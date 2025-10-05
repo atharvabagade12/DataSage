@@ -1,0 +1,138 @@
+/* Global CSS Variables and Mixins */
+:root {
+    /* Color System */
+    --primary-color: #667eea;
+    --primary-dark: #5a67d8;
+    --primary-light: #9f7aea;
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    
+    --success-color: #10b981;
+    --info-color: #3b82f6;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+    
+    /* Background Colors */
+    --bg-primary: #0f0f23;
+    --bg-secondary: #1a1a2e;
+    --bg-tertiary: #16213e;
+    --bg-card: rgba(255, 255, 255, 0.05);
+    
+    /* Text Colors */
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    
+    /* Border Colors */
+    --border-light: rgba(255, 255, 255, 0.1);
+    --border-medium: rgba(255, 255, 255, 0.2);
+    --border-dark: rgba(255, 255, 255, 0.3);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+    
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+  }
+  
+  /* Gradient Text Mixin - Fixed with proper fallbacks */
+  .gradient-text {
+    background: var(--primary-gradient);
+    background-clip: text; /* Standard property */
+    -webkit-background-clip: text; /* Webkit prefix for compatibility */
+    -webkit-text-fill-color: transparent;
+    color: transparent; /* Fallback for browsers that don't support background-clip */
+  }
+  
+  /* Alternative approach for better browser support */
+  /* .gradient-text-safe {
+    background: var(--primary-gradient);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    /* Fallback for browsers that don't support background-clip */
+    /* @supports not (background-clip: text) {
+      background: none;
+      color: var(--primary-color);
+    }
+  }  */
+  
+  /* Glass Effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Button Base Styles */
+  .btn-base {
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    border: none;
+    font-size: 0.875rem;
+  }
+  
+  .btn-primary {
+    background: var(--primary-gradient);
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+  }
+  
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+  }
+  
+  /* Card Styles */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    transition: all var(--transition-normal);
+  }
+  
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  
+  /* Utility Classes */
+  .text-gradient {
+    @extend .gradient-text-safe;
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    :root {
+      --radius-sm: 3px;
+      --radius-md: 6px;
+      --radius-lg: 9px;
+      --radius-xl: 12px;
+    }
+  }
+  
