@@ -3,12 +3,12 @@ export default defineNuxtConfig({
 
   srcDir: 'src/',
   
-  // Add Pinia module
+  
   modules: [
     '@pinia/nuxt'
   ],
   
-  // Nitro configuration for API proxy
+ 
   nitro: {
     devProxy: {
       '/api': {
@@ -19,20 +19,18 @@ export default defineNuxtConfig({
     }
   },
   
-  // Runtime configuration
+  
   runtimeConfig: {
     public: {
       apiBase: 'http://localhost:8000'
     }
   },
   
-  // SSR configuration
+  
   ssr: false,
   
   
-  // css: [
-  //   '~/assets/css/main.css'
-  // ],
+
   
   vite: {
     css: {

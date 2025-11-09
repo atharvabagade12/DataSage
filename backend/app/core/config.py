@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg2://test_admin:ilikec@123@localhost:5432/datasage_db"
     
     # Security
-    secret_key: str = 6253434262524328352838362
+    secret_key: str = "6253434262524328352838362"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 hours
     

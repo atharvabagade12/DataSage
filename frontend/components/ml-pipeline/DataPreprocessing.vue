@@ -596,6 +596,139 @@
       return activeTools.value.length > 0
   })
 
+  // 🔥 NEW: Dynamic computed properties that reflect current dataset state
+const currentDataset = computed(() => {
+  return hasCleanedData.value ? cleanedDataset.value : originalDataset.value;
+});
+
+const currentColumns = computed(() => {
+  if (!hasCleanedData.value) {
+    return columns.value;
+  }
+  // Return columns based on cleaned dataset
+  if (cleanedDataset.value.length > 0) {
+    const cleanedColNames = Object.keys(cleanedDataset.value[0]);
+    return columns.value.filter(col => cleanedColNames.includes(col.name));
+  }
+  return columns.value;
+});
+
+const currentDataInfo = computed(() => ({
+  rows: currentDataset.value.length,
+  columns: currentColumns.value.length,
+}));
+
+const currentDataQuality = computed(() => {
+  const dataset = currentDataset.value;
+  const cols = currentColumns.value;
+  
+  if (!dataset.length || !cols.length) return { score: 0 };
+
+  const totalCells = dataset.length * cols.length;
+  let issues = 0;
+
+  dataset.forEach((row) => {
+    cols.forEach((col) => {
+      const value = row[col.name];
+      if (value === null || value === undefined || value === "" || value === "null") {
+        issues++;
+      }
+    });
+  });
+
+  const score = Math.max(0, Math.round(((totalCells - issues) / totalCells) * 100));
+  return { score };
+});
+
+// 🔥 Calculate missing values for CURRENT dataset
+const currentMissingColumnsDetailed = computed(() => {
+  const dataset = currentDataset.value;
+  const cols = currentColumns.value;
+  const missing = [];
+  
+  if (!dataset.length || !cols.length) return missing;
+  
+  cols.forEach(col => {
+    let missingCount = 0;
+    
+    dataset.forEach(row => {
+      const value = row[col.name];
+      if (value === null || value === undefined || value === '' || value === 'null' || value === 'NaN') {
+        missingCount++;
+      }
+    });
+    
+    if (missingCount > 0) {
+      missing.push({
+        name: col.name,
+        type: col.type,
+        count: missingCount,
+        percentage: ((missingCount / dataset.length) * 100).toFixed(1),
+        strategy: col.type === 'numerical' ? 'fillmedian' : 'fillmode'
+      });
+    }
+  });
+  
+  return missing.sort((a, b) => b.count - a.count);
+});
+
+const currentMissingStats = computed(() => {
+  return {
+    count: currentMissingColumnsDetailed.value.length,
+    totalMissing: currentMissingColumnsDetailed.value.reduce((sum, col) => sum + col.count, 0)
+  }
+});
+
+// 🔥 Calculate duplicates for CURRENT dataset
+const currentDuplicateStats = computed(() => {
+  const dataset = currentDataset.value;
+  const seen = new Set();
+  let count = 0;
+
+  dataset.forEach((row) => {
+    const rowString = JSON.stringify(row);
+    if (seen.has(rowString)) {
+      count++;
+    } else {
+      seen.add(rowString);
+    }
+  });
+
+  return { count };
+});
+
+// 🔥 Calculate outliers for CURRENT dataset
+const currentOutlierStats = computed(() => {
+  const dataset = currentDataset.value;
+  const cols = currentColumns.value;
+  let count = 0;
+  
+  cols.filter((col) => col.type === "numerical")
+    .forEach((col) => {
+      const values = dataset
+        .map((row) => parseFloat(row[col.name]))
+        .filter((val) => !isNaN(val));
+
+      if (values.length > 0) {
+        const sorted = [...values].sort((a, b) => a - b);
+        const q1 = sorted[Math.floor(sorted.length * 0.25)];
+        const q3 = sorted[Math.floor(sorted.length * 0.75)];
+        const iqr = q3 - q1;
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+
+        count += values.filter((val) => val < lowerBound || val > upperBound).length;
+      }
+    });
+
+  return { count };
+});
+
+// 🔥 Get categorical columns from CURRENT dataset
+const currentCategoricalColumns = computed(() => {
+  return currentColumns.value.filter((col) => col.type === "categorical");
+});
+
   const estimatedDataSize = computed(() => {
     let sizeFactor = 1
     

@@ -24,7 +24,7 @@
         </div>
       </div>
 
-      <!-- ✅ ADD THIS: Backend Status -->
+      <!-- âœ… ADD THIS: Backend Status -->
       <div class="backend-status" v-if="backendConnected !== null">
         <div
           class="status-indicator"
@@ -44,7 +44,7 @@
       </div>
       <div class="target-summary" v-if="selectedTarget">
         <span class="target-info">
-          🎯 Target: <strong>{{ selectedTarget.name }}</strong>
+          Target: <strong>{{ selectedTarget.name }}</strong>
           <span class="problem-type">{{
             formatProblemType(problemType.type)
           }}</span>
@@ -55,23 +55,23 @@
     <!-- Hero Section -->
     <div class="hero-section">
       <div class="hero-content">
-        <div class="hero-icon">🤖</div>
+        <div class="hero-icon"></div>
         <h1>Choose Your ML Algorithm</h1>
         <p>
           We'll recommend the best machine learning algorithms based on your
           data and target variable
         </p>
         <div class="dataset-summary" v-if="datasetStats.rows">
-          <span class="summary-item"
-            >📊 {{ formatNumber(datasetStats.rows) }} rows</span
+          <span class="summary-item">
+            {{ formatNumber(datasetStats.rows) }} rows</span
           >
-          <span class="summary-divider">•</span>
-          <span class="summary-item"
-            >📋 {{ datasetStats.features }} features</span
+          <span class="summary-divider"></span>
+          <span class="summary-item">
+            {{ datasetStats.features }} features</span
           >
-          <span class="summary-divider">•</span>
-          <span class="summary-item"
-            >🎯 {{ formatProblemType(problemType.type) }}</span
+          <span class="summary-divider"></span>
+          <span class="summary-item">
+            {{ formatProblemType(problemType.type) }}</span
           >
           <div class="confidence-indicator">
             <div
@@ -104,7 +104,7 @@
 
         <div class="analysis-grid">
           <div class="analysis-card">
-            <div class="card-icon">🎯</div>
+            <div class="card-icon"></div>
             <h3>Problem Type</h3>
             <div class="problem-info">
               <span class="problem-label">{{
@@ -133,7 +133,7 @@
           </div>
 
           <div class="analysis-card">
-            <div class="card-icon">📊</div>
+            <div class="card-icon"></div>
             <h3>Dataset Profile</h3>
             <div class="dataset-profile">
               <div class="profile-metric">
@@ -154,7 +154,7 @@
           </div>
 
           <div class="analysis-card">
-            <div class="card-icon">⚙️</div>
+            <div class="card-icon"></div>
             <h3>Preprocessing Applied</h3>
             <div class="preprocessing-summary">
               <div
@@ -163,7 +163,7 @@
               >
                 <p>No preprocessing was applied</p>
                 <span class="warning-note"
-                  >⚠️ Consider going back to apply data cleaning</span
+                  >Consider going back to apply data cleaning</span
                 >
               </div>
               <div v-else class="preprocessing-list">
@@ -172,7 +172,7 @@
                   :key="step"
                   class="preprocessing-step"
                 >
-                  <span class="step-icon">✓</span>
+                  <span class="step-icon"></span>
                   <span class="step-name">{{
                     formatPreprocessingStep(step)
                   }}</span>
@@ -323,7 +323,7 @@
                   <h3>{{ algorithm.name }}</h3>
                   <div class="algorithm-badges">
                     <span v-if="algorithm.recommended" class="badge recommended"
-                      >🏆 Recommended</span
+                      >Recommended</span
                     >
                     <span
                       class="badge complexity"
@@ -387,29 +387,52 @@
             </div>
 
             <div class="card-footer">
-              <button
-                class="select-algorithm-btn"
-                :class="{
-                  selected: selectedAlgorithm?.name === algorithm.name,
-                }"
-              >
-                <svg
-                  v-if="selectedAlgorithm?.name === algorithm.name"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
+              <!-- 🆕 ADD THIS: Two-button layout -->
+              <div class="footer-buttons">
+                <!-- Learn More Button -->
+                <button
+                  @click.stop="showAlgorithmDetails(algorithm)"
+                  class="learn-more-btn"
+                  title="Learn how this algorithm works"
                 >
-                  <path
-                    d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
-                  />
-                </svg>
-                {{
-                  selectedAlgorithm?.name === algorithm.name
-                    ? "Selected"
-                    : "Select Algorithm"
-                }}
-              </button>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"
+                    />
+                  </svg>
+                  Learn More
+                </button>
+
+                <!-- Select Algorithm Button -->
+                <button
+                  class="select-algorithm-btn"
+                  :class="{
+                    selected: selectedAlgorithm?.name === algorithm.name,
+                  }"
+                >
+                  <svg
+                    v-if="selectedAlgorithm?.name === algorithm.name"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
+                    />
+                  </svg>
+                  {{
+                    selectedAlgorithm?.name === algorithm.name
+                      ? "Selected"
+                      : "Select Algorithm"
+                  }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -576,7 +599,7 @@
                       value="none"
                     />
                     <div class="option-content">
-                      <div class="option-icon">🚫</div>
+                      <div class="option-icon"></div>
                       <span class="option-title">No Scaling</span>
                       <p class="option-desc">
                         Use raw features (good for tree-based algorithms)
@@ -594,7 +617,7 @@
                       value="standard"
                     />
                     <div class="option-content">
-                      <div class="option-icon">📊</div>
+                      <div class="option-icon"></div>
                       <span class="option-title">Standard Scaling</span>
                       <p class="option-desc">
                         Zero mean, unit variance (recommended for most
@@ -613,7 +636,7 @@
                       value="minmax"
                     />
                     <div class="option-content">
-                      <div class="option-icon">📏</div>
+                      <div class="option-icon"></div>
                       <span class="option-title">MinMax Scaling</span>
                       <p class="option-desc">
                         Scale to [0,1] range (good for neural networks)
@@ -631,7 +654,7 @@
                       value="robust"
                     />
                     <div class="option-content">
-                      <div class="option-icon">🛡️</div>
+                      <div class="option-icon"></div>
                       <span class="option-title">Robust Scaling</span>
                       <p class="option-desc">
                         Median and IQR-based (resistant to outliers)
@@ -776,38 +799,51 @@
       <!-- Action Section -->
       <section v-if="selectedAlgorithm" class="action-section">
         <div class="action-content">
-          <!-- ✅ ENHANCE your configuration summary section -->
-        <div class="configuration-summary">
-          <h3>Advanced Configuration Summary</h3>
-          <div class="summary-grid">
-            <div class="summary-item">
-              <span class="summary-label">Algorithm</span>
-              <span class="summary-value">{{ selectedAlgorithm.name }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Problem Type</span>
-              <span class="summary-value">{{ formatProblemType(problemType.type) }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Feature Scaling</span>
-              <span class="summary-value">{{ formatScalingMethod(selectedScaling) }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Validation Method</span>
-              <span class="summary-value">{{ formatValidationMethod(validationMethod) }}</span>
-            </div>
-            <!-- ✅ ADD THESE NEW ITEMS -->
-            <div class="summary-item" v-if="hasFeatureEngineering()">
-              <span class="summary-label">Feature Engineering</span>
-              <span class="summary-value">{{ getFeatureEngineeringSummary() }}</span>
-            </div>
-            <div class="summary-item" v-if="validationMethod === 'cross_validation' || validationMethod === 'stratified'">
-              <span class="summary-label">CV Folds</span>
-              <span class="summary-value">{{ cvFolds }}-Fold</span>
+          <!--  ENHANCE your configuration summary section -->
+          <div class="configuration-summary">
+            <h3>Advanced Configuration Summary</h3>
+            <div class="summary-grid">
+              <div class="summary-item">
+                <span class="summary-label">Algorithm</span>
+                <span class="summary-value">{{ selectedAlgorithm.name }}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Problem Type</span>
+                <span class="summary-value">{{
+                  formatProblemType(problemType.type)
+                }}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Feature Scaling</span>
+                <span class="summary-value">{{
+                  formatScalingMethod(selectedScaling)
+                }}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Validation Method</span>
+                <span class="summary-value">{{
+                  formatValidationMethod(validationMethod)
+                }}</span>
+              </div>
+              <!-- âœ… ADD THESE NEW ITEMS -->
+              <div class="summary-item" v-if="hasFeatureEngineering()">
+                <span class="summary-label">Feature Engineering</span>
+                <span class="summary-value">{{
+                  getFeatureEngineeringSummary()
+                }}</span>
+              </div>
+              <div
+                class="summary-item"
+                v-if="
+                  validationMethod === 'cross_validation' ||
+                  validationMethod === 'stratified'
+                "
+              >
+                <span class="summary-label">CV Folds</span>
+                <span class="summary-value">{{ cvFolds }}-Fold</span>
+              </div>
             </div>
           </div>
-        </div>
-
 
           <div class="action-buttons">
             <button @click="exportConfiguration" class="export-config-btn">
@@ -824,16 +860,40 @@
               Export Configuration
             </button>
 
-            <button @click="startTraining" class="start-training-btn" :disabled="isTraining">
-              <svg v-if="isTraining" width="16" height="16" class="spinner" viewBox="0 0 24 24" fill="currentColor">
+            <button
+              @click="startTraining"
+              class="start-training-btn"
+              :disabled="isTraining"
+            >
+              <svg
+                v-if="isTraining"
+                width="16"
+                height="16"
+                class="spinner"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
                 <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
               </svg>
-              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <svg
+                v-else
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
                 <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
               </svg>
-              {{ isTraining ? 'Initializing Advanced Training...' : 'Start Advanced Training' }}
-              <!-- ✅ ADD FEATURE COUNT INDICATOR -->
-              <span v-if="!isTraining && getAdvancedFeaturesCount() > 0" class="feature-count">
+              {{
+                isTraining
+                  ? "Initializing Advanced Training..."
+                  : "Start Advanced Training"
+              }}
+              <!-- âœ… ADD FEATURE COUNT INDICATOR -->
+              <span
+                v-if="!isTraining && getAdvancedFeaturesCount() > 0"
+                class="feature-count"
+              >
                 +{{ getAdvancedFeaturesCount() }} Advanced Features
               </span>
             </button>
@@ -859,6 +919,139 @@
         </div>
       </div>
     </div>
+
+    <div
+      v-if="selectedAlgorithmInfo"
+      class="algorithm-info-modal"
+      @click.self="closeAlgorithmInfo"
+    >
+      <div class="modal-content">
+        <!-- Modal Header -->
+        <div class="modal-header">
+          <h2>
+            <span class="algo-icon">{{ selectedAlgorithmInfo.icon }}</span>
+            {{ selectedAlgorithmInfo.name }}
+          </h2>
+          <button @click="closeAlgorithmInfo" class="close-btn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body">
+          <!-- Overview Section -->
+          <div class="info-section">
+            <h3>📋 Overview</h3>
+            <p class="description">
+              {{ selectedAlgorithmInfo.detailedDescription }}
+            </p>
+          </div>
+
+          <!-- How It Works -->
+          <div class="info-section">
+            <h3>⚙️ How It Works</h3>
+            <p>{{ selectedAlgorithmInfo.howItWorks }}</p>
+          </div>
+
+          <!-- When to Use -->
+          <div class="info-section">
+            <h3>✅ When to Use</h3>
+            <ul class="bullet-list">
+              <li
+                v-for="(use, index) in selectedAlgorithmInfo.whenToUse"
+                :key="index"
+              >
+                {{ use }}
+              </li>
+            </ul>
+          </div>
+
+          <!-- When NOT to Use -->
+          <div class="info-section warning">
+            <h3>⚠️ When NOT to Use</h3>
+            <ul class="bullet-list">
+              <li
+                v-for="(avoid, index) in selectedAlgorithmInfo.whenNotToUse"
+                :key="index"
+              >
+                {{ avoid }}
+              </li>
+            </ul>
+          </div>
+
+          <!-- Real World Examples -->
+          <div class="info-section">
+            <h3>💼 Real-World Examples</h3>
+            <div class="example-tags">
+              <span
+                v-for="(
+                  example, index
+                ) in selectedAlgorithmInfo.realWorldExamples"
+                :key="index"
+                class="example-tag"
+              >
+                {{ example }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Complexity & Performance -->
+          <div class="info-section">
+            <h3>📊 Performance Characteristics</h3>
+            <div class="metrics-grid">
+              <div class="metric-item">
+                <span class="metric-label">Complexity</span>
+                <span class="metric-value">{{
+                  selectedAlgorithmInfo.complexity
+                }}</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Speed</span>
+                <span class="metric-value">{{
+                  selectedAlgorithmInfo.speed
+                }}</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Interpretability</span>
+                <span class="metric-value">{{
+                  selectedAlgorithmInfo.interpretability || "Medium"
+                }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pros & Cons -->
+          <div class="pros-cons-container">
+            <div class="pros-section">
+              <h3>👍 Strengths</h3>
+              <ul class="bullet-list">
+                <li
+                  v-for="(pro, index) in selectedAlgorithmInfo.strongWith"
+                  :key="index"
+                >
+                  {{ pro }}
+                </li>
+              </ul>
+            </div>
+            <div class="cons-section">
+              <h3>👎 Weaknesses</h3>
+              <ul class="bullet-list">
+                <li
+                  v-for="(con, index) in selectedAlgorithmInfo.weakWith"
+                  :key="index"
+                >
+                  {{ con }}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -878,6 +1071,7 @@ const recommendedAlgorithms = ref([]);
 const selectedAlgorithm = ref(null);
 const backendConnected = ref(null);
 const datasetId = ref(null);
+const selectedAlgorithmInfo = ref(null);
 
 // UI State
 const showComparison = ref(false);
@@ -901,40 +1095,38 @@ const cvFolds = ref(5);
 const randomState = ref(42);
 const optimizationMetric = ref("accuracy");
 
-
-// ✅ STANDARDIZED BACKEND CONNECTION CHECK
+// âœ… STANDARDIZED BACKEND CONNECTION CHECK
 const checkBackendConnection = async () => {
   try {
-    console.log('🔌 Checking backend connection...')
-    
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
-    
-    const response = await fetch('http://localhost:8000/api/health', {
-      method: 'GET',
+    console.log("ðŸ”Œ Checking backend connection...");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    const response = await fetch("http://localhost:8000/api/health", {
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      signal: controller.signal
-    })
-    
-    clearTimeout(timeoutId)
-    
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
     if (response.ok) {
-      const data = await response.json()
-      backendConnected.value = true
-      console.log('✅ Backend connected:', data.message)
-      return true
+      const data = await response.json();
+      backendConnected.value = true;
+      console.log("âœ… Backend connected:", data.message);
+      return true;
     } else {
-      throw new Error(`Backend returned ${response.status}`)
+      throw new Error(`Backend returned ${response.status}`);
     }
   } catch (error) {
-    console.error('❌ Backend connection failed:', error.message)
-    backendConnected.value = false
-    return false
+    console.error("âŒ Backend connection failed:", error.message);
+    backendConnected.value = false;
+    return false;
   }
-}
-
+};
 
 // Methods
 const loadDataFromPreviousSteps = () => {
@@ -978,20 +1170,24 @@ const loadDataFromPreviousSteps = () => {
 
 const selectAlgorithmWithBackend = (algorithm) => {
   // Your existing selectAlgorithm logic
-  selectedAlgorithm.value = algorithm
+  selectedAlgorithm.value = algorithm;
 
   // Set default scaling based on algorithm requirements
   if (algorithm.needsScaling) {
-    selectedScaling.value = 'standard'
+    selectedScaling.value = "standard";
   } else {
-    selectedScaling.value = 'none'
+    selectedScaling.value = "none";
   }
 
   // Initialize hyperparameters with defaults
-  resetHyperparameters()
+  resetHyperparameters();
 
-  console.log(`✅ Algorithm selected: ${algorithm.name} with ${backendConnected.value ? 'BACKEND' : 'FRONTEND'} integration`)
-}
+  console.log(
+    `Algorithm selected: ${algorithm.name} with ${
+      backendConnected.value ? "BACKEND" : "FRONTEND"
+    } integration`
+  );
+};
 
 const detectProblemType = (target) => {
   let problemType = "binary_classification";
@@ -1083,8 +1279,13 @@ const calculateAlgorithmScore = (algorithm) => {
   return Math.min(1.0, Math.max(0.0, score));
 };
 
+// ============================================================================
+// 🎯 COMPLETE REFACTORED getAllAvailableAlgorithms() FUNCTION
+// ============================================================================
+
 const getAllAvailableAlgorithms = () => {
   const allAlgorithms = [
+    // ========== EXISTING ALGORITHMS ==========
     {
       name: "Random Forest",
       icon: "🌲",
@@ -1104,6 +1305,9 @@ const getAllAvailableAlgorithms = () => {
         "multiclass_classification",
         "regression",
       ],
+      description:
+        "Ensemble of decision trees that reduces overfitting through bagging. Excellent for mixed data types and provides feature importance.",
+      category: "ensemble",
     },
     {
       name: "XGBoost",
@@ -1123,6 +1327,9 @@ const getAllAvailableAlgorithms = () => {
         "multiclass_classification",
         "regression",
       ],
+      description:
+        "Gradient boosting algorithm optimized for speed and performance. Industry standard for tabular data competitions.",
+      category: "boosting",
     },
     {
       name: "Logistic Regression",
@@ -1139,10 +1346,13 @@ const getAllAvailableAlgorithms = () => {
       ],
       weakWith: ["Non-linear patterns", "Feature interactions"],
       problemTypes: ["binary_classification", "multiclass_classification"],
+      description:
+        "Linear model for classification with probabilistic outputs. Fast, interpretable, and excellent as a baseline.",
+      category: "linear",
     },
     {
       name: "Linear Regression",
-      icon: "📊",
+      icon: "📉",
       complexity: "Low",
       needsScaling: true,
       speed: 0.98,
@@ -1150,10 +1360,13 @@ const getAllAvailableAlgorithms = () => {
       strongWith: ["Linear relationships", "Simple baseline", "Fast training"],
       weakWith: ["Non-linear patterns", "Outliers"],
       problemTypes: ["regression"],
+      description:
+        "Simple linear model for regression. Perfect for understanding linear relationships and as a baseline.",
+      category: "linear",
     },
     {
       name: "Support Vector Machine",
-      icon: "🎪",
+      icon: "⚡",
       complexity: "High",
       needsScaling: true,
       speed: 0.5,
@@ -1165,10 +1378,13 @@ const getAllAvailableAlgorithms = () => {
         "multiclass_classification",
         "regression",
       ],
+      description:
+        "Powerful classifier using kernel tricks for non-linear decision boundaries. Effective in high-dimensional spaces.",
+      category: "kernel",
     },
     {
       name: "K-Nearest Neighbors",
-      icon: "🎯",
+      icon: "🎲",
       complexity: "Low",
       needsScaling: true,
       speed: 0.4,
@@ -1180,6 +1396,9 @@ const getAllAvailableAlgorithms = () => {
         "multiclass_classification",
         "regression",
       ],
+      description:
+        "Instance-based learning that classifies by majority vote of neighbors. Simple but memory-intensive.",
+      category: "instance-based",
     },
     {
       name: "Decision Tree",
@@ -1199,6 +1418,9 @@ const getAllAvailableAlgorithms = () => {
         "multiclass_classification",
         "regression",
       ],
+      description:
+        "Tree-like model of decisions. Highly interpretable but prone to overfitting without constraints.",
+      category: "tree",
     },
     {
       name: "Neural Network (MLP)",
@@ -1214,13 +1436,114 @@ const getAllAvailableAlgorithms = () => {
         "multiclass_classification",
         "regression",
       ],
+      description:
+        "Multi-layer perceptron with backpropagation. Learns complex non-linear patterns but requires careful tuning.",
+      category: "neural",
+    },
+
+    // ========== 🆕 NEW ALGORITHMS ==========
+    {
+      name: "Support Vector Regression",
+      icon: "📊",
+      complexity: "Medium",
+      needsScaling: true,
+      speed: 0.55,
+      accuracy: 0.82,
+      strongWith: [
+        "Non-linear regression",
+        "High dimensions",
+        "Robust to outliers",
+        "Small to medium datasets",
+      ],
+      weakWith: [
+        "Large datasets (slow)",
+        "Interpretability",
+        "Kernel selection",
+      ],
+      problemTypes: ["regression"],
+      description:
+        "Extension of SVM for regression tasks. Uses kernel trick to model non-linear relationships with robust predictions.",
+      category: "kernel",
+    },
+    {
+      name: "Naive Bayes",
+      icon: "🎯",
+      complexity: "Low",
+      needsScaling: false,
+      speed: 0.98,
+      accuracy: 0.8,
+      strongWith: [
+        "Text classification",
+        "Categorical features",
+        "Small datasets",
+        "Real-time predictions",
+        "Probabilistic output",
+      ],
+      weakWith: [
+        "Feature independence assumption",
+        "Correlated features",
+        "Continuous features (without binning)",
+      ],
+      problemTypes: ["binary_classification", "multiclass_classification"],
+      description:
+        "Fast probabilistic classifier based on Bayes theorem. Excellent for text classification and categorical data.",
+      category: "probabilistic",
+    },
+    {
+      name: "Ridge Regression",
+      icon: "📐",
+      complexity: "Low",
+      needsScaling: true,
+      speed: 0.96,
+      accuracy: 0.78,
+      strongWith: [
+        "Multicollinearity",
+        "Many correlated features",
+        "Regularization",
+        "Interpretability",
+      ],
+      weakWith: [
+        "Non-linear patterns",
+        "No feature selection",
+        "Requires scaled features",
+      ],
+      problemTypes: ["regression"],
+      description:
+        "Linear regression with L2 regularization. Handles multicollinearity and prevents overfitting by shrinking coefficients.",
+      category: "linear",
+    },
+    {
+      name: "Lasso Regression",
+      icon: "🎯",
+      complexity: "Low",
+      needsScaling: true,
+      speed: 0.94,
+      accuracy: 0.77,
+      strongWith: [
+        "Feature selection",
+        "High-dimensional data",
+        "Sparse models",
+        "Interpretability",
+      ],
+      weakWith: [
+        "Non-linear patterns",
+        "Correlated features (unstable)",
+        "May eliminate useful features",
+      ],
+      problemTypes: ["regression"],
+      description:
+        "Linear regression with L1 regularization. Automatically performs feature selection by setting irrelevant coefficients to zero.",
+      category: "linear",
     },
   ];
 
+  // Filter by problem type
   return allAlgorithms.filter((algo) =>
     algo.problemTypes.includes(problemType.value.type)
   );
 };
+
+// 🔧 COMPLETE REFACTORED getKeyParameters() FUNCTION
 
 const getKeyParameters = (algorithmName) => {
   const parameterSets = {
@@ -1264,9 +1587,21 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Minimum samples required to split an internal node.",
           },
+          {
+            name: "min_samples_leaf",
+            label: "Min Samples per Leaf",
+            type: "slider",
+            min: 1,
+            max: 10,
+            step: 1,
+            default: 1,
+            impact: "medium",
+            description: "Minimum samples required at leaf node.",
+          },
         ],
       },
     ],
+
     XGBoost: [
       {
         name: "Boosting Configuration",
@@ -1305,24 +1640,37 @@ const getKeyParameters = (algorithmName) => {
             impact: "high",
             description: "Maximum depth of trees.",
           },
+          {
+            name: "subsample",
+            label: "Subsample Ratio",
+            type: "slider",
+            min: 0.5,
+            max: 1.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "medium",
+            description: "Subsample ratio of training instances.",
+          },
         ],
       },
     ],
+
     "Logistic Regression": [
       {
         name: "Regularization",
-        icon: "⚖️",
+        icon: "📈",
         params: [
           {
             name: "C",
-            label: "Regularization Strength",
+            label: "Regularization Strength (Inverse)",
             type: "slider",
             min: 0.001,
             max: 100,
             step: 0.001,
             default: 1.0,
             impact: "high",
-            description: "Inverse of regularization strength.",
+            description:
+              "Inverse of regularization strength. Smaller values = stronger regularization.",
           },
           {
             name: "penalty",
@@ -1337,13 +1685,51 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Type of penalty to apply.",
           },
+          {
+            name: "max_iter",
+            label: "Maximum Iterations",
+            type: "slider",
+            min: 100,
+            max: 1000,
+            step: 100,
+            default: 100,
+            impact: "low",
+            description: "Maximum iterations for convergence.",
+          },
         ],
       },
     ],
+
+    "Linear Regression": [
+      {
+        name: "Basic Configuration",
+        icon: "📉",
+        params: [
+          {
+            name: "fit_intercept",
+            label: "Fit Intercept",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Whether to calculate the intercept.",
+          },
+          {
+            name: "normalize",
+            label: "Normalize Features",
+            type: "checkbox",
+            default: false,
+            impact: "low",
+            description:
+              "Normalize features before regression (deprecated, use scaler).",
+          },
+        ],
+      },
+    ],
+
     "Support Vector Machine": [
       {
         name: "SVM Configuration",
-        icon: "🎪",
+        icon: "⚡",
         params: [
           {
             name: "C",
@@ -1365,10 +1751,390 @@ const getKeyParameters = (algorithmName) => {
               { value: "rbf", label: "RBF (Gaussian)" },
               { value: "linear", label: "Linear" },
               { value: "poly", label: "Polynomial" },
+              { value: "sigmoid", label: "Sigmoid" },
             ],
             default: "rbf",
             impact: "high",
             description: "Kernel function to use.",
+          },
+          {
+            name: "gamma",
+            label: "Gamma (Kernel Coefficient)",
+            type: "select",
+            options: [
+              { value: "scale", label: "Scale (1 / (n_features * X.var()))" },
+              { value: "auto", label: "Auto (1 / n_features)" },
+            ],
+            default: "scale",
+            impact: "medium",
+            description: "Kernel coefficient for RBF, poly, and sigmoid.",
+          },
+        ],
+      },
+    ],
+
+    "K-Nearest Neighbors": [
+      {
+        name: "KNN Configuration",
+        icon: "🎲",
+        params: [
+          {
+            name: "n_neighbors",
+            label: "Number of Neighbors",
+            type: "slider",
+            min: 1,
+            max: 50,
+            step: 1,
+            default: 5,
+            impact: "high",
+            description: "Number of neighbors to consider.",
+          },
+          {
+            name: "weights",
+            label: "Weight Function",
+            type: "select",
+            options: [
+              { value: "uniform", label: "Uniform" },
+              { value: "distance", label: "Distance" },
+            ],
+            default: "uniform",
+            impact: "medium",
+            description: "Weight function used in prediction.",
+          },
+          {
+            name: "metric",
+            label: "Distance Metric",
+            type: "select",
+            options: [
+              { value: "euclidean", label: "Euclidean" },
+              { value: "manhattan", label: "Manhattan" },
+              { value: "minkowski", label: "Minkowski" },
+            ],
+            default: "euclidean",
+            impact: "medium",
+            description: "Distance metric for finding neighbors.",
+          },
+        ],
+      },
+    ],
+
+    "Decision Tree": [
+      {
+        name: "Tree Configuration",
+        icon: "🌳",
+        params: [
+          {
+            name: "max_depth",
+            label: "Maximum Depth",
+            type: "slider",
+            min: 1,
+            max: 30,
+            step: 1,
+            default: 10,
+            impact: "high",
+            description: "Maximum depth of the tree.",
+          },
+          {
+            name: "min_samples_split",
+            label: "Min Samples to Split",
+            type: "slider",
+            min: 2,
+            max: 20,
+            step: 1,
+            default: 2,
+            impact: "high",
+            description: "Minimum samples required to split.",
+          },
+          {
+            name: "criterion",
+            label: "Split Criterion",
+            type: "select",
+            options: [
+              { value: "gini", label: "Gini Impurity" },
+              { value: "entropy", label: "Information Gain" },
+            ],
+            default: "gini",
+            impact: "medium",
+            description: "Function to measure split quality.",
+          },
+        ],
+      },
+    ],
+
+    "Neural Network (MLP)": [
+      {
+        name: "Network Architecture",
+        icon: "🧠",
+        params: [
+          {
+            name: "hidden_layer_sizes",
+            label: "Hidden Layer Sizes",
+            type: "text",
+            default: "100,50",
+            impact: "high",
+            description:
+              "Comma-separated layer sizes (e.g., '100,50' for 2 hidden layers).",
+          },
+          {
+            name: "activation",
+            label: "Activation Function",
+            type: "select",
+            options: [
+              { value: "relu", label: "ReLU" },
+              { value: "tanh", label: "Tanh" },
+              { value: "logistic", label: "Sigmoid" },
+            ],
+            default: "relu",
+            impact: "high",
+            description: "Activation function for hidden layers.",
+          },
+          {
+            name: "learning_rate_init",
+            label: "Initial Learning Rate",
+            type: "slider",
+            min: 0.0001,
+            max: 0.1,
+            step: 0.0001,
+            default: 0.001,
+            impact: "high",
+            description: "Initial learning rate for weight updates.",
+          },
+          {
+            name: "max_iter",
+            label: "Maximum Iterations",
+            type: "slider",
+            min: 100,
+            max: 1000,
+            step: 100,
+            default: 200,
+            impact: "medium",
+            description: "Maximum number of iterations.",
+          },
+        ],
+      },
+    ],
+
+    "Support Vector Regression": [
+      {
+        name: "SVR Configuration",
+        icon: "📊",
+        params: [
+          {
+            name: "kernel",
+            label: "Kernel Type",
+            type: "select",
+            options: [
+              { value: "rbf", label: "RBF (Radial Basis Function)" },
+              { value: "linear", label: "Linear" },
+              { value: "poly", label: "Polynomial" },
+              { value: "sigmoid", label: "Sigmoid" },
+            ],
+            default: "rbf",
+            impact: "high",
+            description: "Kernel type for non-linear transformation.",
+          },
+          {
+            name: "C",
+            label: "Regularization Parameter",
+            type: "slider",
+            min: 0.001,
+            max: 100,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description: "Trade-off between margin and training errors.",
+          },
+          {
+            name: "epsilon",
+            label: "Epsilon (ε-tube width)",
+            type: "slider",
+            min: 0.001,
+            max: 1.0,
+            step: 0.01,
+            default: 0.1,
+            impact: "medium",
+            description:
+              "Width of insensitive zone. No penalty for errors within this range.",
+          },
+          {
+            name: "gamma",
+            label: "Gamma (Kernel Coefficient)",
+            type: "select",
+            options: [
+              { value: "scale", label: "Scale (1 / (n_features * X.var()))" },
+              { value: "auto", label: "Auto (1 / n_features)" },
+            ],
+            default: "scale",
+            impact: "medium",
+            description: "Kernel coefficient for RBF, poly, and sigmoid.",
+          },
+        ],
+      },
+    ],
+
+    "Naive Bayes": [
+      {
+        name: "Naive Bayes Configuration",
+        icon: "🎯",
+        params: [
+          {
+            name: "variant",
+            label: "Naive Bayes Variant",
+            type: "select",
+            options: [
+              { value: "gaussian", label: "Gaussian (Continuous features)" },
+              { value: "multinomial", label: "Multinomial (Count data)" },
+              { value: "bernoulli", label: "Bernoulli (Binary features)" },
+            ],
+            default: "gaussian",
+            impact: "high",
+            description: "Variant based on feature distribution.",
+          },
+          {
+            name: "alpha",
+            label: "Smoothing Parameter (α)",
+            type: "slider",
+            min: 0.0,
+            max: 10.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "medium",
+            description:
+              "Laplace/Lidstone smoothing (0 = no smoothing). For multinomial/bernoulli only.",
+            condition: "variant !== 'gaussian'",
+          },
+          {
+            name: "var_smoothing",
+            label: "Variance Smoothing",
+            type: "number",
+            default: "1e-9",
+            impact: "low",
+            description:
+              "Portion of largest variance added for stability. For Gaussian only.",
+            condition: "variant === 'gaussian'",
+          },
+          {
+            name: "fit_prior",
+            label: "Learn Class Priors",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Learn class prior probabilities from data.",
+          },
+        ],
+      },
+    ],
+
+    "Ridge Regression": [
+      {
+        name: "Ridge Configuration",
+        icon: "📐",
+        params: [
+          {
+            name: "alpha",
+            label: "Regularization Strength (α)",
+            type: "slider",
+            min: 0.001,
+            max: 100.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description:
+              "Higher values = more regularization (smaller coefficients).",
+          },
+          {
+            name: "solver",
+            label: "Optimization Solver",
+            type: "select",
+            options: [
+              { value: "auto", label: "Auto (chooses best)" },
+              { value: "svd", label: "SVD (Singular Value Decomposition)" },
+              { value: "cholesky", label: "Cholesky (Fast)" },
+              { value: "lsqr", label: "LSQR (Sparse data)" },
+              { value: "saga", label: "SAGA (Large datasets)" },
+            ],
+            default: "auto",
+            impact: "medium",
+            description: "Algorithm for optimization.",
+          },
+          {
+            name: "fit_intercept",
+            label: "Fit Intercept",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Calculate intercept (recommended).",
+          },
+          {
+            name: "max_iter",
+            label: "Maximum Iterations",
+            type: "slider",
+            min: 100,
+            max: 10000,
+            step: 100,
+            default: 1000,
+            impact: "low",
+            description: "Maximum iterations for iterative solvers.",
+          },
+        ],
+      },
+    ],
+
+    "Lasso Regression": [
+      {
+        name: "Lasso Configuration",
+        icon: "🎯",
+        params: [
+          {
+            name: "alpha",
+            label: "Regularization Strength (α)",
+            type: "slider",
+            min: 0.001,
+            max: 100.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description:
+              "Higher values = more feature elimination (stronger L1 penalty).",
+          },
+          {
+            name: "selection",
+            label: "Feature Selection Method",
+            type: "select",
+            options: [
+              { value: "cyclic", label: "Cyclic (Default)" },
+              { value: "random", label: "Random (Faster convergence)" },
+            ],
+            default: "cyclic",
+            impact: "medium",
+            description: "Method for coordinate descent updates.",
+          },
+          {
+            name: "fit_intercept",
+            label: "Fit Intercept",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Calculate intercept.",
+          },
+          {
+            name: "max_iter",
+            label: "Maximum Iterations",
+            type: "slider",
+            min: 100,
+            max: 10000,
+            step: 100,
+            default: 1000,
+            impact: "low",
+            description: "Maximum iterations for convergence.",
+          },
+          {
+            name: "tol",
+            label: "Tolerance",
+            type: "number",
+            default: "0.0001",
+            impact: "low",
+            description: "Tolerance for optimization convergence.",
           },
         ],
       },
@@ -1379,8 +2145,8 @@ const getKeyParameters = (algorithmName) => {
 };
 
 const selectAlgorithm = (algorithm) => {
-  selectAlgorithmWithBackend(algorithm)
-}
+  selectAlgorithmWithBackend(algorithm);
+};
 
 const resetHyperparameters = () => {
   const params = getKeyParameters(selectedAlgorithm.value.name);
@@ -1412,10 +2178,372 @@ const resetSelection = () => {
   featureEngineering.featureSelection = true;
 };
 
+const showAlgorithmDetails = (algo) => {
+  selectedAlgorithmInfo.value = getAlgorithmEducationalContent(algo);
+};
+
+const closeAlgorithmInfo = () => {
+  selectedAlgorithmInfo.value = null;
+};
+
+const getAlgorithmEducationalContent = (algo) => {
+  const educationalContent = {
+    "Random Forest": {
+      ...algo,
+      detailedDescription:
+        "Random Forest is an ensemble learning method that constructs multiple decision trees during training and outputs the mode (classification) or mean (regression) of their predictions. Each tree is trained on a random subset of data and features.",
+      howItWorks:
+        "Creates many decision trees using bootstrap aggregating (bagging). Each tree votes for a classification or predicts a value, and the forest combines these results. Random feature selection at each split reduces correlation between trees, improving accuracy.",
+      whenToUse: [
+        "When you have mixed numerical and categorical features",
+        "When you need feature importance rankings",
+        "When dealing with non-linear relationships",
+        "When you want good performance without extensive tuning",
+        "When overfitting is a concern (more resistant than single trees)",
+      ],
+      whenNotToUse: [
+        "When interpretability is critical (complex to explain)",
+        "When you have extremely high-dimensional data (>10,000 features)",
+        "When real-time predictions are required (slower than single models)",
+        "When working with very small datasets (<100 samples)",
+      ],
+      realWorldExamples: [
+        "🏦 Credit Card Fraud Detection",
+        "🏥 Disease Diagnosis",
+        "📧 Email Spam Filtering",
+        "💰 Stock Price Prediction",
+        "🎮 Game AI Behavior",
+      ],
+    },
+
+    XGBoost: {
+      ...algo,
+      detailedDescription:
+        "XGBoost (Extreme Gradient Boosting) is an optimized distributed gradient boosting library. It builds trees sequentially, where each new tree corrects errors made by previous trees, using gradient descent optimization.",
+      howItWorks:
+        "Builds trees one at a time, focusing on samples that previous trees got wrong. Uses second-order gradients (Newton method) for optimization, includes regularization to prevent overfitting, and supports parallel processing for speed.",
+      whenToUse: [
+        "When you need the best possible accuracy on tabular data",
+        "When competing in ML competitions (Kaggle favorite)",
+        "When you have medium to large datasets (1K+ rows)",
+        "When you can invest time in hyperparameter tuning",
+        "When feature engineering is already done",
+      ],
+      whenNotToUse: [
+        "When you need easily interpretable results",
+        "When working with very small datasets (<500 rows)",
+        "When training time is critical",
+        "When you lack computational resources",
+        "When simple baseline is needed first",
+      ],
+      realWorldExamples: [
+        "🏆 Kaggle Competition Winning Models",
+        "🎯 Click-Through Rate Prediction",
+        "🏪 Customer Churn Prediction",
+        "📈 Sales Forecasting",
+        "🔍 Search Ranking Algorithms",
+      ],
+    },
+
+    "Logistic Regression": {
+      ...algo,
+      detailedDescription:
+        "Logistic Regression is a linear model for binary and multiclass classification that uses the logistic (sigmoid) function to predict probabilities. Despite its name, it's a classification algorithm.",
+      howItWorks:
+        "Learns a linear combination of features and applies a sigmoid function to output probabilities between 0 and 1. Uses maximum likelihood estimation to find optimal coefficients. Very fast and provides probability scores.",
+      whenToUse: [
+        "When you need a quick baseline model",
+        "When interpretability is crucial (clear coefficient weights)",
+        "When relationships between features and target are roughly linear",
+        "When you need probability predictions",
+        "When working with small to medium datasets",
+      ],
+      whenNotToUse: [
+        "When relationships are highly non-linear",
+        "When features have complex interactions",
+        "When you need to capture complex patterns",
+        "When features are not scaled (highly sensitive)",
+        "When you have multicollinearity issues",
+      ],
+      realWorldExamples: [
+        "💳 Credit Approval Systems",
+        "📧 Email Spam Detection",
+        "🏥 Medical Diagnosis (binary outcomes)",
+        "🎓 Student Admission Prediction",
+        "📱 Customer Conversion Prediction",
+      ],
+    },
+
+    "Linear Regression": {
+      ...algo,
+      detailedDescription:
+        "Linear Regression models the relationship between a dependent variable and one or more independent variables using a linear equation. It's the foundation of regression analysis.",
+      howItWorks:
+        "Finds the best-fitting straight line (hyperplane in multiple dimensions) through data points by minimizing the sum of squared residuals. Uses ordinary least squares (OLS) or gradient descent to find optimal coefficients.",
+      whenToUse: [
+        "When the relationship is genuinely linear",
+        "When you need a simple, interpretable baseline",
+        "When predictions need to be explainable",
+        "When you want to understand feature impacts",
+        "For quick exploratory analysis",
+      ],
+      whenNotToUse: [
+        "When relationships are non-linear",
+        "When data has many outliers (very sensitive)",
+        "When features are highly correlated (multicollinearity)",
+        "When you need to capture complex interactions",
+        "When assumptions (normality, homoscedasticity) are violated",
+      ],
+      realWorldExamples: [
+        "🏠 House Price Prediction (with features)",
+        "💰 Salary Estimation",
+        "📊 Sales Forecasting",
+        "🌡️ Temperature Prediction",
+        "📈 Stock Return Modeling",
+      ],
+    },
+
+    "Support Vector Machine": {
+      ...algo,
+      detailedDescription:
+        "SVM finds the optimal hyperplane that maximally separates different classes in high-dimensional space. It uses the 'kernel trick' to handle non-linear decision boundaries.",
+      howItWorks:
+        "Identifies support vectors (data points closest to decision boundary) and maximizes the margin between classes. Kernel functions (RBF, polynomial) transform data into higher dimensions where linear separation becomes possible.",
+      whenToUse: [
+        "When you have high-dimensional data",
+        "When classes are clearly separable",
+        "When working with small to medium datasets",
+        "When you need non-linear decision boundaries",
+        "When margin of separation matters",
+      ],
+      whenNotToUse: [
+        "When you have very large datasets (>10K rows)",
+        "When training time is critical",
+        "When features are not scaled",
+        "When data is very noisy",
+        "When you need probability estimates",
+      ],
+      realWorldExamples: [
+        "✍️ Handwriting Recognition",
+        "🖼️ Image Classification",
+        "🧬 Protein Classification",
+        "📄 Text Categorization",
+        "👤 Face Detection",
+      ],
+    },
+
+    "K-Nearest Neighbors": {
+      ...algo,
+      detailedDescription:
+        "KNN is a simple, instance-based learning algorithm that classifies new data points based on the majority vote of their 'k' nearest neighbors in the feature space.",
+      howItWorks:
+        "Stores all training data in memory. For prediction, it calculates distance to all training points, finds k nearest neighbors, and predicts based on majority class (classification) or average (regression). No explicit training phase.",
+      whenToUse: [
+        "When you need a simple baseline",
+        "When decision boundaries are irregular",
+        "When you have small datasets",
+        "When training time doesn't matter",
+        "When data is well-distributed",
+      ],
+      whenNotToUse: [
+        "When you have large datasets (very slow predictions)",
+        "When features have different scales (must normalize)",
+        "When you have high-dimensional data (curse of dimensionality)",
+        "When memory is limited (stores all training data)",
+        "When real-time predictions are needed",
+      ],
+      realWorldExamples: [
+        "🎬 Movie Recommendation Systems",
+        "🏥 Patient Similarity Matching",
+        "📸 Image Recognition",
+        "🗺️ Location-Based Services",
+        "📚 Document Classification",
+      ],
+    },
+
+    "Decision Tree": {
+      ...algo,
+      detailedDescription:
+        "Decision Trees create a tree-like model of decisions and their consequences. Each internal node represents a feature test, branches represent outcomes, and leaves represent class labels or values.",
+      howItWorks:
+        "Recursively splits data based on feature values that best separate classes (using Gini impurity or entropy). Creates branches until reaching stopping criteria (max depth, min samples). Easy to visualize and interpret.",
+      whenToUse: [
+        "When interpretability is paramount",
+        "When you need to explain decisions to non-technical stakeholders",
+        "When working with categorical features",
+        "When you need to capture non-linear relationships",
+        "When you want feature importance",
+      ],
+      whenNotToUse: [
+        "When you need high accuracy (tends to overfit)",
+        "When data is noisy",
+        "When you want stable predictions (small data changes cause big tree changes)",
+        "When you need smooth decision boundaries",
+        "As a final production model (use Random Forest instead)",
+      ],
+      realWorldExamples: [
+        "🏥 Medical Diagnosis Decision Support",
+        "💳 Credit Risk Assessment",
+        "🎯 Customer Segmentation",
+        "🏦 Loan Approval Systems",
+        "🌐 Website Navigation Optimization",
+      ],
+    },
+
+    "Neural Network (MLP)": {
+      ...algo,
+      detailedDescription:
+        "Multi-Layer Perceptron (MLP) is a feedforward artificial neural network with multiple layers of neurons. It can learn complex non-linear relationships through backpropagation.",
+      howItWorks:
+        "Consists of input layer, one or more hidden layers, and output layer. Each neuron applies activation function to weighted sum of inputs. Learns through backpropagation: calculates error gradient and updates weights using gradient descent.",
+      whenToUse: [
+        "When you have complex non-linear patterns",
+        "When you have large amounts of data (10K+ samples)",
+        "When feature interactions are important",
+        "When you need automatic feature learning",
+        "When computational resources are available",
+      ],
+      whenNotToUse: [
+        "When interpretability is required (black box)",
+        "When you have small datasets (<1000 samples)",
+        "When you need quick results (requires tuning)",
+        "When you lack expertise in tuning hyperparameters",
+        "When simpler models work well",
+      ],
+      realWorldExamples: [
+        "🗣️ Speech Recognition",
+        "🖼️ Image Classification",
+        "💬 Natural Language Processing",
+        "🎮 Game Playing Agents",
+        "📈 Financial Market Prediction",
+      ],
+    },
+
+    "Support Vector Regression": {
+      ...algo,
+      detailedDescription:
+        "SVR extends Support Vector Machines to regression problems. It fits a function within an epsilon-insensitive tube, ignoring errors within the tube while penalizing larger deviations.",
+      howItWorks:
+        "Creates an epsilon-tube around predictions. Points within the tube have no penalty, while points outside contribute to the loss. Uses kernel trick for non-linear regression. Robust to outliers due to epsilon-insensitivity.",
+      whenToUse: [
+        "When you need robust regression (outlier resistance)",
+        "When relationships are non-linear",
+        "When you have small to medium datasets",
+        "When feature space is high-dimensional",
+        "When you need flexibility with kernel functions",
+      ],
+      whenNotToUse: [
+        "When you have very large datasets (computationally expensive)",
+        "When you need highly interpretable predictions",
+        "When linear relationships are sufficient",
+        "When training time is critical",
+        "When you need probability distributions",
+      ],
+      realWorldExamples: [
+        "📈 Stock Price Forecasting",
+        "🌡️ Weather Prediction",
+        "⚡ Energy Demand Forecasting",
+        "🏠 Real Estate Valuation",
+        "📊 Time Series Prediction",
+      ],
+    },
+
+    "Naive Bayes": {
+      ...algo,
+      detailedDescription:
+        "Naive Bayes is a probabilistic classifier based on Bayes' theorem. It assumes features are conditionally independent given the class (the 'naive' assumption), making it simple yet surprisingly effective.",
+      howItWorks:
+        "Calculates probability of each class given the features using Bayes' theorem: P(class|features) ∝ P(features|class) × P(class). Assumes feature independence, which simplifies calculation and makes it very fast.",
+      whenToUse: [
+        "When you need extremely fast training and prediction",
+        "When working with text classification (spam detection)",
+        "When you have small datasets",
+        "When features are truly independent (or mostly)",
+        "When you need probabilistic predictions",
+        "When baseline model is needed quickly",
+      ],
+      whenNotToUse: [
+        "When features are highly correlated (violates independence assumption)",
+        "When you need the best possible accuracy",
+        "When feature interactions are important",
+        "When relationships are complex and non-linear",
+        "When continuous features have complex distributions",
+      ],
+      realWorldExamples: [
+        "📧 Email Spam Detection",
+        "📄 Document Classification",
+        "💭 Sentiment Analysis",
+        "🏥 Medical Diagnosis Screening",
+        "🔍 Search Engine Result Filtering",
+      ],
+    },
+
+    "Ridge Regression": {
+      ...algo,
+      detailedDescription:
+        "Ridge Regression is Linear Regression with L2 regularization. It adds a penalty term proportional to the square of coefficients, preventing overfitting by shrinking coefficients toward zero.",
+      howItWorks:
+        "Minimizes sum of squared residuals PLUS alpha × sum of squared coefficients. The regularization term discourages large coefficients, handling multicollinearity and preventing overfitting. Alpha controls regularization strength.",
+      whenToUse: [
+        "When you have multicollinearity (correlated features)",
+        "When you have more features than samples",
+        "When you want to prevent overfitting",
+        "When all features are potentially relevant (doesn't eliminate features)",
+        "When interpretability with regularization is needed",
+      ],
+      whenNotToUse: [
+        "When you need automatic feature selection (use Lasso instead)",
+        "When relationships are non-linear",
+        "When most features are irrelevant",
+        "When you don't have multicollinearity issues",
+        "When a sparse model is desired",
+      ],
+      realWorldExamples: [
+        "🏠 House Price Prediction (many correlated features)",
+        "💰 Financial Risk Modeling",
+        "🏥 Medical Cost Prediction",
+        "📊 Economic Forecasting",
+        "🔬 Gene Expression Analysis",
+      ],
+    },
+
+    "Lasso Regression": {
+      ...algo,
+      detailedDescription:
+        "Lasso (Least Absolute Shrinkage and Selection Operator) is Linear Regression with L1 regularization. It can shrink coefficients to exactly zero, performing automatic feature selection.",
+      howItWorks:
+        "Minimizes sum of squared residuals PLUS alpha × sum of absolute values of coefficients. L1 penalty creates sparse models by forcing some coefficients to zero, effectively selecting most important features. Creates interpretable models.",
+      whenToUse: [
+        "When you need automatic feature selection",
+        "When you have high-dimensional data with many irrelevant features",
+        "When you want a sparse, interpretable model",
+        "When you suspect only few features are truly important",
+        "When you want to identify key predictors",
+      ],
+      whenNotToUse: [
+        "When all features are important (Ridge is better)",
+        "When features are highly correlated (arbitrarily picks one)",
+        "When relationships are non-linear",
+        "When you need stable feature selection (sensitive to data changes)",
+        "When interpretability of all features matters",
+      ],
+      realWorldExamples: [
+        "🧬 Genomics (selecting important genes)",
+        "💊 Drug Discovery (identifying key molecular features)",
+        "📊 Marketing Analytics (finding key conversion drivers)",
+        "🌐 Web Analytics (identifying important metrics)",
+        "📝 Text Analysis (selecting informative words)",
+      ],
+    },
+  };
+
+  return educationalContent[algo.name] || algo;
+};
+
 const getAvailableMetrics = () => {
   if (problemType.value.type === "regression") {
     return [
-      { value: "r2", label: "R² Score" },
+      { value: "r2", label: "RÂ² Score" },
       { value: "mse", label: "Mean Squared Error" },
       { value: "mae", label: "Mean Absolute Error" },
     ];
@@ -1431,110 +2559,119 @@ const getAvailableMetrics = () => {
 };
 
 const hasFeatureEngineering = () => {
-  return featureEngineering.polynomial || featureEngineering.pca || featureEngineering.featureSelection
-}
+  return (
+    featureEngineering.polynomial ||
+    featureEngineering.pca ||
+    featureEngineering.featureSelection
+  );
+};
 
 const getFeatureEngineeringSummary = () => {
-  const features = []
-  if (featureEngineering.polynomial) features.push('Polynomial')
-  if (featureEngineering.pca) features.push('PCA')
-  if (featureEngineering.featureSelection) features.push('Selection')
-  return features.length > 0 ? features.join(', ') : 'None'
-}
+  const features = [];
+  if (featureEngineering.polynomial) features.push("Polynomial");
+  if (featureEngineering.pca) features.push("PCA");
+  if (featureEngineering.featureSelection) features.push("Selection");
+  return features.length > 0 ? features.join(", ") : "None";
+};
 
 const getAdvancedFeaturesCount = () => {
-  let count = 0
-  if (selectedScaling.value !== 'none') count++
-  if (hasFeatureEngineering()) count++
-  if (validationMethod.value !== 'train_test_split') count++
-  return count
-}
-
-
+  let count = 0;
+  if (selectedScaling.value !== "none") count++;
+  if (hasFeatureEngineering()) count++;
+  if (validationMethod.value !== "train_test_split") count++;
+  return count;
+};
 
 const startTraining = async () => {
   if (!selectedAlgorithm.value) {
-    alert('Please select an algorithm first')
-    return
+    alert("Please select an algorithm first");
+    return;
   }
 
   try {
     // GET REAL BACKEND DATASET ID
-    const processedData = JSON.parse(localStorage.getItem('processedData') || '{}')
-    const selectedTargetData = JSON.parse(localStorage.getItem('selectedTarget') || '{}')
-    
+    const processedData = JSON.parse(
+      localStorage.getItem("processedData") || "{}"
+    );
+    const selectedTargetData = JSON.parse(
+      localStorage.getItem("selectedTarget") || "{}"
+    );
+
     if (!processedData.backendDatasetId) {
-      throw new Error('No backend dataset ID found. Please ensure dataset was uploaded to backend.')
+      throw new Error(
+        "No backend dataset ID found. Please ensure dataset was uploaded to backend."
+      );
     }
-    
+
     // CREATE COMPLETE CONFIGURATION WITH BACKEND DATASET
     const finalConfig = {
       // ALGORITHM INFO
       algorithm: {
         name: selectedAlgorithm.value.name,
         icon: selectedAlgorithm.value.icon,
-        complexity: selectedAlgorithm.value.complexity
+        complexity: selectedAlgorithm.value.complexity,
       },
-      
+
       // HYPERPARAMETERS
-      hyperparameters: {...hyperparameters},
-      
+      hyperparameters: { ...hyperparameters },
+
       // ADVANCED PREPROCESSING (CRITICAL - WAS MISSING)
       scaling: selectedScaling.value,
-      featureEngineering: {...featureEngineering},
-      
+      featureEngineering: { ...featureEngineering },
+
       // ADVANCED VALIDATION CONFIG (CRITICAL - WAS MISSING)
       validation: {
         method: validationMethod.value,
         testSize: testSize.value,
         cvFolds: cvFolds.value,
         randomState: randomState.value,
-        metric: optimizationMetric.value
+        metric: optimizationMetric.value,
       },
-      
+
       // PROBLEM TYPE
       problemType: {
         type: problemType.value.type,
-        confidence: problemType.value.confidence
+        confidence: problemType.value.confidence,
       },
-      
+
       // TARGET INFO
       target: {
         name: selectedTargetData.name || selectedTarget.value?.name,
-        type: selectedTargetData.type || selectedTarget.value?.type
+        type: selectedTargetData.type || selectedTarget.value?.type,
       },
-      
+
+       datasetStats: {
+        rows: processedData.totalRowsInBackend || processedData.rowCount || 0,  
+        features: processedData.columnCount || 0,
+      },
+
       // CRITICAL: BACKEND DATASET INTEGRATION
       backendDatasetId: processedData.backendDatasetId,
       datasetId: processedData.datasetId,
       backendAvailable: processedData.backendAvailable,
-      
+
       // METADATA
       timestamp: new Date().toISOString(),
-      sessionId: `session_${Date.now()}`
-    }
+      sessionId: `session_${Date.now()}`,
+    };
 
-    localStorage.setItem('mlConfiguration', JSON.stringify(finalConfig))
+    localStorage.setItem("mlConfiguration", JSON.stringify(finalConfig));
 
-    console.log('✅ Advanced ML Configuration with backend integration:', {
+    console.log(" Advanced ML Configuration with backend integration:", {
       algorithm: finalConfig.algorithm.name,
       backendDatasetId: finalConfig.backendDatasetId,
+      datasetRows: finalConfig.datasetStats.rows, 
       scaling: finalConfig.scaling,
       featureEngineering: finalConfig.featureEngineering,
-      validationMethod: finalConfig.validation.method
-    })
+      validationMethod: finalConfig.validation.method,
+    });
 
-    router.push('/model-training')
-    
+    router.push("/model-training");
   } catch (error) {
-    console.error('Error:', error)
-    alert('Error: ' + error.message)
+    console.error("Error:", error);
+    alert("Error: " + error.message);
   }
-}
-
-
-
-
+};
 
 const exportConfiguration = () => {
   const config = {
@@ -1668,14 +2805,14 @@ const getProblemDescription = (type) => {
 // Lifecycle
 onMounted(async () => {
   if (loadDataFromPreviousSteps()) {
-    await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate loading
-    initializeRecommendations()
-    isLoading.value = false
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate loading
+    initializeRecommendations();
+    isLoading.value = false;
   }
 
-  // ✅ ADD THIS: Check backend connection
-  await checkBackendConnection()
-})
+  // ADD THIS: Check backend connection
+  await checkBackendConnection();
+});
 </script>
 
 <style scoped>
@@ -1997,8 +3134,11 @@ onMounted(async () => {
 }
 
 .metric-value {
-  color: #ffffff;
-  font-weight: 500;
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #6366f1;
+  text-align: center;  
 }
 
 .dataset-profile,
@@ -2061,7 +3201,6 @@ onMounted(async () => {
   color: #b3b3d1;
 }
 
-
 .backend-status {
   display: flex;
   align-items: center;
@@ -2105,8 +3244,13 @@ onMounted(async () => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Comparison Table */
@@ -2266,7 +3410,7 @@ onMounted(async () => {
 }
 
 .algorithm-card.recommended::before {
-  content: "🏆";
+  content: "";
   position: absolute;
   top: -10px;
   right: -10px;
@@ -2462,7 +3606,7 @@ onMounted(async () => {
 }
 
 .strengths-list li::before {
-  content: "✓";
+  content: "";
   position: absolute;
   left: 0;
   color: #10b981;
@@ -2471,33 +3615,342 @@ onMounted(async () => {
 
 .card-footer {
   margin-top: auto;
+  padding-top: 1rem;
 }
 
-.select-algorithm-btn {
+.footer-buttons {
+  display: flex;
+  gap: 0.75rem;
   width: 100%;
+}
+
+/* Learn More Button */
+.learn-more-btn {
+  flex: 0 0 auto;
+  padding: 0.75rem 1rem;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  color: #6366f1;
+  cursor: pointer;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.learn-more-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.learn-more-btn svg {
+  flex-shrink: 0;
+}
+
+/* Select Algorithm Button - Updated */
+.select-algorithm-btn {
+  flex: 1;
   padding: 0.75rem 1.5rem;
-  background: rgba(102, 126, 234, 0.1);
-  border: 2px solid rgba(102, 126, 234, 0.3);
-  color: #667eea;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
   border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  color: white;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .select-algorithm-btn:hover {
-  background: rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
 }
 
 .select-algorithm-btn.selected {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border-color: #667eea;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.select-algorithm-btn svg {
+  flex-shrink: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .footer-buttons {
+    flex-direction: column;
+  }
+
+  .learn-more-btn {
+    flex: 1;
+  }
+}
+
+.learn-icon {
+  font-size: 1.2rem;
+}
+
+/* Modal Overlay */
+.algorithm-info-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 2rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal Content */
+.modal-content {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 20px;
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from { 
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Modal Header */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  background: rgba(26, 26, 46, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 1;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #fff;
+}
+
+.algo-icon {
+  font-size: 2rem;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #fff;
+}
+
+.close-btn:hover {
+  background: rgba(255, 59, 48, 0.3);
+  transform: rotate(90deg);
+}
+
+/* Modal Body */
+.modal-body {
+  padding: 2rem;
+}
+
+/* Info Sections */
+.info-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.info-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.info-section.warning h3 {
+  color: #f59e0b;
+}
+
+.info-section p {
+  margin: 0;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Bullet Lists */
+.bullet-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bullet-list li {
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+}
+
+.bullet-list li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: #6366f1;
+  font-weight: bold;
+}
+
+.warning .bullet-list li::before {
+  color: #f59e0b;
+}
+
+/* Example Tags */
+.example-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.example-tag {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 20px;
+  font-size: 0.9rem;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* Metrics Grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.metric-item {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.metric-label {
+  display: block;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.5rem;
+  text-align: center; 
+}
+
+.metric-value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #6366f1;
+  text-align: center; 
+}
+
+/* Pros & Cons Container */
+.pros-cons-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.pros-section,
+.cons-section {
+  padding: 1.5rem;
+  border-radius: 12px;
+}
+
+.pros-section {
+  background: rgba(34, 197, 94, 0.05);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.pros-section h3 {
+  color: #22c55e;
+}
+
+.pros-section .bullet-list li::before {
+  color: #22c55e;
+}
+
+.cons-section {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.cons-section h3 {
+  color: #ef4444;
+}
+
+.cons-section .bullet-list li::before {
+  color: #ef4444;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .pros-cons-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-content {
+    max-height: 95vh;
+  }
+  
+  .modal-header h2 {
+    font-size: 1.4rem;
+  }
 }
 
 /* Configuration Section */
@@ -2832,7 +4285,7 @@ onMounted(async () => {
 }
 
 .checkbox-option input[type="checkbox"]:checked + .checkbox-custom::after {
-  content: "✓";
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;

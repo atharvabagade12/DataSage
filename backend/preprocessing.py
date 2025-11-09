@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OrdinalEncoder 
 import json
 
 class DataPreprocessor:
@@ -147,6 +147,9 @@ class DataPreprocessor:
         self.df = df_processed
         return df_processed
     
+    
+
+    
     def remove_duplicates(self, strategy='first'):
         """Remove duplicate rows using pandas"""
         rows_before = len(self.df)
@@ -213,40 +216,81 @@ class DataPreprocessor:
         
         return self.df
     
-    def encode_categorical(self, columns, method='label'):
-        """
-        Encode categorical variables
+    def encode_categorical(self, column, method='label'):
+        """Encode categorical variables - FIXED with proper dtype"""
         
-        Args:
-            columns (list): Columns to encode
-            method (str): 'label' or 'onehot'
-        """
-        for col in columns:
-            if col not in self.df.columns:
-                continue
-            
+        if column not in self.df.columns:
+            print(f"Column {column} not found in dataframe")
+            return self.df
+        
+        try:
             if method == 'label':
+                print(f"Label encoding {column}...")
                 le = LabelEncoder()
-                self.df[col] = le.fit_transform(self.df[col].astype(str))
                 
-                self.preprocessing_log.append({
+                # ✅ Handle NaN values
+                col_data = self.df[column].astype(str)
+                col_data = col_data.replace('nan', 'Unknown')
+                
+                # ✅ Fit and transform
+                self.df[column] = le.fit_transform(col_data)
+                
+                print(f"✅ Label encoded {column}: {le.classes_.tolist()}")
+                self.preprocessinglog.append({
                     'action': 'label_encode',
-                    'column': col,
+                    'column': column,
                     'classes': le.classes_.tolist()
                 })
             
             elif method == 'onehot':
-                # One-hot encoding
-                dummies = pd.get_dummies(self.df[col], prefix=col)
-                self.df = pd.concat([self.df.drop(col, axis=1), dummies], axis=1)
+                print(f"One-hot encoding {column}...")
                 
-                self.preprocessing_log.append({
+                col_data = self.df[column].astype(str)
+                col_data = col_data.replace('nan', 'Unknown')
+                
+                # ✅ CRITICAL: Create dummies AND convert to int (1/0, not True/False)
+                dummies = pd.get_dummies(col_data, prefix=column, drop_first=True).astype(int)
+                
+                # ✅ Concatenate and drop original column
+                self.df = pd.concat([self.df.drop(columns=[column]), dummies], axis=1)
+                
+                print(f"✅ One-hot encoded {column}: created {len(dummies.columns)} columns")
+                print(f"   Values: 1 (True), 0 (False) ✅")
+                self.preprocessinglog.append({
                     'action': 'onehot_encode',
-                    'column': col,
-                    'new_columns': dummies.columns.tolist()
+                    'column': column,
+                    'new_columns': dummies.columns.tolist(),
+                    'dtype': 'int (1/0)'  # ✅ Document dtype
                 })
+            
+            elif method == 'ordinal':
+                print(f"Ordinal encoding {column}...")
+                
+                col_data = self.df[column].astype(str)
+                col_data = col_data.replace('nan', 'Unknown')
+                
+                oe = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+                
+                # ✅ Convert to int
+                self.df[column] = oe.fit_transform(col_data.values.reshape(-1, 1)).astype(int)
+                
+                print(f"✅ Ordinal encoded {column}: {oe.categories_[0].tolist()}")
+                self.preprocessinglog.append({
+                    'action': 'ordinal_encode',
+                    'column': column,
+                    'categories': oe.categories_[0].tolist(),
+                    'dtype': 'int'  # ✅ Document dtype
+                })
+            
+            return self.df
         
-        return self.df
+        except Exception as e:
+            print(f"❌ Error encoding {column}: {e}")
+            import traceback
+            traceback.print_exc()
+            return self.df
+
+
     
     def scale_features(self, columns, method='standard'):
         """

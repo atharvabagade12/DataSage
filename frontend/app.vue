@@ -6,13 +6,13 @@
 </template>
 
 <script setup>
-// ===== CORRECT VERSION =====
+
 const authStore = useAuthStore()
 
 onMounted(() => {
   console.log('🚀 App initialized')
   
-  // Restore session if exists (this is the correct function name)
+  
   authStore.restoreSession()
   
   console.log('👤 Auth state restored:', {

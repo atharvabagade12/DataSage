@@ -46,11 +46,11 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
             email=user.email,
             password=user.password
         )
-        # ✅ FIXED RESPONSE FORMAT
+        # FIXED RESPONSE FORMAT
         return {
-            "success": True,                    # ← Added success field
+            "success": True,                    
             "message": "User created successfully",
-            "user": {                           # ← Added user object
+            "user": {                          
                 "id": db_user.id,
                 "username": db_user.username,
                 "email": db_user.email,
@@ -67,7 +67,7 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
         )
 
 
-@router.post("/login", response_model=dict)  # ← Changed response_model
+@router.post("/login", response_model=dict)  
 async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """Login user and return JWT token"""
     user = UserService.authenticate_user(
@@ -127,3 +127,10 @@ async def verify_token(token: str = Depends(security)):
         return {"valid": True, "username": payload["username"]}
     except HTTPException:
         return {"valid": False}
+
+
+@router.post("/logout", response_model=dict)
+async def logout():
+    """Stateless logout endpoint for JWT-based auth"""
+    # With JWT, logout is handled client-side by discarding the token
+    return {"success": True, "message": "Logged out"}
