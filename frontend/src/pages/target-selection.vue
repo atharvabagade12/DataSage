@@ -239,33 +239,35 @@
           </h3>
           <div v-if="selectedColumn" class="chart-controls">
             <select
-              v-model="chartType"
-              @change="onChartTypeChange"
-              class="chart-selector"
-            >
-              <!-- NUMERIC COLUMN CHARTS -->
-              <template v-if="selectedColumn.type === 'number'">
-                <option value="histogram">📊 Histogram</option>
-                <option value="box">📦 Box Plot</option>
-                <option value="line">📈 Distribution Curve</option>
-                <option value="scatter">🔵 Scatter Plot</option>
-                <option value="violin">🎻 Violin Plot</option>
-              </template>
+  v-model="chartType"
+  @change="onChartTypeChange"
+  class="chart-selector"
+  :class="{ 'placeholder': !chartType }"
+>
+  <!-- REMOVE the disabled option, just keep actual options -->
+  <template v-if="selectedColumn && selectedColumn.type === 'number'">
+    <option value="histogram">📊 Histogram</option>
+    <option value="box">📦 Box Plot</option>
+    <option value="line">📈 Distribution Curve</option>
+    <option value="scatter">🔵 Scatter Plot</option>
+    <option value="violin">🎻 Violin Plot</option>
+  </template>
 
-              <!-- STRING COLUMN CHARTS -->
-              <template v-else-if="selectedColumn.type === 'string'">
-                <option value="doughnut">🍩 Value Distribution</option>
-                <option value="bar">📊 Bar Chart</option>
-                <option value="pie">🥧 Pie Chart</option>
-                <option value="treemap">🗂️ Treemap View</option>
-              </template>
+  <template v-else-if="selectedColumn && selectedColumn.type === 'string'">
+    <option value="doughnut">🍩 Value Distribution</option>
+    <option value="bar">📊 Bar Chart</option>
+    <option value="pie">🥧 Pie Chart</option>
+    <option value="treemap">🗂️ Treemap View</option>
+  </template>
 
-              <!-- BOOLEAN/DATE COLUMN CHARTS -->
-              <template v-else>
-                <option value="bar">📊 Bar Chart</option>
-                <option value="pie">🥧 Pie Chart</option>
-              </template>
-            </select>
+  <template v-else>
+    <option value="bar">📊 Bar Chart</option>
+    <option value="pie">🥧 Pie Chart</option>
+  </template>
+</select>
+
+
+
 
             <!-- ENCODING INDICATOR -->
             <div
@@ -526,42 +528,39 @@
       </aside>
     </div>
 
+    
+
+
+
+
     <!-- Action Footer -->
-    <div class="action-footer">
-      <div class="footer-content">
-        <button @click="goBack" class="footer-btn secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-            />
-          </svg>
-          Back to Preview
-        </button>
+<!-- Action Footer -->
+<section class="action-footer">
+  <div class="footer-content">
+    <button @click="goBack" class="footer-btn back-btn secondary">
+      ⬅ Back to Data Preview
+    </button>
 
-        <div class="selection-summary">
-          <span v-if="selectedColumn" class="selected-target">
-            🎯 Target: <strong>{{ selectedColumn.name }}</strong>
-          </span>
-          <span v-else class="no-target">No target selected</span>
-        </div>
-
-        <div class="footer-actions">
-          <button @click="saveDraft" class="footer-btn secondary">
-            💾 Save Draft
-          </button>
-          <button
-            @click="continueToModelSelection"
-            :disabled="!selectedColumn"
-            class="footer-btn primary"
-          >
-            <span>Continue to Algorithm Selection</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-            </svg>
-          </button>
-        </div>
-      </div>
+    <div class="selection-summary">
+      <span v-if="selectedColumn" class="selected-target">
+        Target: {{ selectedColumn.name }}
+      </span>
+      <span v-else class="no-target">
+        No target selected
+      </span>
     </div>
+
+    <button 
+      @click="continueToModelSelection" 
+      :disabled="!selectedColumn"
+      class="footer-btn continue-btn primary"
+    >
+      Continue to Algorithm Selection ➡
+    </button>
+  </div>
+</section>
+
+
   </div>
 </template>
 
@@ -593,7 +592,7 @@ const availableColumns = ref([]);
 const selectedColumn = ref(null);
 const searchQuery = ref("");
 const activeFilter = ref("all");
-const chartType = ref("histogram");
+const chartType = ref("");
 const isLoadingChart = ref(false);
 const fileName = ref("");
 const isLoading = ref(true);
@@ -602,6 +601,22 @@ const encodingInfo = ref(null);
 const backendConnected = ref(null);
 const datasetId = ref(null);
 const showDisclaimer = ref(false); 
+
+
+
+
+const selectedScalingMethod = ref('standard');
+const scalingMethods = ref([
+  { value: 'none', label: 'None', icon: '🚫', description: 'No scaling applied' },
+  { value: 'standard', label: 'Standard', icon: '📊', description: 'Mean=0, StdDev=1 (StandardScaler)' },
+  { value: 'minmax', label: 'MinMax', icon: '📏', description: 'Scale to range [0, 1]' },
+  { value: 'robust', label: 'Robust', icon: '💪', description: 'Uses median & IQR (robust to outliers)' }
+]);
+const columnsToScale = ref([]);
+const numericalColumns = ref([]);
+const isScaling = ref(false);
+const scalingResult = ref(null);
+const isDownloading = ref(false);
 
 // Import Chart.js composable
 const { loadChart } = useChart();
@@ -770,28 +785,33 @@ const detectProblemTypeWithBackend = async (column) => {
 
 const loadPreviousData = async () => {
   try {
-    console.log("🔄 Loading dataset for target selection...");
+    console.log("\n" + "=".repeat(80));
+    console.log("🎯 TARGET SELECTION - Loading Dataset");
+    console.log("=".repeat(80));
+    
     isLoading.value = true;
 
-    // STEP 1: Try mlStore first (fastest)
+    // ================================================
+    // PRIORITY 1: Try mlStore (should have cleaned data)
+    // ================================================
     if (mlStore.dataset && mlStore.dataset.length > 0) {
-      console.log(
-        "✅ Found dataset in mlStore:",
-        mlStore.dataset.length,
-        "rows"
-      );
+      console.log("✅ Step 1: Found dataset in mlStore");
+      console.log(`   - Dataset ID: ${mlStore.datasetId}`);
+      console.log(`   - Rows: ${mlStore.dataset.length}`);
+      console.log(`   - Preprocessed: ${mlStore.preprocessed}`);
+      console.log(`   - Columns: ${mlStore.columns.length}`);
+
+      // Use mlStore data (which should be the cleaned dataset)
       dataset.value = mlStore.dataset;
       datasetId.value = mlStore.datasetId;
       fileName.value = mlStore.fileName;
 
-      // Extract columns from mlStore data
       if (dataset.value.length > 0) {
+        // Extract columns from mlStore data
         columns.value = Object.keys(dataset.value[0]).map((colName) => ({
           name: colName,
           type: detectColumnType(dataset.value.map((row) => row[colName])),
-          originalType: detectColumnType(
-            dataset.value.map((row) => row[colName])
-          ),
+          originalType: detectColumnType(dataset.value.map((row) => row[colName])),
           unique: 0,
           missing: 0,
         }));
@@ -801,37 +821,45 @@ const loadPreviousData = async () => {
           columnCount: columns.value.length,
         };
 
-        console.log("✅ Columns extracted from mlStore:", columns.value.length);
+        console.log("✅ Using mlStore cleaned data:");
+        console.log(`   - Dataset ID: ${datasetId.value}`);
+        console.log(`   - Rows: ${dataset.value.length}`);
+        console.log(`   - Columns: ${columns.value.length}`);
+        console.log("=".repeat(80) + "\n");
+
         processColumnsForTargetSelection();
         isLoading.value = false;
         return;
       }
     }
 
-    // STEP 2: Try localStorage
+    console.log("⚠️  mlStore is empty, trying localStorage...");
+
+    // ================================================
+    // PRIORITY 2: Try localStorage (should have cleaned data)
+    // ================================================
     const processedDataStr = localStorage.getItem("processedData");
+    
     if (processedDataStr) {
-      console.log("🔍 Found processedData in localStorage");
+      console.log("✅ Step 2: Found processedData in localStorage");
       const processedData = JSON.parse(processedDataStr);
 
+      console.log("   - Dataset ID:", processedData.datasetId);
+      console.log("   - Is Preprocessed:", processedData.isPreprocessed);
+      console.log("   - Rows:", processedData.data?.length || 0);
+      console.log("   - Original ID:", processedData.originalDatasetId);
+
       if (processedData.data && processedData.data.length > 0) {
-        console.log(
-          "✅ Using localStorage data:",
-          processedData.data.length,
-          "rows"
-        );
+        // ✅ CRITICAL: Use the cleaned datasetId (NOT originalDatasetId)
         dataset.value = processedData.data;
-        datasetId.value =
-          processedData.backendDatasetId || processedData.datasetId;
+        datasetId.value = processedData.datasetId;  // ← This should be cleaned ID
         fileName.value = processedData.fileName;
 
         // Extract columns from localStorage data
         columns.value = Object.keys(dataset.value[0]).map((colName) => ({
           name: colName,
           type: detectColumnType(dataset.value.map((row) => row[colName])),
-          originalType: detectColumnType(
-            dataset.value.map((row) => row[colName])
-          ),
+          originalType: detectColumnType(dataset.value.map((row) => row[colName])),
           unique: 0,
           missing: 0,
         }));
@@ -841,10 +869,11 @@ const loadPreviousData = async () => {
           columnCount: columns.value.length,
         };
 
-        console.log("✅ Dataset loaded from localStorage");
-        console.log("   - Rows:", dataset.value.length);
-        console.log("   - Columns:", columns.value.length);
-        console.log("   - Dataset ID:", datasetId.value);
+        console.log("✅ Using localStorage cleaned data:");
+        console.log(`   - Dataset ID: ${datasetId.value}`);
+        console.log(`   - Rows: ${dataset.value.length}`);
+        console.log(`   - Columns: ${columns.value.length}`);
+        console.log("=".repeat(80) + "\n");
 
         processColumnsForTargetSelection();
         isLoading.value = false;
@@ -852,61 +881,112 @@ const loadPreviousData = async () => {
       }
     }
 
-    // STEP 3: Try backend (if available)
-    if (mlStore.backendConnected && datasetId.value) {
-      console.log("🌐 Attempting to load from backend...");
-      const response = await fetch(
-        `http://localhost:8000/api/datasets/${datasetId.value}`
-      );
+    console.log("⚠️  localStorage is empty, trying backend...");
 
-      if (response.ok) {
-        const backendData = await response.json();
-        console.log("✅ Backend data received");
-
-        if (backendData.sampledata && backendData.sampledata.length > 0) {
-          dataset.value = backendData.sampledata;
-
-          columns.value = backendData.columns.map((colName) => ({
-            name: colName,
-            type:
-              backendData.dtypes?.[colName]?.includes("int") ||
-              backendData.dtypes?.[colName]?.includes("float")
-                ? "numerical"
-                : "categorical",
-            originalType:
-              backendData.dtypes?.[colName]?.includes("int") ||
-              backendData.dtypes?.[colName]?.includes("float")
-                ? "numerical"
-                : "categorical",
-            unique: 0,
-            missing: 0,
-          }));
-
-          datasetInfo.value = {
-            rowCount: backendData.shape?.[0] || dataset.value.length,
-            columnCount: backendData.shape?.[1] || columns.value.length,
-          };
-
-          console.log("✅ Dataset loaded from backend");
-          processColumnsForTargetSelection();
-          isLoading.value = false;
-          return;
-        }
-      }
+    // ================================================
+    // PRIORITY 3: Fallback to Backend API
+    // ================================================
+    console.log("✅ Step 3: Fetching from backend API");
+    
+    // Try to get dataset ID from mlStore or localStorage
+    let datasetToFetch = mlStore.datasetId;
+    
+    if (!datasetToFetch && processedDataStr) {
+      const processedData = JSON.parse(processedDataStr);
+      datasetToFetch = processedData.datasetId;
     }
 
-    // STEP 4: No data found anywhere!
-    throw new Error("Dataset not found in mlStore, localStorage, or backend");
-  } catch (error) {
-    console.error("❌ Error loading dataset:", error);
-    alert(
-      "Failed to load dataset. Please go back to Data Preview and try again."
+    if (!datasetToFetch) {
+      throw new Error(
+        "No dataset ID found. Please go back to Data Preview and upload/preprocess a dataset."
+      );
+    }
+
+    console.log(`   Fetching dataset: ${datasetToFetch}`);
+
+    const response = await fetch(
+      `http://localhost:8000/api/datasets/${datasetToFetch}`
     );
-    router.push("/data-preview");
+
+    if (!response.ok) {
+      throw new Error(
+        `Dataset not found in backend (ID: ${datasetToFetch}). Please re-upload.`
+      );
+    }
+
+    const backendData = await response.json();
+
+    console.log("✅ Received from backend:");
+    console.log(`   - Dataset ID: ${backendData.id}`);
+    console.log(`   - Rows: ${backendData.rows}`);
+    console.log(`   - Columns: ${backendData.columns}`);
+
+    // Fetch the actual data preview
+    const dataResponse = await fetch(
+      `http://localhost:8000/api/datasets/${datasetToFetch}/preview`
+    );
+
+    if (!dataResponse.ok) {
+      throw new Error("Failed to load dataset preview from backend");
+    }
+
+    const previewData = await dataResponse.json();
+
+    dataset.value = previewData.data || [];
+    datasetId.value = datasetToFetch;
+    fileName.value = backendData.filename || "Unknown";
+
+    if (dataset.value.length > 0) {
+      columns.value = Object.keys(dataset.value[0]).map((colName) => ({
+        name: colName,
+        type: detectColumnType(dataset.value.map((row) => row[colName])),
+        originalType: detectColumnType(dataset.value.map((row) => row[colName])),
+        unique: 0,
+        missing: 0,
+      }));
+
+      datasetInfo.value = {
+        rowCount: backendData.rows,
+        columnCount: backendData.columns,
+      };
+
+      console.log("✅ Using backend data:");
+      console.log(`   - Dataset ID: ${datasetId.value}`);
+      console.log(`   - Rows: ${dataset.value.length}`);
+      console.log(`   - Columns: ${columns.value.length}`);
+      console.log("=".repeat(80) + "\n");
+
+      processColumnsForTargetSelection();
+    } else {
+      throw new Error("Backend returned empty dataset");
+    }
+
+  } catch (error) {
+    console.error("\n❌ ERROR Loading Dataset:");
+    console.error("   Message:", error.message);
+    console.error("   Stack:", error.stack);
+    console.error("=".repeat(80) + "\n");
+
+    showNotification(
+      `Failed to load dataset: ${error.message}`,
+      "error"
+    );
+
+    // Show user-friendly error modal
+    isLoading.value = false;
+    
+    // Optionally redirect back to data preview
+    setTimeout(() => {
+      if (confirm("Would you like to go back to Data Preview to upload a dataset?")) {
+        router.push("/data-preview");
+      }
+    }, 1000);
+
   } finally {
     isLoading.value = false;
   }
 };
+
 
 // SIMPLIFIED: processColumnsForTargetSelection
 
@@ -1745,6 +1825,7 @@ const selectColumn = async (column) => {
   console.log("Selected column:", column.name);
   selectedColumn.value = column;
   selectedTarget.value = column.name;
+  chartType.value = "";
 
   // Set chart type based on column type
   if (column.type === "number" || column.type === "numerical") {
@@ -1793,10 +1874,7 @@ const saveDraft = () => {
   }
 };
 
-// FIXED: In target-selection.vue
-// ✅ UPDATE YOUR EXISTING continueToModelSelection FUNCTION
 
-// ✅ UPDATE target-selection.vue continueToModelSelection
 
 const continueToModelSelection = async () => {
   if (!selectedColumn.value) {
@@ -1849,6 +1927,9 @@ const continueToModelSelection = async () => {
     alert(`Navigation failed: ${error.message}`);
   }
 };
+
+
+
 
 // ============= WATCHERS =============
 watch(chartType, async () => {
@@ -2403,6 +2484,20 @@ onMounted(async () => {
 .score-fill.poor {
   background: #ef4444;
 }
+.chart-selector.placeholder {
+  color: #64748b; /* Gray placeholder color */
+}
+
+.chart-selector.placeholder::before {
+  content: "📊 Select Chart Type";
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* When an option is selected, remove placeholder styling */
+.chart-selector:not(.placeholder) {
+  color: #e2e8f0; /* Normal text color */
+}
 
 .score-text {
   font-size: 0.6rem;
@@ -2800,6 +2895,9 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.5rem;
 }
+
+
+
 
 .factor-item {
   display: flex;

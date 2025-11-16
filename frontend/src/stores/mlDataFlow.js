@@ -12,6 +12,8 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
     datasetId: '', // Alias for easier access
     dataset: [], // Actual data rows
     fileName: '',
+    targetColumn: null,
+    problemType: null,
     
     // Dataset Registry (Map of all uploaded datasets)
     registeredDatasets: new Map(),
@@ -19,6 +21,16 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
     // Preprocessing State
     preprocessed: false,
     preprocessingSteps: [],
+
+    isSplit: false,
+    isScaled: false,
+    splitInfo: {
+      trainRows: 0,
+      testRows: 0,
+      trainRatio: 0,
+      testRatio: 0
+    },
+    scalingMethod: null,
     
     // ML Pipeline State
     targetColumn: null,
@@ -47,6 +59,16 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
     // Get all datasets
     allDatasets: (state) => {
       return Array.from(state.registeredDatasets.values())
+    },
+
+    
+    canModifyPreprocessing: (state) => {
+      return !state.isSplit
+    },
+
+    //Check if scaling can be applied
+    canApplyScaling: (state) => {
+      return state.isSplit && !state.isScaled
     }
   },
   
@@ -196,6 +218,55 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
         return false
       }
     },
+
+    setCurrentDataset(datasetId, dataset, fileName, columns) {
+    console.log('📌 Setting current dataset:', datasetId);
+    
+    this.currentDataset = datasetId;
+    this.datasetId = datasetId;
+    this.dataset = dataset;
+    this.fileName = fileName;
+    this.columns = columns || [];
+    
+    // Register dataset
+    this.registeredDatasets.set(datasetId, {
+      id: datasetId,
+      data: dataset,
+      fileName: fileName,
+      columns: columns || [],
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log('✅ Dataset state updated:', {
+      datasetId: this.datasetId,
+      rows: this.dataset.length,
+      columns: this.columns.length
+    });
+  },
+
+  updateAfterPreprocessing(cleanedDatasetId, cleanedData, fileName, columns) {
+    console.log('🧹 Updating after preprocessing:', cleanedDatasetId);
+    
+    this.currentDataset = cleanedDatasetId;
+    this.datasetId = cleanedDatasetId;
+    this.dataset = cleanedData;
+    this.fileName = fileName;
+    this.columns = columns || [];
+    this.preprocessed = true;
+    
+    // Register cleaned dataset
+    this.registeredDatasets.set(cleanedDatasetId, {
+      id: cleanedDatasetId,
+      data: cleanedData,
+      fileName: fileName,
+      columns: columns || [],
+      timestamp: new Date().toISOString(),
+      isPreprocessed: true
+    });
+    
+    console.log('✅ Preprocessing state updated in mlStore');
+  }
+},
     
     // ===== ML PIPELINE STATE =====
     
@@ -219,6 +290,48 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
       this.preprocessed = true
       console.log('🔧 Preprocessing steps recorded:', steps)
     },
+
+    //Set split state
+    setSplitState(isSplit, splitInfo = null) {
+      this.isSplit = isSplit
+      if (splitInfo) {
+        this.splitInfo = {
+          trainRows: splitInfo.trainRows || 0,
+          testRows: splitInfo.testRows || 0,
+          trainRatio: splitInfo.trainRatio || 0,
+          testRatio: splitInfo.testRatio || 0
+        }
+      }
+      
+      // Reset scaling if split is reset
+      if (!isSplit) {
+        this.isScaled = false
+        this.scalingMethod = null
+      }
+      
+      console.log('🔀 Split state updated:', { isSplit, splitInfo: this.splitInfo })
+    },
+
+    //Set scaling state
+    setScalingState(isScaled, method = null) {
+      this.isScaled = isScaled
+      this.scalingMethod = method
+      console.log('📊 Scaling state updated:', { isScaled, method })
+    },
+
+    //Reset preprocessing state (called when preprocessing after split)
+    resetPreprocessingState() {
+      this.isSplit = false
+      this.isScaled = false
+      this.splitInfo = {
+        trainRows: 0,
+        testRows: 0,
+        trainRatio: 0,
+        testRatio: 0
+      }
+      this.scalingMethod = null
+      console.log('🔄 Preprocessing state reset (split & scaling cleared)')
+    },
     
     // ===== NAVIGATION =====
     
@@ -238,29 +351,42 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
     },
     
     // Reset store
-    reset() {
-      this.currentDataset = null
-      this.datasetId = ''
-      this.dataset = []
-      this.fileName = ''
-      this.preprocessed = false
-      this.preprocessingSteps = []
-      this.targetColumn = null
-      this.selectedAlgorithm = null
-      this.trainedModel = null
-      this.columns = []
-      this.currentStep = 'upload'
-      
-      console.log('🔄 Store reset')
-    },
-    
-    // Clear all datasets
-    clearAllDatasets() {
-      this.registeredDatasets.clear()
-      this.reset()
-      console.log('🗑️ All datasets cleared')
-    }
-  },
+reset() {
+  this.currentDataset = null
+  this.datasetId = ''
+  this.dataset = []
+  this.fileName = ''
+  this.preprocessed = false
+  this.preprocessingSteps = []
+  
+  // ✅ NEW: Reset split/scaling state
+  this.isSplit = false
+  this.isScaled = false
+  this.splitInfo = {
+    trainRows: 0,
+    testRows: 0,
+    trainRatio: 0,
+    testRatio: 0
+  }
+  this.scalingMethod = null
+  
+  this.targetColumn = null
+  this.selectedAlgorithm = null
+  this.trainedModel = null
+  this.columns = []
+  this.currentStep = 'upload'
+  
+  console.log('🔄 Store reset')
+},
+
+  
+  // Clear all datasets
+  clearAllDatasets() {
+    this.registeredDatasets.clear()
+    this.reset()
+    console.log('🗑️ All datasets cleared')
+  }
+  ,
   
   // Persist to localStorage
   persist: {
@@ -276,7 +402,12 @@ export const useMLDataFlowStore = defineStore('mlDataFlow', {
           'preprocessed',
           'targetColumn',
           'selectedAlgorithm',
-          'currentStep'
+          'currentStep',
+          // ✅ NEW: Persist split/scaling state
+          'isSplit',
+          'isScaled',
+          'splitInfo',
+          'scalingMethod'
         ]
       }
     ]

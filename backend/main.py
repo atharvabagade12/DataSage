@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from fastapi.responses import StreamingResponse
 
+
 # ===== SKLEARN IMPORTS =====
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -74,7 +75,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:3001"
+        "http://localhost:3001",
+        "http://localhost:3002"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -93,6 +95,11 @@ except ImportError as e:
 datasets: Dict[str, Dict[str, Any]] = {}  # { dataset_id: { 'dataframe': df, 'metadata': {...} } }
 trained_models: Dict[str, Dict[str, Any]] = {}
 scalers: Dict[str, Any] = {}
+X_train_storage: Dict[str, Any] = {}
+X_test_storage: Dict[str, Any] = {}
+y_train_storage: Dict[str, Any] = {}
+y_test_storage: Dict[str, Any] = {}
+split_scalers: Dict[str, Any] = {}
 
 # ===== ALGORITHM MAPPING =====
 CLASSIFICATION_ALGORITHMS = {
@@ -403,8 +410,20 @@ async def upload_dataset(file: UploadFile = File(...)):
             'preprocessed': False,
             'original_shape': df.shape,
             'total_rows': row_count, 
-            'size_mb': round(size_mb, 2)
+            'size_mb': round(size_mb, 2),
+            
+            'is_split': False,
+            'is_scaled': False,
+            'split_info': None,
+            'X_train': None,
+            'X_test': None,
+            'y_train': None,
+            'y_test': None,
+            'scaler': None,
+            'scaling_method': None,
+            'scaled_columns': []
         }
+
 
         print(f"✅ FULL dataset {dataset_id} stored in memory: {row_count:,} rows")
         
@@ -540,7 +559,10 @@ async def get_dataset_info(dataset_id: str):
         'preprocessed': data.get('preprocessed', False),
         'uploaded_at': data.get('uploaded_at'),
         'sample_data': sample_data,  # ← Sample for display (200 rows)
-        'status': 'success'
+        'status': 'success',
+        'is_split': data.get('is_split', False),
+        'is_scaled': data.get('is_scaled', False),
+        'split_info': data.get('split_info')
     }
         print(f"✅ Returning response:")
         print(f"   Total rows in backend: {df.shape[0]}")
@@ -560,52 +582,78 @@ async def get_dataset_info(dataset_id: str):
 
 @app.post("/api/preprocess")
 async def preprocess(config: dict):
-    """Apply preprocessing steps to dataset - FIXED"""
+    """Apply preprocessing steps to dataset - Fully Refactored & Robust"""
+    new_dataset_id = None  # Safe initialization
+
     try:
         dataset_id = config.get("dataset_id")
         steps = config.get("steps", [])
-        
+
         print("=" * 80)
         print("🔧 PREPROCESSING REQUEST")
         print("=" * 80)
         print(f"Dataset ID: {dataset_id}")
         print(f"Steps: {len(steps)}")
-        
+
         if dataset_id not in datasets:
             return {"success": False, "error": f"Dataset {dataset_id} not found"}
-        
-        # ✅ CRITICAL FIX: Get FULL dataset
+
+        # ✅ Reset split/scaling if preprocessing changes after split
+        if datasets[dataset_id].get("is_split", False):
+            print(f"⚠️ Dataset was split. Resetting split & scaling state...")
+            for key in ["is_split", "is_scaled", "X_train", "X_test", "y_train", "y_test", "scaler", "scaling_method", "split_info"]:
+                datasets[dataset_id][key] = None
+            print("✅ Split & scaling state reset complete")
+
+        # ✅ Get FULL dataset
         df_full = datasets[dataset_id]["dataframe"].copy()
         original_rows = len(df_full)
-        
         print(f"Original shape: {df_full.shape}")
         print(f"Original rows from storage: {original_rows}")
-        
+
         from preprocessing import DataPreprocessor
         preprocessor = DataPreprocessor(df_full)
-        
-        # Process each step
+
         categorical_encoded = False
         encoded_columns = []
-        
+
+        # Main preprocessing loop
         for i, step in enumerate(steps, 1):
             step_type = step.get("type")
             print(f"\nStep {i}/{len(steps)}: {step_type}")
-            
+
             if step_type == "handle_missing":
                 strategies = step.get("strategies", {})
                 print(f"  Strategies: {strategies}")
                 if strategies:
                     preprocessor.handle_missing_values(strategies)
                     print(f"  ✅ Handled missing values")
-            
-            elif step_type == "remove_columns":
-                columns = step.get("columns", [])
-                print(f"  Removing: {columns}")
-                if columns:
-                    preprocessor.df = preprocessor.df.drop(columns, errors="ignore")
-                    print(f"  ✅ Columns removed")
-            
+
+            elif step_type == 'remove_columns':  
+                columns_to_remove = step.get('columns', [])
+                print(f"📋 Removing {len(columns_to_remove)} columns: {columns_to_remove}")
+                
+                if columns_to_remove:
+                    # Filter out columns that don't exist
+                    existing_cols = [col for col in columns_to_remove if col in preprocessor.df.columns]
+                    missing_cols = [col for col in columns_to_remove if col not in preprocessor.df.columns]
+                    
+                    if missing_cols:
+                        print(f"⚠️ Columns not found (skipping): {missing_cols}")
+                    
+                    if existing_cols:
+                        before_cols = len(preprocessor.df.columns)
+                        preprocessor.df = preprocessor.df.drop(columns=existing_cols)
+                        after_cols = len(preprocessor.df.columns)
+                        
+                        print(f"✅ Columns removed: {existing_cols}")
+                        print(f"   Before: {before_cols} columns → After: {after_cols} columns")
+                        print(f"   Remaining columns: {preprocessor.df.columns.tolist()}")
+                    else:
+                        print("❌ No valid columns to remove")
+
+
+
             elif step_type == "remove_duplicates":
                 keep = step.get("keep", "first")
                 print(f"  Keep: {keep}")
@@ -613,7 +661,7 @@ async def preprocess(config: dict):
                 preprocessor.remove_duplicates(strategy=keep)
                 after = len(preprocessor.df)
                 print(f"  ✅ Duplicates removed: {before - after} rows")
-            
+
             elif step_type == "handle_outliers":
                 method = step.get("method", "remove")
                 print(f"  Method: {method}")
@@ -623,12 +671,11 @@ async def preprocess(config: dict):
                     preprocessor.handle_outliers(numeric_cols, method="iqr", strategy=method)
                     after = len(preprocessor.df)
                     print(f"  ✅ Outliers handled: {before - after} rows")
-            
+
             elif step_type == "encode_categorical":
                 columns_to_encode = step.get("columns", [])
                 methods = step.get("methods", {})
                 print(f"  Encoding columns: {columns_to_encode}")
-                
                 if columns_to_encode:
                     for col in columns_to_encode:
                         if col in preprocessor.df.columns:
@@ -643,39 +690,46 @@ async def preprocess(config: dict):
                                 print(f"      ❌ Error: {e}")
                         else:
                             print(f"    ⚠️ Column {col} not found")
-        
+
         # Get processed dataframe
         processed_df = preprocessor.get_processed_dataframe()
         processed_rows = len(processed_df)
-        datasets[new_dataset_id]["dataframe"] = processed_df
-        
+
         print(f"\n📊 PROCESSING COMPLETE:")
         print(f"  Input: {original_rows} rows")
         print(f"  Output: {processed_rows} rows")
         print(f"  Columns: {len(processed_df.columns)}")
-        
-        # Clean for JSON
+
         processed_df = processed_df.replace([np.inf, -np.inf], np.nan)
-        
-        # ✅ CRITICAL: Generate NEW cleaned dataset ID
+
+        # ✅ Generate NEW cleaned dataset ID
         new_dataset_id = f"{dataset_id}_cleaned_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # ✅ CRITICAL: Store the PROCESSED dataset (not original!)
+
+        # ✅ Store the processed dataset
         datasets[new_dataset_id] = {
-            "dataframe": processed_df.copy(),  # ✅ Store PROCESSED df
+            "dataframe": processed_df.copy(),
             "filename": f"{datasets[dataset_id]['filename']}_cleaned",
             "uploaded_at": datasets[dataset_id]["uploaded_at"],
             "preprocessed": True,
             "original_dataset_id": dataset_id,
-            "processing_steps": steps  # ✅ Track what was applied
+            "processing_steps": steps,
+            "is_split": False,
+            "is_scaled": False,
+            "split_info": None,
+            "X_train": None,
+            "X_test": None,
+            "y_train": None,
+            "y_test": None,
+            "scaler": None,
+            "scaling_method": None,
+            "scaled_columns": []
         }
-        
+
         print(f"✅ Stored processed dataset: {new_dataset_id}")
-        
-        # Prepare preview (sample for frontend)
+
+        # Prepare preview for frontend
         sample_size = min(200, len(processed_df))
         sample_df = processed_df.head(sample_size)
-        
         preview_data = []
         for idx, row in sample_df.iterrows():
             row_dict = {}
@@ -695,7 +749,7 @@ async def preprocess(config: dict):
                 else:
                     row_dict[str(col)] = str(value)
             preview_data.append(row_dict)
-        
+
         print("\n" + "=" * 80)
         print(f"✅ SUCCESS!")
         print(f"  Original: {original_rows}")
@@ -703,23 +757,28 @@ async def preprocess(config: dict):
         print(f"  Removed: {original_rows - processed_rows}")
         print(f"  New Dataset ID: {new_dataset_id}")
         print("=" * 80)
-        
+
         return {
             "success": True,
             "preview": preview_data,
             "original_rows": original_rows,
-            "total_rows": processed_rows,  
+            "total_rows": processed_rows,
             "rows_removed": original_rows - processed_rows,
             "categorical_encoded": categorical_encoded,
             "encoded_columns": encoded_columns,
             "cleaned_dataset_id": new_dataset_id
         }
-    
+
     except Exception as e:
         print(f"❌ ERROR: {e}")
         import traceback
         traceback.print_exc()
-        return {"success": False, "error": str(e)}
+        # Return cleaned_dataset_id only if assigned
+        error_response = {"success": False, "error": str(e)}
+        if new_dataset_id is not None:
+            error_response["cleaned_dataset_id"] = new_dataset_id
+        return error_response
+
 
 
 
@@ -872,187 +931,488 @@ async def get_engineering_preview(dataset_id: str):
         raise HTTPException(500, str(e))
 
 
-@app.post("/api/split-dataset/{dataset_id}")
-async def split_dataset(dataset_id: str, request: dict):
+
+
+
+# ===== TARGET VARIABLE SELECTION =====
+@app.post("/api/set-target")
+async def set_target(request: dict):
     """
-    ✅ Split FULL dataset into train and test sets
+    Set target variable and detect problem type
     """
     try:
+        dataset_id = request.get('dataset_id')
+        target_column = request.get('target_column')
+        datasets[dataset_id]['target_column'] = target_column
+        
+        print(f"🎯 Setting target for dataset {dataset_id}: {target_column}")
+        
         if dataset_id not in datasets:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
-        # ✅ GET FULL DATASET (NOT SAMPLE)
-        df = datasets[dataset_id]["dataframe"].copy()
+        df = datasets[dataset_id]['dataframe']
         
-        print(f"\n{'='*80}")
-        print(f"DEBUG: Received split request for dataset: {dataset_id}")
-        print(f"DEBUG: Dataset shape: {df.shape}")
-        print(f"DEBUG: Request data: {request}")
-        print(f"{'='*80}\n")
+        if target_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Column '{target_column}' not found in dataset")
         
-        # Extract parameters from request
-        test_size = float(request.get("test_size", 0.2))
-        random_state = int(request.get("random_state", 42))
+        # Detect problem type
+        unique_values = df[target_column].nunique()
+        problem_type = "classification" if unique_values < 20 else "regression"
         
-        # Validate test_size
-        if not (0.05 <= test_size <= 0.95):
-            raise HTTPException(status_code=400, detail="Test size must be between 5% and 95%")
+        # If numerical but few unique values, check if they're continuous
+        if pd.api.types.is_numeric_dtype(df[target_column]):
+            if unique_values > 20:
+                problem_type = "regression"
+            else:
+                # Check if values are integers (likely classification)
+                if df[target_column].dtype in ['int64', 'int32']:
+                    problem_type = "classification"
+                else:
+                    problem_type = "regression"
         
-        print(f"🔀 SPLITTING FULL DATASET")
-        print(f"Test size: {test_size*100:.1f}%")
-        print(f"Total rows: {len(df)}")
+        # Store target info in dataset
+        datasets[dataset_id]['target_column'] = target_column
+        datasets[dataset_id]['problem_type'] = problem_type
         
-        # ✅ Import at function level (prevents import errors)
+        # Get feature information
+        feature_columns = [col for col in df.columns if col != target_column]
+        categorical_features = df[feature_columns].select_dtypes(include=['object', 'category']).columns.tolist()
+        numerical_features = df[feature_columns].select_dtypes(include=np.number).columns.tolist()
+        
+        print(f"✅ Target set: {target_column} | Type: {problem_type}")
+        
+        return {
+            'success': True,
+            'target_column': target_column,
+            'problem_type': problem_type,
+            'target_unique_values': int(unique_values),
+            'total_features': len(feature_columns),
+            'categorical_features': categorical_features,
+            'numerical_features': numerical_features
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error setting target: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
+    
+# ===== NEW: SPLIT & SCALING ENDPOINTS =====
+
+@app.post("/api/split-dataset")
+async def split_dataset(request: Dict[str, Any]):
+    """Split dataset into train/test sets"""
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage
+    
+    try:
+        dataset_id = request.get('datasetid')
+        test_size = request.get('test_size', 0.2)
+        stratify_enabled = request.get('stratify', True)
+        random_state = request.get('random_state', 42)
+        
+        print(f"Split request for dataset: {dataset_id}")
+        
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Get the target column from dataset metadata
+        dataset_info = datasets[dataset_id]
+        if 'target_column' not in dataset_info:
+            raise HTTPException(status_code=400, detail="No target selected. Please select target first.")
+        
+        target_column = dataset_info['target_column']
+        df = dataset_info['dataframe'].copy()
+        
+        print(f"Target column: {target_column}")
+        print(f"Dataset shape: {df.shape}")
+        
+        if target_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Target column '{target_column}' not found")
+        
+        # Separate features and target
+        X = df.drop(columns=[target_column])
+        y = df[target_column]
+        
+        # Determine if stratification is possible
+        stratify_param = None
+        if stratify_enabled:
+            # Check if target is categorical/classification
+            if y.dtype == 'object' or y.nunique() < 20:
+                try:
+                    stratify_param = y
+                except:
+                    print("Stratification failed, proceeding without stratification")
+                    stratify_param = None
+        
+        # Perform split
         from sklearn.model_selection import train_test_split
-        import numpy as np
-        
-        # Get target column (last column)
-        target_col = df.columns[-1]
-        print(f"Target column: {target_col}")
-        
-        y = df[target_col].copy()
-        X = df.drop(columns=[target_col]).copy()
-        
-        print(f"X shape: {X.shape}, y shape: {y.shape}")
-        
-        # Check if data is suitable for stratification
-        try:
-            unique_values = y.nunique() if hasattr(y, 'nunique') else len(np.unique(y))
-            print(f"Unique target values: {unique_values}")
-            stratify = y if unique_values <= 20 else None
-        except:
-            stratify = None
-            print("Could not determine stratify - setting to None")
-        
-        # ✅ SPLIT ON FULL DATA
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, 
-            test_size=test_size, 
+            test_size=test_size,
             random_state=random_state,
+            stratify=stratify_param
+        )
+        
+        # Store split data
+        X_train_storage[dataset_id] = X_train
+        X_test_storage[dataset_id] = X_test
+        y_train_storage[dataset_id] = y_train
+        y_test_storage[dataset_id] = y_test
+        
+        # Update dataset metadata
+        datasets[dataset_id]['is_split'] = True
+        datasets[dataset_id]['split_info'] = {
+            'train_size': len(X_train),
+            'test_size': len(X_test),
+            'test_size_ratio': test_size,
+            'stratified': stratify_param is not None
+        }
+        
+        # Get numerical columns for scaling
+        numerical_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
+        
+        print(f"Split complete: {len(X_train)} train, {len(X_test)} test")
+        print(f"Numerical columns: {numerical_cols}")
+        
+        return {
+            "status": "success",
+            "message": "Dataset split successfully",
+            "train_size": len(X_train),
+            "test_size": len(X_test),
+            "numerical_columns": numerical_cols,
+            "stratified": stratify_param is not None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Split error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apply-scaling")
+async def apply_scaling(request: Dict[str, Any]):
+    """Apply feature scaling to numerical columns"""
+    global X_train_storage, X_test_storage, split_scalers
+    
+    try:
+        dataset_id = request.get('dataset_id')
+        scaling_method = request.get('scaling_method', 'standard')
+        columns = request.get('columns', [])
+        
+        print(f"Scaling request for dataset: {dataset_id}")
+        print(f"Method: {scaling_method}, Columns: {columns}")
+        
+        if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
+            raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
+        
+        if not columns:
+            raise HTTPException(status_code=400, detail="No columns selected for scaling")
+        
+        X_train = X_train_storage[dataset_id]
+        X_test = X_test_storage[dataset_id]
+        
+        # Select scaler
+        if scaling_method == 'standard':
+            scaler = StandardScaler()
+        elif scaling_method == 'minmax':
+            scaler = MinMaxScaler()
+        elif scaling_method == 'robust':
+            scaler = RobustScaler()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown scaling method: {scaling_method}")
+        
+        # Apply scaling
+        X_train[columns] = scaler.fit_transform(X_train[columns])
+        X_test[columns] = scaler.transform(X_test[columns])
+        
+        # Update storage
+        X_train_storage[dataset_id] = X_train
+        X_test_storage[dataset_id] = X_test
+        split_scalers[dataset_id] = {
+            'scaler': scaler,
+            'columns': columns,
+            'method': scaling_method
+        }
+        
+        # Update dataset metadata
+        datasets[dataset_id]['is_scaled'] = True
+        datasets[dataset_id]['scaling_method'] = scaling_method
+        datasets[dataset_id]['scaled_columns'] = columns
+        
+        print(f"Scaling complete: {len(columns)} columns scaled")
+        
+        return {
+            "status": "success",
+            "message": f"Scaling applied using {scaling_method} scaler",
+            "columns_scaled": len(columns),
+            "scaler_type": scaling_method
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Scaling error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/download-preprocessed")
+async def download_preprocessed(dataset_id: str):
+    """Download the preprocessed dataset (after split & scaling)"""
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage
+    
+    try:
+        print(f"Download request for dataset: {dataset_id}")
+        
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # If split was done, combine train+test with target
+        if dataset_id in X_train_storage and dataset_id in y_train_storage:
+            X_train = X_train_storage[dataset_id]
+            X_test = X_test_storage[dataset_id]
+            y_train = y_train_storage[dataset_id]
+            y_test = y_test_storage[dataset_id]
+            
+            target_col = datasets[dataset_id].get('target_column', 'target')
+            
+            # Combine back
+            train_df = X_train.copy()
+            train_df[target_col] = y_train.values
+            test_df = X_test.copy()
+            test_df[target_col] = y_test.values
+            
+            preprocessed_df = pd.concat([train_df, test_df], ignore_index=True)
+            print(f"Combined dataset shape: {preprocessed_df.shape}")
+        else:
+            # If no split, return current preprocessed dataset
+            preprocessed_df = datasets[dataset_id]['dataframe'].copy()
+            print(f"Original dataset shape: {preprocessed_df.shape}")
+        
+        # Convert to CSV
+        csv_buffer = io.StringIO()
+        preprocessed_df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+        
+        filename = f"preprocessed_{dataset_id}.csv"
+        
+        return StreamingResponse(
+            io.BytesIO(csv_buffer.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Download error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+from pydantic import BaseModel
+
+# ===== PYDANTIC MODELS =====
+class SplitRequest(BaseModel):
+    test_size: float = 0.2
+    random_state: int = 42
+
+
+@app.post("/api/split-dataset/{dataset_id}")
+async def split_dataset(dataset_id: str, request: SplitRequest):
+    """Split dataset into training and testing sets using target variable"""
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    try:
+        # 🆕 CHECK IF TARGET IS SET
+        target_column = datasets[dataset_id].get('target_column')
+        if not target_column:
+            return {
+                'success': False,
+                'error': 'Please select a target variable first'
+            }
+        
+        df = datasets[dataset_id]['dataframe']
+        
+        # 🆕 SEPARATE X and y BASED ON TARGET
+        X = df.drop(columns=[target_column])
+        y = df[target_column]
+        
+        # 🆕 USE SKLEARN'S train_test_split
+        from sklearn.model_selection import train_test_split
+        
+        # Stratify for classification
+        stratify = y if datasets[dataset_id]['problem_type'] == 'classification' else None
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y,
+            test_size=request.test_size,
+            random_state=42,
             stratify=stratify
         )
         
-        print(f"✅ Split complete!")
-        print(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
+        # Store split data
+        datasets[dataset_id]['X_train'] = X_train
+        datasets[dataset_id]['X_test'] = X_test
+        datasets[dataset_id]['y_train'] = y_train
+        datasets[dataset_id]['y_test'] = y_test
+        datasets[dataset_id]['is_split'] = True
         
-        # ✅ STORE SPLIT INDICES & DATA
-        datasets[dataset_id]["split_info"] = {
-            "train_indices": X_train.index.tolist(),
-            "test_indices": X_test.index.tolist(),
-            "test_size": float(test_size),
-            "random_state": random_state,
-            "is_split": True
+        split_info = {
+            'train_size': len(X_train),
+            'test_size': len(X_test),
+            'train_ratio': round(len(X_train) / len(df), 2),
+            'test_ratio': round(len(X_test) / len(df), 2),
+            'target_column': target_column
         }
         
-        # ✅ Store train/test data
-        datasets[dataset_id]["X_train"] = X_train.reset_index(drop=True)
-        datasets[dataset_id]["X_test"] = X_test.reset_index(drop=True)
-        datasets[dataset_id]["y_train"] = y_train.reset_index(drop=True)
-        datasets[dataset_id]["y_test"] = y_test.reset_index(drop=True)
-        datasets[dataset_id]["target_column"] = str(target_col)
+        datasets[dataset_id]['splitInfo'] = split_info
         
-        train_ratio = int((1 - test_size) * 100)
-        test_ratio = int(test_size * 100)
+        print(f"✅ Dataset split: {len(X_train)} train, {len(X_test)} test | Target: {target_column}")
         
-        response_data = {
-            "success": True,
-            "train_rows": int(len(X_train)),
-            "test_rows": int(len(X_test)),
-            "train_ratio": train_ratio,
-            "test_ratio": test_ratio,
-            "features": int(X_train.shape[1])
+        return {
+            'success': True,
+            'split_info': split_info
         }
         
-        print(f"Response: {response_data}")
-        print(f"{'='*80}\n")
-        
-        return response_data
-    
     except Exception as e:
-        print(f"\n{'='*80}")
-        print(f"❌ SPLIT ERROR!")
-        print(f"Error type: {type(e).__name__}")
-        print(f"Error message: {str(e)}")
-        import traceback
-        print(f"Traceback:\n{traceback.format_exc()}")
-        print(f"{'='*80}\n")
-        raise HTTPException(status_code=500, detail=f"Split failed: {str(e)}")
+        print(f"❌ Split error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
+
+from pydantic import BaseModel
+from typing import List
+
+class ScalingRequest(BaseModel):
+    method: str
+    columns: List[str]
 
 @app.post("/api/apply-scaling/{dataset_id}")
-async def apply_scaling(dataset_id: str, request: dict):
+async def apply_scaling(dataset_id: str, request: ScalingRequest):
     """
-    ✅ Apply feature scaling to train & test
-    ✅ FIT scaler on TRAIN only
-    ✅ Transform BOTH using TRAIN scaler (NO DATA LEAKAGE)
+    Apply feature scaling to numeric columns
     """
+    print(f"\n{'='*80}")
+    print(f"🔧 APPLYING FEATURE SCALING")
+    print(f"{'='*80}")
+    print(f"Dataset ID: {dataset_id}")
+    print(f"Method: {request.method}")
+    print(f"Columns: {request.columns}")
+    
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    if not datasets[dataset_id].get("is_split", False):
+        raise HTTPException(status_code=400, detail="Dataset must be split before scaling")
+    
     try:
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        # ✅ GET SPLIT DATA
-        split_info = datasets[dataset_id].get("split_info", {})
-        if not split_info.get("is_split"):
-            raise HTTPException(status_code=400, detail="Dataset not split yet")
-        
         X_train = datasets[dataset_id]["X_train"].copy()
         X_test = datasets[dataset_id]["X_test"].copy()
+        y_train = datasets[dataset_id]["y_train"]
+        y_test = datasets[dataset_id]["y_test"]
         
-        method = request.get("method", "standard")
-        cols_to_scale = request.get("include_cols", X_train.columns.tolist())
+        print(f"✅ Loaded split data:")
+        print(f"   X_train shape: {X_train.shape}")
+        print(f"   X_test shape: {X_test.shape}")
         
-        # ✅ VALIDATE SCALING METHOD
-        from sklearn.preprocessing import StandardScaler, RobustScaler, MinMaxScaler
+        # Select scaler
+        if request.method == "standard":
+            scaler = StandardScaler()
+        elif request.method == "minmax":
+            scaler = MinMaxScaler()
+        elif request.method == "robust":
+            scaler = RobustScaler()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown scaling method: {request.method}")
         
-        scalers_map = {
-            "standard": StandardScaler(),
-            "robust": RobustScaler(),
-            "minmax": MinMaxScaler()
-        }
+        print(f"✅ Selected scaler: {request.method}")
         
-        if method not in scalers_map:
-            raise HTTPException(status_code=400, detail=f"Invalid scaling method: {method}")
+        # Validate columns
+        missing_cols = [col for col in request.columns if col not in X_train.columns]
+        if missing_cols:
+            raise HTTPException(status_code=400, detail=f"Columns not found: {missing_cols}")
         
-        scaler = scalers_map[method]
+        non_numeric = [col for col in request.columns if not pd.api.types.is_numeric_dtype(X_train[col])]
+        if non_numeric:
+            raise HTTPException(status_code=400, detail=f"Non-numeric columns: {non_numeric}")
         
-        print(f"\n{'='*80}")
-        print(f"📏 APPLYING {method.upper()} SCALING")
-        print(f"{'='*80}")
-        print(f"Columns to scale: {cols_to_scale[:3]}..." if len(cols_to_scale) > 3 else f"Columns: {cols_to_scale}")
-        print(f"Train shape: {X_train.shape}")
-        print(f"Test shape: {X_test.shape}")
+        print(f"✅ Validation passed for {len(request.columns)} columns")
         
-        # ✅ FIT SCALER ON TRAIN ONLY
-        X_train_scaled = X_train.copy()
-        X_train_scaled[cols_to_scale] = scaler.fit_transform(X_train[cols_to_scale])
+        # Fit and transform
+        scaler.fit(X_train[request.columns])
+        X_train[request.columns] = scaler.transform(X_train[request.columns])
+        X_test[request.columns] = scaler.transform(X_test[request.columns])
         
-        # ✅ TRANSFORM TEST using TRAIN scaler (NO REFIT)
-        X_test_scaled = X_test.copy()
-        X_test_scaled[cols_to_scale] = scaler.transform(X_test[cols_to_scale])
+        print(f"✅ Applied scaling to train and test sets")
         
-        # ✅ STORE BACK TO DATASET
-        datasets[dataset_id]["X_train"] = X_train_scaled
-        datasets[dataset_id]["X_test"] = X_test_scaled
+        # Update dataset
+        datasets[dataset_id]["X_train"] = X_train
+        datasets[dataset_id]["X_test"] = X_test
         datasets[dataset_id]["scaler"] = scaler
-        datasets[dataset_id]["scaling_method"] = method
-        datasets[dataset_id]["scaled_columns"] = cols_to_scale
+        datasets[dataset_id]["scaler_type"] = request.method
+        datasets[dataset_id]["scaled_columns"] = request.columns
+        datasets[dataset_id]["is_scaled"] = True
         
-        print(f"✅ Scaling applied successfully!")
+        # ✅ Reconstruct full dataframe
+        X_full = pd.concat([X_train, X_test], ignore_index=True)
+        
+        # ✅ Handle y concatenation robustly
+        print(f"📊 y_train type: {type(y_train)}")
+        print(f"📊 y_test type: {type(y_test)}")
+        
+        if isinstance(y_train, pd.Series) and isinstance(y_test, pd.Series):
+            y_full = pd.concat([y_train, y_test], ignore_index=True)
+        elif isinstance(y_train, np.ndarray) and isinstance(y_test, np.ndarray):
+            if y_train.ndim == 0 or y_test.ndim == 0:
+                y_full = np.concatenate([np.atleast_1d(y_train), np.atleast_1d(y_test)])
+            else:
+                y_full = np.concatenate([y_train.ravel(), y_test.ravel()])
+        else:
+            y_full = np.concatenate([np.array(y_train).ravel(), np.array(y_test).ravel()])
+        
+        print(f"✅ y_full length: {len(y_full)}")
+        
+        # Combine features and target
+        df_full = X_full.copy()
+        target_col = datasets[dataset_id].get("target_column", "target")
+        df_full[target_col] = y_full
+        
+        datasets[dataset_id]["dataframe"] = df_full
+        
+        print(f"✅ Updated dataframe shape: {df_full.shape}")
         print(f"{'='*80}\n")
         
         return {
             "success": True,
-            "method": method,
-            "scaled_columns": len(cols_to_scale),
-            "train_rows": len(X_train_scaled),
-            "test_rows": len(X_test_scaled)
+            "message": f"Applied {request.method} scaling to {len(request.columns)} columns",
+            "scaled_columns": request.columns,
+            "is_scaled": True,
+            "method": request.method
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Scaling error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+
 
 
     

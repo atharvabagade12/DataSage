@@ -157,27 +157,8 @@
             <div class="card-icon"></div>
             <h3>Preprocessing Applied</h3>
             <div class="preprocessing-summary">
-              <div
-                v-if="preprocessingSteps.length === 0"
-                class="no-preprocessing"
-              >
-                <p>No preprocessing was applied</p>
-                <span class="warning-note"
-                  >Consider going back to apply data cleaning</span
-                >
-              </div>
-              <div v-else class="preprocessing-list">
-                <div
-                  v-for="step in preprocessingSteps"
-                  :key="step"
-                  class="preprocessing-step"
-                >
-                  <span class="step-icon"></span>
-                  <span class="step-name">{{
-                    formatPreprocessingStep(step)
-                  }}</span>
-                </div>
-              </div>
+              
+              
             </div>
           </div>
         </div>
@@ -1053,6 +1034,7 @@
       </div>
     </div>
   </div>
+
 </template>
 
 <script setup>
@@ -2813,7 +2795,11 @@ onMounted(async () => {
   // ADD THIS: Check backend connection
   await checkBackendConnection();
 });
+
+
 </script>
+
+
 
 <style scoped>
 /* Base Styles */
