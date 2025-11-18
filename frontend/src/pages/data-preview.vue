@@ -1367,13 +1367,11 @@ import {
   nextTick,
   onUnmounted,
 } from "vue";
+
 import { useRouter } from "vue-router";
 import { useMLDataFlowStore } from "~/stores/mlDataFlow";
 const mlStore = useMLDataFlowStore();
 import axios from 'axios'
-
-
-
 
 const router = useRouter();
 
@@ -1423,11 +1421,6 @@ const outlierStrategy = ref("cap");
 
 // Get total rows from your EXISTING data
 const totalRows = computed(() => currentDataset.value.length)
-
-
-
-
-
 
 
 // ===== COMPUTED PROPERTIES =====
@@ -1735,6 +1728,11 @@ const getToolName = (toolId) => {
   };
   return toolNames[toolId] || toolId;
 };
+
+const displayedRowCount = computed(() => {
+  
+  return totalRows.value;
+});
 
 
 const getToolIcon = (toolId) => {
@@ -2224,6 +2222,12 @@ const applyBackendPreprocessing = async () => {
     );
   console.log("✅ mlStore updated successfully");
 
+    if (mlStore.datasetId && mlStore.registeredDatasets.has(mlStore.datasetId)) {
+      const datasetRecord = mlStore.registeredDatasets.get(mlStore.datasetId);
+      datasetRecord.shape = [result.total_rows, columns.value.length];
+      console.log(`✅ Updated dataset shape in registry: [${result.total_rows}, ${columns.value.length}]`);
+    }
+
   // 2️⃣ Update localStorage with cleaned dataset
   console.log("💾 Updating localStorage...");
   localStorage.setItem('processedData', JSON.stringify({
@@ -2241,10 +2245,14 @@ const applyBackendPreprocessing = async () => {
       rows: result.total_rows,
       columns: columns.value.length
     },
+    shape: [result.total_rows, columns.value.length],
     isPreprocessed: true,
     preprocessingHistory: preprocessingHistory.value
   }));
   console.log("✅ localStorage updated successfully");
+
+  
+
 
 
       // Mark as cleaned and switch view
@@ -3742,11 +3750,9 @@ const analyzeColumns = () => {
   recalculateMissingColumnsDetailed();
 };
 
-/**
- * Load dataset from available sources (mlStore, localStorage, or backend)
- * Priority: mlStore > localStorage > Backend
- * Support for reloading fresh data after scaling operations
- */
+
+//  * Support for reloading fresh data after scaling operations
+//  */
 const loadDataFromStorage = async () => {
   console.log("\n" + "=".repeat(80));
   console.log("📂 LOADING DATA FROM STORAGE");

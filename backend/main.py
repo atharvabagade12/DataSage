@@ -713,6 +713,7 @@ async def preprocess(config: dict):
             "preprocessed": True,
             "original_dataset_id": dataset_id,
             "processing_steps": steps,
+            "target_column": None,
             "is_split": False,
             "is_scaled": False,
             "split_info": None,
@@ -1074,6 +1075,12 @@ async def split_dataset(request: Dict[str, Any]):
         # Get numerical columns for scaling
         numerical_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
         
+        train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
+        test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
+        
+        train_preview = train_preview_df.to_dict('records')
+        test_preview = test_preview_df.to_dict('records')
+        
         print(f"Split complete: {len(X_train)} train, {len(X_test)} test")
         print(f"Numerical columns: {numerical_cols}")
         
@@ -1082,6 +1089,8 @@ async def split_dataset(request: Dict[str, Any]):
             "message": "Dataset split successfully",
             "train_size": len(X_train),
             "test_size": len(X_test),
+            "train_preview": train_preview,
+            "test_preview": test_preview,
             "numerical_columns": numerical_cols,
             "stratified": stratify_param is not None
         }
@@ -1095,27 +1104,199 @@ async def split_dataset(request: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/apply-scaling")
-async def apply_scaling(request: Dict[str, Any]):
+
+
+from fastapi import HTTPException
+from pydantic import BaseModel
+from typing import List, Dict
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, OrdinalEncoder
+import numpy as np
+
+# Pydantic model for request
+class ColumnEncoding(BaseModel):
+    name: str
+    method: str  # 'onehot', 'label', 'ordinal'
+
+class CategoricalEncodingRequest(BaseModel):
+    dataset_id: str
+    columns: List[ColumnEncoding]
+
+# Storage for encoders (similar to split_scalers)
+categorical_encoders = {}
+
+@app.post("/api/apply-categorical-encoding")
+async def apply_categorical_encoding(request: CategoricalEncodingRequest):
+    """
+    Apply categorical encoding to specified columns in train and test splits.
+    Must be called AFTER dataset is split.
+    """
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, categorical_encoders
+    
+    try:
+        dataset_id = request.dataset_id
+        columns_to_encode = request.columns
+        
+        print("\n" + "=" * 80)
+        print(f"📊 CATEGORICAL ENCODING REQUEST")
+        print(f"   Dataset ID: {dataset_id}")
+        print(f"   Columns to encode: {len(columns_to_encode)}")
+        print("=" * 80)
+        
+        # Validate dataset exists and is split
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset must be split before encoding")
+        
+        if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
+            raise HTTPException(status_code=400, detail="Split data not found")
+        
+        X_train = X_train_storage[dataset_id].copy()
+        X_test = X_test_storage[dataset_id].copy()
+        y_train = y_train_storage[dataset_id]
+        y_test = y_test_storage[dataset_id]
+        
+        encoders_used = {}
+        encoded_columns = []
+        
+        for col_info in columns_to_encode:
+            col_name = col_info.name
+            method = col_info.method.lower()
+            
+            if col_name not in X_train.columns:
+                print(f"⚠️  Column {col_name} not found, skipping...")
+                continue
+            
+            print(f"Encoding {col_name} using {method}...")
+            
+            if method == 'label':
+                # Label Encoding: Fit on train, transform both
+                encoder = LabelEncoder()
+                X_train[col_name] = encoder.fit_transform(X_train[col_name].astype(str))
+                X_test[col_name] = encoder.transform(X_test[col_name].astype(str))
+                encoders_used[col_name] = {'type': 'label', 'encoder': encoder}
+                encoded_columns.append(col_name)
+                
+            elif method == 'onehot':
+                # One-Hot Encoding: Creates new columns
+                encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+                
+                # Fit on train
+                train_encoded = encoder.fit_transform(X_train[[col_name]])
+                test_encoded = encoder.transform(X_test[[col_name]])
+                
+                # Create new column names
+                feature_names = [f"{col_name}_{cat}" for cat in encoder.categories_[0]]
+                
+                # Create DataFrames for encoded columns
+                train_encoded_df = pd.DataFrame(train_encoded, columns=feature_names, index=X_train.index)
+                test_encoded_df = pd.DataFrame(test_encoded, columns=feature_names, index=X_test.index)
+                
+                # Drop original column and concat encoded columns
+                X_train = X_train.drop(columns=[col_name])
+                X_test = X_test.drop(columns=[col_name])
+                X_train = pd.concat([X_train, train_encoded_df], axis=1)
+                X_test = pd.concat([X_test, test_encoded_df], axis=1)
+                
+                encoders_used[col_name] = {'type': 'onehot', 'encoder': encoder, 'feature_names': feature_names}
+                encoded_columns.extend(feature_names)
+                
+            elif method == 'ordinal':
+                # Ordinal Encoding: Preserves order
+                encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+                X_train[col_name] = encoder.fit_transform(X_train[[col_name]])
+                X_test[col_name] = encoder.transform(X_test[[col_name]])
+                encoders_used[col_name] = {'type': 'ordinal', 'encoder': encoder}
+                encoded_columns.append(col_name)
+            
+            else:
+                print(f"⚠️  Unknown encoding method: {method}")
+        
+        # Update storage
+        X_train_storage[dataset_id] = X_train
+        X_test_storage[dataset_id] = X_test
+        categorical_encoders[dataset_id] = encoders_used
+        
+        # Update dataset metadata
+        datasets[dataset_id]['is_encoded'] = True
+        datasets[dataset_id]['encoded_columns'] = encoded_columns
+        datasets[dataset_id]['encoders'] = list(encoders_used.keys())
+        
+        # Create preview data with encoded columns
+        train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
+        test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
+        
+        train_preview = train_preview_df.to_dict('records')
+        test_preview = test_preview_df.to_dict('records')
+        
+        print(f"✅ Encoding complete!")
+        print(f"   Train shape: {X_train.shape}")
+        print(f"   Test shape: {X_test.shape}")
+        print(f"   Encoded columns: {encoded_columns}")
+        print("=" * 80 + "\n")
+        
+        return {
+            "success": True,
+            "message": f"Successfully encoded {len(encoded_columns)} columns",
+            "train_shape": list(X_train.shape),
+            "test_shape": list(X_test.shape),
+            "encoded_columns": encoded_columns,
+            "train_preview": train_preview,
+            "test_preview": test_preview,
+            "columns": list(X_train.columns)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Encoding error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Encoding error: {str(e)}")
+
+
+
+
+
+
+
+from pydantic import BaseModel
+from typing import List, Optional
+
+class ScalingRequest(BaseModel):
+    dataset_id: str
+    method: str = 'standard'
+    columns: Optional[List[str]] = None
+
+@app.post("/api/datasets/apply-scaling")
+async def apply_scaling(request: ScalingRequest):
     """Apply feature scaling to numerical columns"""
     global X_train_storage, X_test_storage, split_scalers
     
     try:
-        dataset_id = request.get('dataset_id')
-        scaling_method = request.get('scaling_method', 'standard')
-        columns = request.get('columns', [])
+        dataset_id = request.dataset_id
+        scaling_method = request.method
+        columns = request.columns
         
         print(f"Scaling request for dataset: {dataset_id}")
-        print(f"Method: {scaling_method}, Columns: {columns}")
+        print(f"Method: {scaling_method}")
         
         if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
             raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
         
-        if not columns:
-            raise HTTPException(status_code=400, detail="No columns selected for scaling")
+        X_train = X_train_storage[dataset_id].copy()
+        X_test = X_test_storage[dataset_id].copy()
         
-        X_train = X_train_storage[dataset_id]
-        X_test = X_test_storage[dataset_id]
+        # If no columns specified, scale all numerical columns
+        if not columns:
+            columns = X_train.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if not columns:
+            raise HTTPException(status_code=400, detail="No numerical columns found for scaling")
+        
+        print(f"Scaling columns: {columns}")
         
         # Select scaler
         if scaling_method == 'standard':
@@ -1145,463 +1326,42 @@ async def apply_scaling(request: Dict[str, Any]):
         datasets[dataset_id]['scaling_method'] = scaling_method
         datasets[dataset_id]['scaled_columns'] = columns
         
-        print(f"Scaling complete: {len(columns)} columns scaled")
+        # Create preview data for frontend
+        y_train = y_train_storage.get(dataset_id)
+        y_test = y_test_storage.get(dataset_id)
+        
+        train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
+        test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
+        
+        train_preview = train_preview_df.to_dict('records')
+        test_preview = test_preview_df.to_dict('records')
+        
+        print(f"✅ Scaling complete: {len(columns)} columns scaled")
         
         return {
-            "status": "success",
+            "success": True,
             "message": f"Scaling applied using {scaling_method} scaler",
             "columns_scaled": len(columns),
-            "scaler_type": scaling_method
+            "scaled_columns": columns,
+            "scaler_type": scaling_method,
+            "scaled_train_preview": train_preview,
+            "scaled_test_preview": test_preview
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Scaling error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/download-preprocessed")
-async def download_preprocessed(dataset_id: str):
-    """Download the preprocessed dataset (after split & scaling)"""
-    global X_train_storage, X_test_storage, y_train_storage, y_test_storage
-    
-    try:
-        print(f"Download request for dataset: {dataset_id}")
-        
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        # If split was done, combine train+test with target
-        if dataset_id in X_train_storage and dataset_id in y_train_storage:
-            X_train = X_train_storage[dataset_id]
-            X_test = X_test_storage[dataset_id]
-            y_train = y_train_storage[dataset_id]
-            y_test = y_test_storage[dataset_id]
-            
-            target_col = datasets[dataset_id].get('target_column', 'target')
-            
-            # Combine back
-            train_df = X_train.copy()
-            train_df[target_col] = y_train.values
-            test_df = X_test.copy()
-            test_df[target_col] = y_test.values
-            
-            preprocessed_df = pd.concat([train_df, test_df], ignore_index=True)
-            print(f"Combined dataset shape: {preprocessed_df.shape}")
-        else:
-            # If no split, return current preprocessed dataset
-            preprocessed_df = datasets[dataset_id]['dataframe'].copy()
-            print(f"Original dataset shape: {preprocessed_df.shape}")
-        
-        # Convert to CSV
-        csv_buffer = io.StringIO()
-        preprocessed_df.to_csv(csv_buffer, index=False)
-        csv_buffer.seek(0)
-        
-        filename = f"preprocessed_{dataset_id}.csv"
-        
-        return StreamingResponse(
-            io.BytesIO(csv_buffer.getvalue().encode()),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Download error: {str(e)}")
+        print(f"❌ Scaling error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 
-from pydantic import BaseModel
-
-# ===== PYDANTIC MODELS =====
-class SplitRequest(BaseModel):
-    test_size: float = 0.2
-    random_state: int = 42
-
-
-@app.post("/api/split-dataset/{dataset_id}")
-async def split_dataset(dataset_id: str, request: SplitRequest):
-    """Split dataset into training and testing sets using target variable"""
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
-    try:
-        # 🆕 CHECK IF TARGET IS SET
-        target_column = datasets[dataset_id].get('target_column')
-        if not target_column:
-            return {
-                'success': False,
-                'error': 'Please select a target variable first'
-            }
-        
-        df = datasets[dataset_id]['dataframe']
-        
-        # 🆕 SEPARATE X and y BASED ON TARGET
-        X = df.drop(columns=[target_column])
-        y = df[target_column]
-        
-        # 🆕 USE SKLEARN'S train_test_split
-        from sklearn.model_selection import train_test_split
-        
-        # Stratify for classification
-        stratify = y if datasets[dataset_id]['problem_type'] == 'classification' else None
-        
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y,
-            test_size=request.test_size,
-            random_state=42,
-            stratify=stratify
-        )
-        
-        # Store split data
-        datasets[dataset_id]['X_train'] = X_train
-        datasets[dataset_id]['X_test'] = X_test
-        datasets[dataset_id]['y_train'] = y_train
-        datasets[dataset_id]['y_test'] = y_test
-        datasets[dataset_id]['is_split'] = True
-        
-        split_info = {
-            'train_size': len(X_train),
-            'test_size': len(X_test),
-            'train_ratio': round(len(X_train) / len(df), 2),
-            'test_ratio': round(len(X_test) / len(df), 2),
-            'target_column': target_column
-        }
-        
-        datasets[dataset_id]['splitInfo'] = split_info
-        
-        print(f"✅ Dataset split: {len(X_train)} train, {len(X_test)} test | Target: {target_column}")
-        
-        return {
-            'success': True,
-            'split_info': split_info
-        }
-        
-    except Exception as e:
-        print(f"❌ Split error: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 
 
-from pydantic import BaseModel
-from typing import List
-
-class ScalingRequest(BaseModel):
-    method: str
-    columns: List[str]
-
-@app.post("/api/apply-scaling/{dataset_id}")
-async def apply_scaling(dataset_id: str, request: ScalingRequest):
-    """
-    Apply feature scaling to numeric columns
-    """
-    print(f"\n{'='*80}")
-    print(f"🔧 APPLYING FEATURE SCALING")
-    print(f"{'='*80}")
-    print(f"Dataset ID: {dataset_id}")
-    print(f"Method: {request.method}")
-    print(f"Columns: {request.columns}")
-    
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
-    if not datasets[dataset_id].get("is_split", False):
-        raise HTTPException(status_code=400, detail="Dataset must be split before scaling")
-    
-    try:
-        X_train = datasets[dataset_id]["X_train"].copy()
-        X_test = datasets[dataset_id]["X_test"].copy()
-        y_train = datasets[dataset_id]["y_train"]
-        y_test = datasets[dataset_id]["y_test"]
-        
-        print(f"✅ Loaded split data:")
-        print(f"   X_train shape: {X_train.shape}")
-        print(f"   X_test shape: {X_test.shape}")
-        
-        # Select scaler
-        if request.method == "standard":
-            scaler = StandardScaler()
-        elif request.method == "minmax":
-            scaler = MinMaxScaler()
-        elif request.method == "robust":
-            scaler = RobustScaler()
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown scaling method: {request.method}")
-        
-        print(f"✅ Selected scaler: {request.method}")
-        
-        # Validate columns
-        missing_cols = [col for col in request.columns if col not in X_train.columns]
-        if missing_cols:
-            raise HTTPException(status_code=400, detail=f"Columns not found: {missing_cols}")
-        
-        non_numeric = [col for col in request.columns if not pd.api.types.is_numeric_dtype(X_train[col])]
-        if non_numeric:
-            raise HTTPException(status_code=400, detail=f"Non-numeric columns: {non_numeric}")
-        
-        print(f"✅ Validation passed for {len(request.columns)} columns")
-        
-        # Fit and transform
-        scaler.fit(X_train[request.columns])
-        X_train[request.columns] = scaler.transform(X_train[request.columns])
-        X_test[request.columns] = scaler.transform(X_test[request.columns])
-        
-        print(f"✅ Applied scaling to train and test sets")
-        
-        # Update dataset
-        datasets[dataset_id]["X_train"] = X_train
-        datasets[dataset_id]["X_test"] = X_test
-        datasets[dataset_id]["scaler"] = scaler
-        datasets[dataset_id]["scaler_type"] = request.method
-        datasets[dataset_id]["scaled_columns"] = request.columns
-        datasets[dataset_id]["is_scaled"] = True
-        
-        # ✅ Reconstruct full dataframe
-        X_full = pd.concat([X_train, X_test], ignore_index=True)
-        
-        # ✅ Handle y concatenation robustly
-        print(f"📊 y_train type: {type(y_train)}")
-        print(f"📊 y_test type: {type(y_test)}")
-        
-        if isinstance(y_train, pd.Series) and isinstance(y_test, pd.Series):
-            y_full = pd.concat([y_train, y_test], ignore_index=True)
-        elif isinstance(y_train, np.ndarray) and isinstance(y_test, np.ndarray):
-            if y_train.ndim == 0 or y_test.ndim == 0:
-                y_full = np.concatenate([np.atleast_1d(y_train), np.atleast_1d(y_test)])
-            else:
-                y_full = np.concatenate([y_train.ravel(), y_test.ravel()])
-        else:
-            y_full = np.concatenate([np.array(y_train).ravel(), np.array(y_test).ravel()])
-        
-        print(f"✅ y_full length: {len(y_full)}")
-        
-        # Combine features and target
-        df_full = X_full.copy()
-        target_col = datasets[dataset_id].get("target_column", "target")
-        df_full[target_col] = y_full
-        
-        datasets[dataset_id]["dataframe"] = df_full
-        
-        print(f"✅ Updated dataframe shape: {df_full.shape}")
-        print(f"{'='*80}\n")
-        
-        return {
-            "success": True,
-            "message": f"Applied {request.method} scaling to {len(request.columns)} columns",
-            "scaled_columns": request.columns,
-            "is_scaled": True,
-            "method": request.method
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-
-
-
-
-
-    
-@app.post("/api/apply-pca/{dataset_id}")
-async def apply_pca(dataset_id: str, request: dict):
-    """
-    ✅ Apply PCA to train & test
-    ✅ FIT PCA on TRAIN only
-    ✅ Transform BOTH using TRAIN PCA model (NO DATA LEAKAGE)
-    """
-    try:
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        split_info = datasets[dataset_id].get("split_info", {})
-        if not split_info.get("is_split"):
-            raise HTTPException(status_code=400, detail="Dataset not split yet")
-        
-        X_train = datasets[dataset_id]["X_train"].copy()
-        X_test = datasets[dataset_id]["X_test"].copy()
-        
-        n_components = request.get("n_components", 10)
-        n_components = min(n_components, X_train.shape[1] - 1)
-        
-        if n_components < 2:
-            raise HTTPException(status_code=400, detail="Components must be >= 2")
-        
-        from sklearn.decomposition import PCA
-        import numpy as np
-        
-        print(f"\n{'='*80}")
-        print(f"🔍 APPLYING PCA (DIMENSIONALITY REDUCTION)")
-        print(f"{'='*80}")
-        print(f"Original features: {X_train.shape[1]}")
-        print(f"Target components: {n_components}")
-        
-        # ✅ FIT PCA ON TRAIN ONLY
-        pca = PCA(n_components=n_components)
-        X_train_pca = pca.fit_transform(X_train)
-        
-        # ✅ TRANSFORM TEST using TRAIN PCA model
-        X_test_pca = pca.transform(X_test)
-        
-        # ✅ CREATE DATAFRAMES WITH PCA COLUMNS
-        pca_cols = [f"PC{i+1}" for i in range(n_components)]
-        X_train_pca_df = pd.DataFrame(X_train_pca, columns=pca_cols, index=X_train.index)
-        X_test_pca_df = pd.DataFrame(X_test_pca, columns=pca_cols, index=X_test.index)
-        
-        # ✅ STORE BACK TO DATASET
-        datasets[dataset_id]["X_train"] = X_train_pca_df
-        datasets[dataset_id]["X_test"] = X_test_pca_df
-        datasets[dataset_id]["pca"] = pca
-        datasets[dataset_id]["pca_variance"] = pca.explained_variance_ratio_.tolist()
-        datasets[dataset_id]["pca_columns"] = pca_cols
-        
-        cumsum_var = np.sum(pca.explained_variance_ratio_)
-        
-        print(f"✅ PCA applied successfully!")
-        print(f"Cumulative variance explained: {cumsum_var*100:.2f}%")
-        print(f"Components: {pca_cols}")
-        print(f"{'='*80}\n")
-        
-        return {
-            "success": True,
-            "components": n_components,
-            "variance_explained": float(cumsum_var),
-            "variance_per_component": pca.explained_variance_ratio_.tolist()
-        }
-    
-    except Exception as e:
-        print(f"❌ PCA error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/export/train/{dataset_id}")
-async def export_train(dataset_id: str):
-    """✅ Export training dataset as CSV"""
-    try:
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        X_train = datasets[dataset_id].get("X_train")
-        y_train = datasets[dataset_id].get("y_train")
-        target_col = datasets[dataset_id].get("target_column", "target")
-        
-        if X_train is None or y_train is None:
-            raise HTTPException(status_code=400, detail="Dataset not split yet")
-        
-        # ✅ COMBINE FEATURES AND TARGET
-        train_df = X_train.copy()
-        train_df[target_col] = y_train.values
-        
-        csv_content = train_df.to_csv(index=False)
-        
-        return StreamingResponse(
-            iter([csv_content]),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=training_data.csv"}
-        )
-    
-    except Exception as e:
-        print(f"❌ Export train error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/export/test/{dataset_id}")
-async def export_test(dataset_id: str):
-    """✅ Export test dataset as CSV"""
-    try:
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        X_test = datasets[dataset_id].get("X_test")
-        y_test = datasets[dataset_id].get("y_test")
-        target_col = datasets[dataset_id].get("target_column", "target")
-        
-        if X_test is None or y_test is None:
-            raise HTTPException(status_code=400, detail="Dataset not split yet")
-        
-        # ✅ COMBINE FEATURES AND TARGET
-        test_df = X_test.copy()
-        test_df[target_col] = y_test.values
-        
-        csv_content = test_df.to_csv(index=False)
-        
-        return StreamingResponse(
-            iter([csv_content]),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=test_data.csv"}
-        )
-    
-    except Exception as e:
-        print(f"❌ Export test error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/export/both/{dataset_id}")
-async def export_both(dataset_id: str):
-    """✅ Export both train & test as ZIP"""
-    try:
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        X_train = datasets[dataset_id].get("X_train")
-        y_train = datasets[dataset_id].get("y_train")
-        X_test = datasets[dataset_id].get("X_test")
-        y_test = datasets[dataset_id].get("y_test")
-        target_col = datasets[dataset_id].get("target_column", "target")
-        
-        if None in [X_train, y_train, X_test, y_test]:
-            raise HTTPException(status_code=400, detail="Dataset not split yet")
-        
-        import zipfile
-        import io
-        
-        # ✅ CREATE ZIP FILE IN MEMORY
-        zip_buffer = io.BytesIO()
-        
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Add training data
-            train_df = X_train.copy()
-            train_df[target_col] = y_train.values
-            zip_file.writestr("training_data.csv", train_df.to_csv(index=False))
-            
-            # Add test data
-            test_df = X_test.copy()
-            test_df[target_col] = y_test.values
-            zip_file.writestr("test_data.csv", test_df.to_csv(index=False))
-            
-            # Add metadata
-            metadata = {
-                "train_rows": len(X_train),
-                "test_rows": len(X_test),
-                "features": X_train.shape[1],
-                "target_column": target_col
-            }
-            zip_file.writestr("metadata.json", json.dumps(metadata, indent=2))
-        
-        zip_buffer.seek(0)
-        
-        return StreamingResponse(
-            iter([zip_buffer.getvalue()]),
-            media_type="application/zip",
-            headers={"Content-Disposition": "attachment; filename=processed_datasets.zip"}
-        )
-    
-    except Exception as e:
-        print(f"❌ Export both error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 

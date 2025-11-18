@@ -551,11 +551,11 @@
     </div>
 
     <button 
-      @click="continueToModelSelection" 
+      @click="continueToAdvancedPreprocessing" 
       :disabled="!selectedColumn"
       class="footer-btn continue-btn primary"
     >
-      Continue to Algorithm Selection ➡
+      Continue to Advanced Preprocessing ➡
     </button>
   </div>
 </section>
@@ -1817,10 +1817,12 @@ const formatSampleValue = (value) => {
   return String(value);
 };
 
-// ============= UI INTERACTIONS =============
-// ✅ UPDATE YOUR EXISTING selectColumn FUNCTION
 
-// ✅ UPDATE your selectColumn function:
+const processedData = JSON.parse(localStorage.getItem('processedData'));
+const cleanedDatasetId = processedData.datasetId;
+
+
+//your selectColumn function:
 const selectColumn = async (column) => {
   console.log("Selected column:", column.name);
   selectedColumn.value = column;
@@ -1834,12 +1836,48 @@ const selectColumn = async (column) => {
     chartType.value = "doughnut";
   }
 
-  // ✅ GENERATE CHART WITH PROPER DELAY
+  // Generate chart after next tick
   await nextTick();
   await generateChart();
 
   console.log("Target selected:", column.name, "with analysis");
+
+  try {
+    // Read cleaned dataset id from localStorage 'processedData'
+    const processedData = JSON.parse(localStorage.getItem('processedData'));
+    const cleanedDatasetId = processedData?.datasetId;
+
+    if (!cleanedDatasetId) {
+      console.warn("No cleaned dataset ID found in localStorage processedData");
+      alert("Cleaned dataset ID not found. Please preprocess your data first.");
+      return;
+    }
+
+    const response = await fetch("http://localhost:8000/api/set-target", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataset_id: cleanedDatasetId,
+        target_column: column.name,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      console.error("Failed to set target:", err.detail || err.message || response.statusText);
+      alert("Failed to set target: " + (err.detail || err.message || response.statusText));
+      return;
+    }
+
+    const data = await response.json();
+    console.log("Target set successfully:", data.message);
+    alert("Target column set successfully!");
+  } catch (e) {
+    console.error("Error in setting target:", e);
+    alert("Error setting target column. See console for details.");
+  }
 };
+
 
 const onChartTypeChange = async () => {
   if (selectedColumn.value) {
@@ -1876,57 +1914,56 @@ const saveDraft = () => {
 
 
 
-const continueToModelSelection = async () => {
+const continueToAdvancedPreprocessing = async () => {
   if (!selectedColumn.value) {
-    alert("Please select a target column first");
+    alert('Please select a target column first');
     return;
   }
 
   try {
     // Get backend dataset ID from stored data
-    const processedData = JSON.parse(
-      localStorage.getItem("processedData") || "{}"
-    );
+    const processedData = JSON.parse(localStorage.getItem('processedData'));
     const backendDatasetId = processedData.backendDatasetId;
 
-    // ✅ STORE TARGET WITH REAL BACKEND DATASET ID
+    // STORE TARGET WITH REAL BACKEND DATASET ID
     const targetData = {
       name: selectedColumn.value.name,
       type: selectedColumn.value.type,
-      originalType:
-        selectedColumn.value.originalType || selectedColumn.value.type,
+      originalType: selectedColumn.value.originalType || selectedColumn.value.type,
       uniqueValues: selectedColumn.value.uniqueValues,
       suitabilityScore: selectedColumn.value.suitabilityScore,
       statistics: selectedColumn.value.statistics,
       missingPercent: selectedColumn.value.missingPercent || 0,
-
-      // ✅ CRITICAL: Include backend dataset ID
+      // CRITICAL: Include backend dataset ID
       backendDatasetId: backendDatasetId,
       datasetId: processedData.datasetId,
     };
-    localStorage.setItem("selectedTarget", JSON.stringify(targetData));
 
-    // ✅ UPDATE ML APP STATE WITH BACKEND INFO
-    const currentState = JSON.parse(localStorage.getItem("mlAppState") || "{}");
+    localStorage.setItem('selectedTarget', JSON.stringify(targetData));
+
+    // UPDATE ML APP STATE WITH BACKEND INFO
+    const currentState = JSON.parse(localStorage.getItem('mlAppState')) || {};
     currentState.selectedTarget = selectedColumn.value.name;
     currentState.targetColumn = selectedColumn.value;
     currentState.backendDatasetId = backendDatasetId;
     currentState.datasetId = processedData.datasetId;
     currentState.updatedAt = Date.now();
-    localStorage.setItem("mlAppState", JSON.stringify(currentState));
+    localStorage.setItem('mlAppState', JSON.stringify(currentState));
 
-    console.log("✅ Target selected with backend info:", {
+    console.log('Target selected with backend info:', {
       target: selectedColumn.value.name,
-      backendDatasetId: backendDatasetId,
+      backendDatasetId: processedData.datasetId,
       datasetId: processedData.datasetId,
     });
 
-    router.push("/algorithm-select");
+    // ✅ FIX: Add leading slash
+    router.push('/advanced-preprocessing');
   } catch (error) {
-    console.error("Error in navigation:", error);
-    alert(`Navigation failed: ${error.message}`);
+    console.error('Error in navigation:', error);
+    alert('Navigation failed: ' + error.message);
   }
 };
+
 
 
 
