@@ -37,35 +37,60 @@
     </nav>
 
     <!-- Hero Section -->
-    <div class="hero-section">
+    <section class="hero-section">
       <div class="hero-content">
-        <div class="hero-icon">🔧</div>
-        <h1>Advanced Preprocessing</h1>
-        <p>Split, scale, and engineer features for optimal model training</p>
-        <div class="dataset-summary">
-          <span class="summary-item"
-            >Dataset: <strong>{{ fileName }}</strong></span
-          >
-          <span class="summary-divider">•</span>
-          <span class="summary-item">{{ totalRows }} rows</span>
-          <span class="summary-divider">•</span>
-          <span class="summary-item">{{ totalColumns }} columns</span>
-          <div class="quality-indicator">
-          <div 
-            class="quality-score"
-            :class="{
-              excellent: dataQuality.score >= 90,
-              good: dataQuality.score >= 70 && dataQuality.score < 90,
-              fair: dataQuality.score >= 50 && dataQuality.score < 70,
-              poor: dataQuality.score < 50
-            }"
-          >
-            {{ dataQuality.score }}% Quality
-          </div>
+        <!-- Centered Header -->
+        <div class="hero-header-centered">
+          <h1 class="gradient-text">Advanced Preprocessing</h1>
+          <p class="hero-subtitle">Split, scale, and engineer features for optimal model training</p>
         </div>
+        
+        <!-- Stats Grid -->
+        <div class="dataset-summary">
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Dataset</span>
+              <span class="stat-value" :title="fileName">{{ fileName }}</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3,3H21V21H3V3M5,5V19H19V5H5M7,7H9V9H7V7M11,7H13V9H11V7M15,7H17V9H15V7Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Rows</span>
+              <span class="stat-value">{{ totalRows.toLocaleString() }}</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2,2H8V4H16V2H22V8H20V16H22V22H16V20H8V22H2V16H4V8H2V2M16,8V6H8V8H6V16H8V18H16V16H18V8H16M4,4V6H6V4H4M18,4V6H20V4H18M4,18V20H6V18H4M18,18V20H20V18H18Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Columns</span>
+              <span class="stat-value">{{ totalColumns }}</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Target Variable</span>
+              <span class="stat-value">{{ selectedTarget || 'Not Set' }}</span>
+            </div>
+          </div>
+          
+          
         </div>
       </div>
-    </div>
+    </section>
 
     <div v-if="showBackendWarning" class="backend-warning">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -119,7 +144,7 @@
                 }}
                 rows
               </span>
-              <span class="stat-value">{{ totalColumns }} columns</span>
+              <span class="stat">{{ totalColumns }} columns</span>
             </div>
           </div>
         </div>
@@ -222,7 +247,7 @@
                     <div class="cell-content">
                       {{ formatCellValue(row[column]) }}
                       <span
-                        v-if="scalingApplied && isNumericalColumn(column)"
+                        v-if="scaledColumns.has(column)"
                         class="encoded-badge"
                         >Scaled</span
                       >
@@ -310,70 +335,35 @@
           <!-- ========== CARD 1: DATASET SPLITTING ========== -->
 
           <!-- ========== CARD 1: DATASET SPLITTING (IMPROVED UI) ========== -->
-          <div
-            class="preprocessing-tool"
-            :class="{
-              active: isToolEnabled('datasetSplitting'),
-              expanded: isDropdownOpen('datasetSplitting'),
-            }"
-          >
+          <Card class="preprocessing-tool-card" hover>
             <div class="tool-header">
-              <div class="tool-info">
-                <h3>
-                  Dataset Splitting
-                  <span class="required-badge">Required First Step</span>
-                </h3>
-                <p class="tool-description">
-                  Split your dataset into train and test sets to prevent data
-                  leakage
-                </p>
+              <div class="tool-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                </svg>
               </div>
-              <div class="tool-actions">
-                <span class="tool-badge" :class="{ success: splitApplied }">
-                  {{ splitApplied ? "✓ Applied" : "Not Applied" }}
-                </span>
-                <button
-                  @click="toggleDropdown('datasetSplitting')"
-                  class="config-btn"
-                  :class="{ active: isDropdownOpen('datasetSplitting') }"
-                  v-if="isToolEnabled('datasetSplitting')"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      v-if="!isDropdownOpen('datasetSplitting')"
-                      d="M7 10l5 5 5-5z"
-                    />
-                    <path v-else d="M7 14l5-5 5 5z" />
-                  </svg>
-                  {{
-                    isDropdownOpen("datasetSplitting") ? "Close" : "Configure"
-                  }}
-                </button>
-                <button
-                  @click="
-                    isToolEnabled('datasetSplitting')
-                      ? disableTool('datasetSplitting')
-                      : enableTool('datasetSplitting')
-                  "
-                  class="tool-btn"
-                  :class="{ active: isToolEnabled('datasetSplitting') }"
-                  :disabled="splitApplied"
-                >
-                  {{ isToolEnabled("datasetSplitting") ? "Disable" : "Enable" }}
-                </button>
+              <div class="tool-info">
+                <h3>Dataset Splitting</h3>
+                <p>Split your dataset into train and test sets to prevent data leakage</p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': splitApplied }">
+                {{ splitApplied ? "✓ Applied" : "Not Applied" }}
               </div>
             </div>
-
-            <!-- ========== CARD CONTENT ========== -->
-            <div
-              class="tool-config"
-              v-show="isDropdownOpen('datasetSplitting')"
-            >
+            
+            <div class="tool-footer">
+              <Button variant="primary" @click="showSplitModal = true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                Configure Split
+              </Button>
+            </div>
+          </Card>
+          
+          <!-- Dataset Splitting Modal -->
+          <Modal v-model="showSplitModal" title="Dataset Splitting Configuration" size="xl">
+            <div class="modal-section">
               <!-- Split Ratio Section -->
               <div class="config-group">
                 <label class="config-label">
@@ -391,31 +381,31 @@
                 </label>
 
                 <div class="ratio-display">
-                  <div class="ratio-badge-large train">
-                    <span class="ratio-percentage"
-                      >{{ (splitRatio * 100).toFixed(0) }}%</span
-                    >
-                    <span class="ratio-label">Train</span>
+                  <div class="ratio-card train">
+                    <span class="ratio-value">{{ (splitRatio * 100).toFixed(0) }}%</span>
+                    <span class="ratio-label">Train Set</span>
+                    <span class="ratio-rows">{{ Math.round(totalRows * splitRatio).toLocaleString() }} rows</span>
                   </div>
-                  <div class="ratio-separator">
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-                    </svg>
+                  
+                  <div class="ratio-visual">
+                    <div class="ratio-bar">
+                      <div class="ratio-fill train" :style="{ width: (splitRatio * 100) + '%' }"></div>
+                      <div class="ratio-fill test" :style="{ width: ((1 - splitRatio) * 100) + '%' }"></div>
+                    </div>
                   </div>
-                  <div class="ratio-badge-large test">
-                    <span class="ratio-percentage"
-                      >{{ ((1 - splitRatio) * 100).toFixed(0) }}%</span
-                    >
-                    <span class="ratio-label">Test</span>
+
+                  <div class="ratio-card test">
+                    <span class="ratio-value">{{ ((1 - splitRatio) * 100).toFixed(0) }}%</span>
+                    <span class="ratio-label">Test Set</span>
+                    <span class="ratio-rows">{{ Math.round(totalRows * (1 - splitRatio)).toLocaleString() }} rows</span>
                   </div>
                 </div>
 
                 <div class="slider-container">
+                  <div class="slider-labels">
+                    <span>50%</span>
+                    <span>95%</span>
+                  </div>
                   <input
                     type="range"
                     min="0.5"
@@ -425,10 +415,6 @@
                     :disabled="splitApplied"
                     class="split-slider"
                   />
-                  <div
-                    class="slider-track-fill"
-                    :style="{ width: splitRatio * 100 + '%' }"
-                  ></div>
                 </div>
 
                 <div class="quick-ratios">
@@ -646,349 +632,287 @@
                 </div>
               </div>
             </div>
-          </div>
+            
+            
+          </Modal>
 
 
-          <!-- ========== CARD:2 CATEGORICAL ENCODING ========== -->
+          <!-- ========== CARD 2: CATEGORICAL ENCODING ========== -->
+          <Card class="preprocessing-tool-card" hover :class="{ disabled: !splitApplied }">
+            <div class="tool-header">
+              <div class="tool-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+              </div>
+              <div class="tool-info">
+                <h3>
+                  Categorical Encoding
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                </h3>
+                <p>Convert categorical features to numerical representations for ML algorithms</p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': encodingApplied }">
+                {{ encodingApplied ? "✓ Applied" : "Not Applied" }}
+              </div>
+            </div>
+            
+            <div class="tool-footer">
+              <Button variant="primary" @click="showEncodingModal = true" :disabled="!splitApplied">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                Configure Encoding
+              </Button>
+            </div>
+          </Card>
+          
+          <!-- Categorical Encoding Modal -->
+          <Modal v-model="showEncodingModal" title="Categorical Encoding Configuration" size="xl">
+            <div class="modal-section">
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                  Select Columns to Encode
+                </label>
+                
+                <div class="selection-controls">
+                  <button @click="selectAllCategoricalColumns" class="btn-secondary small">
+                    Select All
+                  </button>
+                  <button @click="deselectAllCategoricalColumns" class="btn-secondary small">
+                    Deselect All
+                  </button>
+                </div>
 
-<div
-  class="preprocessing-tool"
-  :class="{
-    active: isToolEnabled('categoricalEncoding'),
-    expanded: isDropdownOpen('categoricalEncoding'),
-    disabled: !splitApplied,
-  }"
->
-  <div class="tool-header">
-    <div class="tool-info">
-      <h3>Categorical Encoding</h3>
-      <p>
-        Convert categorical features to numerical representations for ML algorithms.
-      </p>
-    </div>
-    <div class="tool-actions">
-      <span class="tool-badge" :class="{ success: encodingApplied }">
-        {{ encodingApplied ? "✓ Applied" : "Not Applied" }}
-      </span>
-      <button
-        @click="splitApplied && toggleDropdown('categoricalEncoding')"
-        class="config-btn"
-        :class="{ active: isDropdownOpen('categoricalEncoding') }"
-        :disabled="!splitApplied"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path
-            v-if="!isDropdownOpen('categoricalEncoding')"
-            d="M7 10l5 5 5-5z"
-          />
-          <path v-else d="M7 14l5-5 5 5z" />
-        </svg>
-        {{ isDropdownOpen("categoricalEncoding") ? "Close" : "Configure" }}
-      </button>
-      <button
-        @click="
-          isToolEnabled('categoricalEncoding')
-            ? disableTool('categoricalEncoding')
-            : enableTool('categoricalEncoding')
-        "
-        class="tool-btn"
-        :class="{ active: isToolEnabled('categoricalEncoding') }"
-        :disabled="!splitApplied"
-      >
-        {{ isToolEnabled("categoricalEncoding") ? "Disable" : "Enable" }}
-      </button>
-    </div>
-  </div>
+                <div class="encoding-list">
+                  <div
+                    v-for="column in categoricalColumns.filter(c => c.name !== selectedTarget)"
+                    :key="column.name"
+                    class="encoding-row"
+                    :class="{ active: column.encode }"
+                  >
+                    <label class="checkbox-label">
+                      <input
+                        type="checkbox"
+                        v-model="column.encode"
+                        @change="toggleColumnEncoding(column)"
+                      />
+                      <span class="checkbox-custom"></span>
+                      <span class="col-name">{{ column.name }}</span>
+                    </label>
+                    
+                    <div class="encoding-select-wrapper" v-if="column.encode">
+                      <select
+                        v-model="column.encoding"
+                        @change="setEncodingMethod(column.name, column.encoding)"
+                        class="encoding-select"
+                      >
+                        <option value="onehot">One-Hot Encoding</option>
+                        <option value="label">Label Encoding</option>
+                        <option value="ordinal">Ordinal Encoding</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div v-if="categoricalColumns.filter(c => c.name !== selectedTarget).length === 0" class="empty-state">
+                    No categorical columns found available for encoding.
+                  </div>
+                </div>
+              </div>
 
-  <!-- Dropdown Content -->
-  <div class="tool-config" v-show="isDropdownOpen('categoricalEncoding')">
-    <h4>Select Categorical Columns to Encode</h4>
-    <div class="encoding-actions" style="margin-bottom: 1rem; display: flex; gap: 1rem;">
-      <button @click="selectAllCategoricalColumns" class="btn small secondary">
-        Select All
-      </button>
-      <button @click="deselectAllCategoricalColumns" class="btn small secondary">
-        Deselect All
-      </button>
-      <!-- <button @click="autoSelectForEncoding(selectedTarget)" class="btn small secondary">
-        Auto-select (Excludes Target)
-      </button> -->
-    </div>
-
-    <div class="encoding-list">
-      <div
-        v-for="column in categoricalColumns.filter(c => c.name !== selectedTarget)"
-        :key="column.name"
-        class="encoding-row"
-        style="margin-bottom:0.75rem"
-      >
-        <label style="font-size:1rem; display:flex; align-items:center;">
-          <input
-            type="checkbox"
-            v-model="column.encode"
-            @change="toggleColumnEncoding(column)"
-            style="margin-right:0.5rem"
-          />
-          {{ column.name }}
-        </label>
-        <select
-          v-if="column.encode"
-          v-model="column.encoding"
-          @change="setEncodingMethod(column.name, column.encoding)"
-          style="margin-left:1rem; min-width: 160px;"
-        >
-          <option value="onehot">One-Hot Encoding</option>
-          <option value="label">Label Encoding</option>
-          <option value="ordinal">Ordinal Encoding</option>
-        </select>
-      </div>
-    </div>
-
-    <div style="text-align: center; margin-top: 2rem;">
-      <button
-        @click="applyCategoricalEncoding"
-        class="btn btn-apply"
-        style="padding: 0.75rem 2.5rem; font-size: 1.1rem;"
-        :disabled="categoricalColumns.filter(c => c.name !== selectedTarget && c.encode).length === 0"
-      >
-        Apply Categorical Encoding
-      </button>
-    </div>
-  </div>
-</div>
+            </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showEncodingModal = false">
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                :loading="isProcessing"
+                @click="applyCategoricalEncoding"
+                :disabled="categoricalColumns.filter(c => c.name !== selectedTarget && c.encode).length === 0"
+              >
+                Apply Encoding
+              </Button>
+            </template>
+          </Modal>
 
           <!-- ========== CARD 3: FEATURE SCALING ========== -->
-          <div
-            class="preprocessing-tool"
-            :class="{
-              active: isToolEnabled('featureScaling'),
-              expanded: isDropdownOpen('featureScaling'),
-              disabled: !splitApplied,
-            }"
-          >
+          <Card class="preprocessing-tool-card" hover :class="{ disabled: !splitApplied }">
             <div class="tool-header">
+              <div class="tool-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"/>
+                </svg>
+              </div>
               <div class="tool-info">
-                <h3>Feature Scaling</h3>
+                <h3>
+                  Feature Scaling
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                </h3>
                 <p>Normalize numerical features for better model performance</p>
               </div>
-              <div class="tool-actions">
-                <span class="tool-badge" :class="{ success: scalingApplied }">
-                  {{ scalingApplied ? "✓ Applied" : "Not Applied" }}
-                </span>
-
-                <button
-                  @click="splitApplied && toggleDropdown('featureScaling')"
-                  class="config-btn"
-                  :class="{ active: isDropdownOpen('featureScaling') }"
-                  v-if="isToolEnabled('featureScaling')"
-                  :disabled="!splitApplied"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      v-if="!isDropdownOpen('featureScaling')"
-                      d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"
-                    />
-                    <path
-                      v-else
-                      d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"
-                    />
-                  </svg>
-                  {{ isDropdownOpen("featureScaling") ? "Close" : "Configure" }}
-                </button>
-
-                <button
-                  @click="
-                    isToolEnabled('featureScaling')
-                      ? disableTool('featureScaling')
-                      : enableTool('featureScaling')
-                  "
-                  class="tool-btn"
-                  :class="{ active: isToolEnabled('featureScaling') }"
-                  :disabled="!splitApplied"
-                >
-                  {{ isToolEnabled("featureScaling") ? "Disable" : "Enable" }}
-                </button>
+              <div class="tool-badge" :class="{ 'success-badge': scalingApplied }">
+                {{ scalingApplied ? "✓ Applied" : "Not Applied" }}
               </div>
             </div>
-
-            <!-- Dropdown Content -->
-            <div class="tool-config" v-show="isDropdownOpen('featureScaling')">
-              <!-- Warning if split not applied -->
-              <div class="alert alert-warning" v-if="!splitApplied">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"
-                  />
+            
+            <div class="tool-footer">
+              <Button variant="primary" @click="showScalingModal = true" :disabled="!splitApplied">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
                 </svg>
-                <span
-                  >Please apply dataset splitting first to prevent data
-                  leakage</span
-                >
-              </div>
-
-              <div class="config-section" :class="{ disabled: !splitApplied }">
-                <!-- Scaling Method -->
-                <div class="form-group">
-                  <label class="form-label">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"
-                      />
-                    </svg>
-                    Scaling Method
-                  </label>
-                  <select
-                    v-model="scalingMethod"
-                    :disabled="!splitApplied || scalingApplied"
-                    class="form-select"
-                  >
-                    <option value="standard">
-                      StandardScaler - Standardize features (mean=0, std=1)
-                    </option>
-                    <option value="minmax">
-                      MinMaxScaler - Scale to range [0, 1]
-                    </option>
-                    <option value="robust">
-                      RobustScaler - Scale using median and IQR (robust to
-                      outliers)
-                    </option>
-                    <option value="maxabs">
-                      MaxAbsScaler - Scale to [-1, 1] based on max absolute
-                      value
-                    </option>
-                    <option value="none">No Scaling</option>
-                  </select>
-                  <p class="help-text">
-                    {{
-                      scalingMethod === "standard"
-                        ? "Best for algorithms that assume normally distributed data (e.g., Logistic Regression, SVM)"
-                        : scalingMethod === "minmax"
-                        ? "Best for algorithms that require bounded features (e.g., Neural Networks)"
-                        : scalingMethod === "robust"
-                        ? "Best when data contains many outliers"
-                        : scalingMethod === "maxabs"
-                        ? "Best for data that is already centered at zero or sparse data"
-                        : "Features will not be scaled"
-                    }}
-                  </p>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="action-buttons">
-                  <button
-                    @click="applyScaling"
-                    class="btn btn-apply"
-                    :disabled="
-                      !splitApplied ||
-                      isProcessing ||
-                      scalingApplied ||
-                      scalingMethod === 'none'
-                    "
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                      />
-                    </svg>
-                    {{ isProcessing ? "Scaling..." : "Apply Scaling" }}
-                  </button>
-                  <button
-                    v-if="scalingApplied"
-                    @click="resetScaling"
-                    class="btn btn-reset"
-                    :disabled="isProcessing"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
-                      />
-                    </svg>
-                    Reset Scaling
-                  </button>
-                </div>
-
-                <!-- Scaling Info -->
-                <div class="info-panel success" v-if="scalingApplied">
-                  <div class="info-header">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                      />
-                    </svg>
-                    <h4>Scaling Applied</h4>
-                  </div>
-                  <p class="info-text">
-                    <strong>{{ scalingMethod.toUpperCase() }}</strong> scaling
-                    has been applied to numerical features in the training set.
-                    The same transformation will be applied to the test set.
-                  </p>
-                </div>
-              </div>
-
-              <!-- Dropdown Footer -->
-              <div class="dropdown-footer">
-                <button
-                  @click="toggleDropdown('featureScaling')"
-                  class="close-dropdown-btn"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                    />
+                Configure Scaling
+              </Button>
+            </div>
+          </Card>
+          
+          <!-- Feature Scaling Modal -->
+          <Modal v-model="showScalingModal" title="Feature Scaling Configuration" size="xl">
+            <div class="modal-section">
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                   </svg>
-                  Close Configuration
-                </button>
-              </div>
-            </div>
-          </div>
+                  Select Columns to Scale
+                </label>
+                
+                <div class="selection-controls">
+                  <button @click="selectAllNumericalColumns" class="btn-secondary small">
+                    Select All
+                  </button>
+                  <button @click="deselectAllNumericalColumns" class="btn-secondary small">
+                    Deselect All
+                  </button>
+                </div>
 
-          <!-- CARD 3: Feature Engineering (Coming Soon) -->
-          <div class="preprocessing-tool disabled">
-            <div class="tool-header">
-              <div class="tool-info">
-                <h3>Feature Engineering</h3>
-                <p>Apply advanced feature engineering techniques</p>
-              </div>
-              <div class="card-header-right">
-                <span class="status-badge">Coming Soon</span>
+                <div class="encoding-list">
+                  <div
+                    v-for="col in numericalColumns"
+                    :key="col.name"
+                    class="encoding-row"
+                    :class="{ active: col.scale }"
+                  >
+                    <label class="checkbox-label">
+                      <input
+                        type="checkbox"
+                        v-model="col.scale"
+                        @change="toggleColumnScaling(col)"
+                      />
+                      <span class="checkbox-custom"></span>
+                      <span class="col-name">
+                        {{ col.name }}
+                        <span v-if="col.isAlreadyScaled" class="requires-split-inline" style="margin-left: 8px; font-size: 0.7rem;">Scaled</span>
+                      </span>
+                    </label>
+                    
+                    <div class="encoding-select-wrapper" v-if="col.scale">
+                      <select
+                        v-model="col.scalingMethod"
+                        class="encoding-select"
+                      >
+                        <option value="standard">StandardScaler</option>
+                        <option value="minmax">MinMaxScaler</option>
+                        <option value="robust">RobustScaler</option>
+                        <option value="maxabs">MaxAbsScaler</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div v-if="numericalColumns.length === 0" class="empty-state">
+                    No numerical columns available for scaling.
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showScalingModal = false">
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                :loading="isProcessing"
+                @click="applyScaling"
+                :disabled="!splitApplied || !numericalColumns.some(col => col.scale)"
+              >
+                Apply Scaling
+              </Button>
+            </template>
+          </Modal>
+
+          <!-- Reset Confirmation Modal -->
+          <Modal v-model="showResetConfirmModal" title="Reset All Transformations?" size="md">
+            <div class="modal-section">
+              <div class="config-group">
+                <p style="margin-bottom: 1rem; color: #e0e7ef; line-height: 1.6;">
+                  Are you sure you want to reset all transformations?
+                </p>
+                <p style="margin-bottom: 1rem; color: #94a3b8; line-height: 1.6;">
+                  This will:
+                </p>
+                <ul style="color: #94a3b8; margin-left: 1.5rem; line-height: 1.8;">
+                  <li>Clear the dataset split</li>
+                  <li>Remove all categorical encoding</li>
+                  <li>Remove all feature scaling</li>
+                  <li>Return dataset to its original state</li>
+                </ul>
+                <p style="margin-top: 1rem; color: #fbbf24; line-height: 1.6;">
+                  ⚠️ This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showResetConfirmModal = false">
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                @click="confirmResetAll"
+                style="background: #ef4444; border-color: #ef4444;"
+              >
+                Reset All
+              </Button>
+            </template>
+          </Modal>
+
+          <!-- Reset Split Confirmation Modal -->
+          <Modal v-model="showResetSplitModal" title="Reset Dataset Split?" size="md">
+            <div class="modal-section">
+              <div class="config-group">
+                <p style="margin-bottom: 1rem; color: #e0e7ef; line-height: 1.6;">
+                  Are you sure you want to reset the dataset split?
+                </p>
+                <p style="margin-bottom: 1rem; color: #94a3b8; line-height: 1.6;">
+                  This will also clear:
+                </p>
+                <ul style="color: #94a3b8; margin-left: 1.5rem; line-height: 1.8;">
+                  <li>All categorical encoding</li>
+                  <li>All feature scaling</li>
+                </ul>
+              </div>
+            </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showResetSplitModal = false">
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                @click="confirmResetSplit"
+                style="background: #ef4444; border-color: #ef4444;"
+              >
+                Reset Split
+              </Button>
+            </template>
+          </Modal>
+
+         
         </div>
       </section>
     </div>
@@ -1024,21 +948,7 @@
           </div>
         </div>
 
-        <!-- Dataset Stats -->
-        <div class="final-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ totalRows }}</span>
-            <span class="stat-label">Total Rows</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ totalColumns }}</span>
-            <span class="stat-label">Columns</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ dataQuality.score }}%</span>
-            <span class="stat-label">Quality Score</span>
-          </div>
-        </div>
+        
 
         <!-- Action Buttons -->
         <div class="footer-actions">
@@ -1056,11 +966,11 @@
           </button>
 
           <button
-            @click="proceedToModelTraining"
-            class="footer-btn primary"
+            @click="proceedToAlgorithmSelection"
+            class="footer-btn continue-btn primary"
             :disabled="!splitApplied"
           >
-            <span>Proceed to Model Training</span>
+            <span>Proceed to Algorithm Selection</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
             </svg>
@@ -1086,7 +996,11 @@
 import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { useMLDataFlowStore } from "~/stores/mlDataFlow";
+import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch'
+import { useToast } from '~/composables/useToast'
 
+const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
+const { showSuccess, showError, showWarning, showInfo } = useToast()
 
 const router = useRouter();
 const mlStore = useMLDataFlowStore();
@@ -1118,21 +1032,43 @@ const columns = ref([]);
 
 // Selected target variable
 const mlAppState = JSON.parse(localStorage.getItem('mlAppState') || '{}');
-const selectedTarget = ref(mlAppState.selectedTarget || ""); 
+const selectedTarget = ref(mlAppState.selectedTarget || "");
+
+console.log('\n' + '='.repeat(80));
+console.log('🎯 ADVANCED PREPROCESSING - Target Variable');
+console.log('='.repeat(80));
+console.log('   Selected Target:', selectedTarget.value || 'Not set');
+console.log('   Full State:', mlAppState);
+console.log('='.repeat(80) + '\n'); 
 
 
 // ==================== SPLIT & SCALE CONFIG ====================
 const splitApplied = ref(false);
 const scalingApplied = ref(false);
+const encodingApplied = ref(false);
 const currentSplitView = ref("full"); // 'full', 'train', 'test'
 const splitRatio = ref(0.8);
 const splitStrategy = ref("random"); // 'random' or 'stratified'
 const randomSeed = ref(null);
 const scalingMethod = ref("standard"); // 'standard', 'minmax', 'robust', 'maxabs', 'none'
+const scaledColumns = ref(new Set()); // Track scaled columns
+
+watch(scaledColumns, (newSet) => {
+  columns.value.forEach(col => {
+    col.isAlreadyScaled = newSet.has(col.name);
+  });
+}, { deep: true });
 
 // ==================== TOOLKIT STATE ====================
 const enabledTools = ref([]);
 const openDropdowns = ref([]);
+
+// ==================== MODAL STATE ====================
+const showSplitModal = ref(false);
+const showEncodingModal = ref(false);
+const showScalingModal = ref(false);
+const showResetConfirmModal = ref(false);
+const showResetSplitModal = ref(false);
 
 // ==================== TABLE STATE ====================
 const searchQuery = ref("");
@@ -1222,10 +1158,26 @@ const displayedRowCount = computed(() => {
 const categoricalColumns = computed(() =>
   columns.value.filter(col => col.type === 'categorical')
 );
+
+const numericalColumns = computed(() =>
+  columns.value.filter(col => col.type === 'numerical' && col.name !== selectedTarget.value)
+);
+
 // For per-column encoding selection state (update as needed for your structure)
 categoricalColumns.value.forEach(col => {
   col.encode = col.encode ?? false;       // Whether to encode
   col.encoding = col.encoding ?? 'onehot';// Encoding method: onehot, label, ordinal
+});
+
+// For per-column scaling selection state
+numericalColumns.value.forEach(col => {
+  col.scale = col.scale ?? false;         // Whether to scale
+  // Ensure scalingMethod is initialized to standard if null/undefined
+  if (col.scalingMethod === undefined || col.scalingMethod === null || col.scalingMethod === '') {
+    col.scalingMethod = 'standard';
+  }
+  // Mark as already scaled
+  col.isAlreadyScaled = scaledColumns.value.has(col.name);
 });
 
 
@@ -1324,12 +1276,6 @@ const visiblePageNumbers = computed(() => {
   return pages;
 });
 
-const numericalColumns = computed(() => {
-  if (!columns.value || columns.value.length === 0) return [];
-  return columns.value
-    .filter(col => col.type === 'number' || col.type === 'numerical')
-    .map(col => col.name);
-});
 
 // ==================== UTILITY FUNCTIONS ====================
 
@@ -1375,6 +1321,12 @@ const getColumnSample = (column) => {
 function toggleColumnEncoding(column) {
   // If column is selected but has no encoding method, default to 'onehot'
   if (column.encode && !column.encoding) column.encoding = 'onehot';
+}
+
+// Toggle scaling for a column
+function toggleColumnScaling(column) {
+  // If column is selected but has no scaling method, default to 'standard'
+  if (column.scale && !column.scalingMethod) column.scalingMethod = 'standard';
 }
 
 // Set encoding method for a column
@@ -1459,7 +1411,7 @@ const fetchBackendDatasetInfo = async (datasetId) => {
   console.log(`📡 Fetching backend dataset info for ID: ${datasetId}`);
 
   try {
-    const response = await fetch(`http://localhost:8000/api/datasets/${datasetId}`);
+    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId}`)
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: Dataset not found in backend`);
@@ -1599,20 +1551,35 @@ const applySplit = async () => {
   isProcessing.value = true;
   processingMessage.value = "Splitting dataset...";
 
-  console.log('Sending split request for dataset ID:', mlStore.cleanedDatasetId || mlStore.datasetId);
+  console.log('Sending split request for dataset ID:', datasetId.value);
 
+  if (!selectedTarget.value) {
+    alert("⚠️ No target column selected. Please go back to Target Selection.");
+    isProcessing.value = false;
+    return;
+  }
+
+  if (!datasetId.value) {
+    alert("⚠️ No dataset ID found. Please refresh the page or go back to upload a dataset.");
+    isProcessing.value = false;
+    return;
+  }
 
   try {
-    const response = await fetch('http://localhost:8000/api/split-dataset', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      datasetid: datasetId.value,  // Use the verified backend dataset ID
+    const payload = {
+      datasetid: datasetId.value,
       test_size: 1 - splitRatio.value,
       stratify: splitStrategy.value === 'stratified',
       random_state: randomSeed.value || 42,
-    }),
-  });
+      target_column: selectedTarget.value
+    };
+
+    console.log('🔍 Split Request Debug:');
+    console.log('  Dataset ID:', payload.datasetid);
+    console.log('  Target Column:', payload.target_column);
+    console.log('  Full Payload:', payload);
+
+    const response = await authenticatedPost('http://localhost:8000/api/split-dataset', payload)
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
@@ -1641,13 +1608,19 @@ const applySplit = async () => {
         testRatio: 1 - splitRatio.value,
       };
 
-      alert(`✅ Dataset Split Applied!\n\nTrain: ${data.train_size.toLocaleString()} rows\nTest: ${data.test_size.toLocaleString()} rows`);
+      showSuccess(
+        'Dataset Split Applied!',
+        `Train: ${data.train_size.toLocaleString()} rows | Test: ${data.test_size.toLocaleString()} rows`
+      );
+      
+      // Close the modal
+      showSplitModal.value = false;
     } else {
       throw new Error(data.message || "Split failed");
     }
   } catch (error) {
     console.error("❌ Split error:", error);
-    alert("Error applying split: " + error.message);
+    showError('Split Failed', error.message);
   } finally {
     isProcessing.value = false;
     processingMessage.value = "";
@@ -1656,31 +1629,85 @@ const applySplit = async () => {
 
 
 const resetSplit = () => {
-  if (
-    confirm(
-      "Are you sure you want to reset the split? This will also reset any scaling applied."
-    )
-  ) {
+  showResetSplitModal.value = true;
+};
+
+const confirmResetSplit = () => {
+  splitApplied.value = false;
+  scalingApplied.value = false;
+  encodingApplied.value = false;
+  scaledColumns.value.clear();
+  trainData.value = [];
+  testData.value = [];
+  trainRows.value = 0;
+  testRows.value = 0;
+  currentSplitView.value = "full";
+
+  mlStore.isSplit = false;
+  mlStore.isScaled = false;
+  mlStore.isEncoded = false;
+
+  showResetSplitModal.value = false;
+  console.log("🔄 Split reset");
+  showSuccess('Split Reset', 'All transformations have been cleared');
+};
+
+// Reset all transformations
+const resetAllTransformations = () => {
+  showResetConfirmModal.value = true;
+};
+
+const confirmResetAll = async () => {
+  try {
+    isProcessing.value = true;
+    showResetConfirmModal.value = false;
+    
+    // Reload the original dataset from backend
+    await loadInitialData();
+    
+    // Reset all state
     splitApplied.value = false;
     scalingApplied.value = false;
+    encodingApplied.value = false;
+    scaledColumns.value.clear();
     trainData.value = [];
     testData.value = [];
     trainRows.value = 0;
     testRows.value = 0;
     currentSplitView.value = "full";
-
+    
     mlStore.isSplit = false;
     mlStore.isScaled = false;
-
-    console.log("🔄 Split reset");
+    mlStore.isEncoded = false;
+    
+    console.log("🔄 All transformations reset");
+    showSuccess('Reset Complete', 'Dataset returned to original state');
+  } catch (error) {
+    console.error('❌ Reset error:', error);
+    showError('Reset Failed', error.message);
+  } finally {
+    isProcessing.value = false;
   }
 };
 
 // ==================== SCALING OPERATIONS ====================
 
 const applyScaling = async () => {
-  if (!splitApplied.value || isProcessing.value || scalingApplied.value) {
+  if (!splitApplied.value || isProcessing.value) {
     alert("Please apply split first");
+    return;
+  }
+
+  // Get columns to scale
+  const columnsToScale = numericalColumns.value
+    .filter(col => col.scale)
+    .map(col => ({
+      name: col.name,
+      method: col.scalingMethod || 'standard'
+    }));
+
+  if (columnsToScale.length === 0) {
+    alert('Please select at least one numerical column for scaling.');
     return;
   }
 
@@ -1691,15 +1718,23 @@ const applyScaling = async () => {
   isProcessing.value = true;
   processingMessage.value = "Scaling features...";
 
+  if (!datasetId.value) {
+    alert("⚠️ No dataset ID found. Please refresh the page.");
+    isProcessing.value = false;
+    return;
+  }
+
   try {
-    const response = await fetch("http://localhost:8000/api/datasets/apply-scaling", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dataset_id: datasetId.value,
-        method: scalingMethod.value,
-      }),
-    });
+    const payload = {
+      dataset_id: datasetId.value,
+      columns: columnsToScale
+    };
+
+    console.log('🔍 Scaling Request Debug:');
+    console.log('  Dataset ID:', payload.dataset_id);
+    console.log('  Columns to scale:', columnsToScale);
+
+    const response = await authenticatedPost('http://localhost:8000/api/datasets/apply-scaling', payload)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -1715,24 +1750,51 @@ const applyScaling = async () => {
       scalingApplied.value = true;
 
       mlStore.isScaled = true;
+      mlStore.isScaled = true;
       mlStore.scalingMethod = scalingMethod.value;
+      
+      // Track scaled columns
+      columnsToScale.forEach(col => scaledColumns.value.add(col.name));
 
       console.log("=".repeat(80) + "\n");
 
-      alert(
-        `✅ Feature Scaling Applied!\n\nMethod: ${scalingMethod.value.toUpperCase()}`
+      const scaledCount = columnsToScale.length;
+      const scaledList = columnsToScale.slice(0, 3).map(c => c.name).join(', ');
+      const moreText = scaledCount > 3 ? ` and ${scaledCount - 3} more` : '';
+      
+      showSuccess(
+        'Feature Scaling Applied!',
+        `Scaled ${scaledCount} column${scaledCount !== 1 ? 's' : ''}: ${scaledList}${moreText}`
       );
+      
+      // Close the modal
+      showScalingModal.value = false;
     } else {
       throw new Error(data.error || "Scaling failed");
     }
   } catch (error) {
     console.error("❌ Scaling error:", error);
-    alert("Error applying scaling: " + error.message);
+    showError('Scaling Failed', error.message);
   } finally {
     isProcessing.value = false;
     processingMessage.value = "";
   }
 };
+
+
+
+const selectAllNumericalColumns = () => {
+  numericalColumns.value.forEach(col => {
+    col.scale = true;
+    if (!col.scalingMethod) col.scalingMethod = 'standard';
+  });
+};
+
+const deselectAllNumericalColumns = () => {
+  numericalColumns.value.forEach(col => col.scale = false);
+};
+
+
 
 const resetScaling = async () => {
   if (
@@ -1742,6 +1804,7 @@ const resetScaling = async () => {
   ) {
     scalingApplied.value = false;
     mlStore.isScaled = false;
+    scaledColumns.value.clear();
 
     await applySplit();
 
@@ -1754,35 +1817,36 @@ const resetScaling = async () => {
 const exportData = async () => {
   console.log("🔄 Starting data export...");
 
-  let dataToExport = [];
-  let filename = "";
-
-  if (currentSplitView.value === "train" && splitApplied.value) {
-    dataToExport = trainData.value;
-    filename = `${fileName.value.replace(".csv", "")}_train.csv`;
-  } else if (currentSplitView.value === "test" && splitApplied.value) {
-    dataToExport = testData.value;
-    filename = `${fileName.value.replace(".csv", "")}_test.csv`;
-  } else {
-    dataToExport = originalDataset.value;
-    filename = fileName.value;
-  }
-
-  if (dataToExport.length === 0) {
-    alert("No data to export");
-    return;
-  }
-
   try {
-    const headers = visibleColumns.value.join(",");
-    const rows = dataToExport.map((row) =>
-      visibleColumns.value
-        .map((col) => JSON.stringify(row[col] ?? ""))
-        .join(",")
-    );
-    const csv = [headers, ...rows].join("\n");
+    let response;
+    let filename = "";
 
-    const blob = new Blob([csv], { type: "text/csv" });
+    if (currentSplitView.value === "train" && splitApplied.value) {
+      // Export full training dataset from backend
+      console.log("📥 Exporting full training dataset from backend...");
+      response = await authenticatedGet(`http://localhost:8000/api/export-train/${datasetId.value}`);
+      filename = `${fileName.value.replace(".csv", "")}_train.csv`;
+      
+    } else if (currentSplitView.value === "test" && splitApplied.value) {
+      // Export full test dataset from backend
+      console.log("📥 Exporting full test dataset from backend...");
+      response = await authenticatedGet(`http://localhost:8000/api/export-test/${datasetId.value}`);
+      filename = `${fileName.value.replace(".csv", "")}_test.csv`;
+      
+    } else {
+      // Export full original dataset from backend
+      console.log("📥 Exporting full original dataset from backend...");
+      response = await authenticatedGet(`http://localhost:8000/api/export-dataset/${datasetId.value}`);
+      filename = fileName.value;
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Export failed with status ${response.status}`);
+    }
+
+    // Download the file
+    const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1790,10 +1854,12 @@ const exportData = async () => {
     a.click();
     window.URL.revokeObjectURL(url);
 
-    console.log(`✅ Exported ${dataToExport.length} rows to ${filename}`);
+    console.log(`✅ Exported full dataset to ${filename}`);
+    showSuccess('Export Complete', `Downloaded ${filename}`);
+    
   } catch (error) {
     console.error("❌ Export failed:", error);
-    alert(`Export failed: ${error.message}`);
+    showError('Export Failed', error.message);
   }
 };
 
@@ -1811,28 +1877,102 @@ async function applyCategoricalEncoding() {
     return;
   }
 
-  // POST to backend - adapt this to your splitting/scaling pipeline as needed
-  const response = await fetch('http://localhost:8000/api/apply-categorical-encoding', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    dataset_id: datasetId.value,
-    columns: [
-      { name: 'Category_B', method: 'onehot' },
-      { name: 'Category_C', method: 'label' },
-      { name: 'Category_D', method: 'ordinal' }
-    ]
-  })
-});
+  if (!datasetId.value) {
+    alert("⚠️ No dataset ID found. Please refresh the page.");
+    return;
+  }
+
+  isProcessing.value = true;
+
+  try {
+    // POST to backend - adapt this to your splitting/scaling pipeline as needed
+    const payload = {
+      dataset_id: datasetId.value,
+      columns: columnsToEncode
+    };
+
+    console.log('🔍 Encoding Request Debug:');
+    console.log('  Dataset ID:', payload.dataset_id);
+    console.log('  Columns to encode:', columnsToEncode);
+
+  const response = await authenticatedPost('http://localhost:8000/api/apply-categorical-encoding', payload)
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(`HTTP ${response.status}: ${errorBody.detail || errorBody.message || 'Unknown error'}`);
+  }
 
   const data = await response.json();
   if (data.success) {
-    trainData.value = data.train_preview;
-    testData.value = data.test_preview;
-    alert('Categorical encoding applied!');
+    console.log('🔍 Encoding Response:', data);
+    console.log('  Train preview rows:', data.train_preview?.length);
+    console.log('  Test preview rows:', data.test_preview?.length);
+    console.log('  Encoded columns:', data.encoded_columns);
+    console.log('  New columns:', data.columns);
+    
+    trainData.value = data.train_preview || [];
+    testData.value = data.test_preview || [];
+    encodingApplied.value = true;
+    
+    // Update columns list with new encoded column names
+    if (data.columns && data.columns.length > 0) {
+      console.log('  Updating columns from:', columns.value.map(c => c.name));
+      console.log('  To:', data.columns);
+      
+      // Rebuild columns array with new column names
+      columns.value = data.columns.map(colName => {
+        // Check if this is an encoded column (new column from one-hot encoding)
+        const isEncodedColumn = data.encoded_columns?.includes(colName);
+        
+        // Try to find existing column info
+        const existingCol = columns.value.find(c => c.name === colName);
+        
+        if (existingCol) {
+          return existingCol;
+        } else {
+          // New column (from one-hot encoding)
+          return {
+            name: colName,
+            type: isEncodedColumn ? 'numerical' : 'categorical',
+            unique: 0,
+            missing: 0,
+            remove: false,
+            encode: false,
+            encoding: 'onehot'
+          };
+        }
+      });
+      
+      console.log('  Updated columns:', columns.value.map(c => c.name));
+    }
+    
+    // Switch to train view to show encoded data
+    currentSplitView.value = 'train';
+    
+    console.log('✅ Categorical encoding applied successfully');
+    console.log('  Current view:', currentSplitView.value);
+    console.log('  Train data rows:', trainData.value.length);
+    
+    const encodedCount = data.encoded_columns?.length || 0;
+    const encodedList = data.encoded_columns?.slice(0, 3).join(', ') || '';
+    const moreText = encodedCount > 3 ? ` and ${encodedCount - 3} more` : '';
+    
+    showSuccess(
+      'Categorical Encoding Applied!',
+      `Encoded ${encodedCount} column${encodedCount !== 1 ? 's' : ''}: ${encodedList}${moreText}`
+    );
+    
+    // Close the modal
+    showEncodingModal.value = false;
     // Refresh table, preview, columns, etc. here as needed
   } else {
-    alert('Encoding failed: ' + (data.detail || data.message));
+    throw new Error(data.detail || data.message || 'Encoding failed');
+  }
+  } catch (error) {
+    console.error('❌ Encoding error:', error);
+    showError('Encoding Failed', error.message);
+  } finally {
+    isProcessing.value = false;
   }
 }
 
@@ -1845,17 +1985,21 @@ const goBack = () => {
   router.push("/target-selection");
 };
 
-const proceedToModelTraining = () => {
+const proceedToAlgorithmSelection = () => {
+  console.log('🔵 proceedToAlgorithmSelection called!', { splitApplied: splitApplied.value });
+  
   if (!splitApplied.value) {
-    alert("Please apply dataset splitting before proceeding");
+    showWarning('Split Required', 'Please apply dataset splitting before proceeding');
     return;
   }
 
+  // Save preprocessing state
   localStorage.setItem(
     "advancedPreprocessing",
     JSON.stringify({
       splitApplied: splitApplied.value,
       scalingApplied: scalingApplied.value,
+      encodingApplied: encodingApplied.value,
       splitRatio: splitRatio.value,
       scalingMethod: scalingMethod.value,
       trainRows: trainRows.value,
@@ -1863,18 +2007,20 @@ const proceedToModelTraining = () => {
     })
   );
 
-  router.push("/algo-selection");
-};
-
-const resetAllTransformations = () => {
-  if (
-    confirm(
-      "Are you sure you want to reset all transformations? This will clear all splits and scaling."
-    )
-  ) {
-    resetSplit();
-    console.log("🔄 All transformations reset");
+  // Ensure pipeline state has targetColumn for navigation guard
+  const pipelineState = JSON.parse(
+    localStorage.getItem("datasage_pipeline_state") || "{}"
+  );
+  
+  if (!pipelineState.targetColumn) {
+    // Get target from mlStore
+    pipelineState.targetColumn = mlStore.targetColumn || selectedTarget.value;
+    pipelineState.dataset = mlStore.dataset;
+    localStorage.setItem("datasage_pipeline_state", JSON.stringify(pipelineState));
   }
+
+  console.log('Navigating to algorithm selection with state:', pipelineState);
+  router.push("/algorithm-select");
 };
 
 // ==================== LIFECYCLE ====================
@@ -3545,19 +3691,28 @@ watch(currentSplitView, () => {
 }
 
 .stat-content {
-  display: flex;
-  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .stat-label {
-  font-size: 0.85rem;
-  color: #757575;
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
 }
 
 .stat-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #212121;
+  display: block;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .alert {
@@ -5099,6 +5254,10 @@ watch(currentSplitView, () => {
   flex-wrap: wrap;
 }
 
+.continue-btn {
+  animation: none !important
+}
+
 .processing-complete {
   display: flex;
   align-items: center;
@@ -5165,9 +5324,8 @@ watch(currentSplitView, () => {
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
   animation: pulse 2s infinite;
-  min-width: 200px;
-  justify-content: center;
 }
+
 
 .footer-btn.secondary {
   background: rgba(102, 126, 234, 0.1);
@@ -5515,10 +5673,141 @@ watch(currentSplitView, () => {
     padding: 1rem;
   }
 
+
   .tool-config {
     padding-top: 1rem;
     margin-top: 1rem;
   }
+}
+
+/* Hero Section - Glassmorphism Effect */
+.hero-section {
+  padding: 2rem;
+  text-align: center;
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  margin: 1.5rem 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.hero-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero-header-centered {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.gradient-text {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-subtitle {
+  font-size: 1.125rem;
+  color: #b3b3d1;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.dataset-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.summary-stat:hover {
+  background: rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #b3b3d1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.quality-indicator {
+  width: 100%;
+}
+
+.quality-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.quality-score.excellent {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.quality-score.good {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.quality-score.fair {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.quality-score.poor {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.quality-icon {
+  flex-shrink: 0;
 }
 
 /* Custom Scrollbars */
@@ -5533,22 +5822,475 @@ watch(currentSplitView, () => {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, #667eea, #764ba2);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(102, 126, 234, 0.5);
+  background: linear-gradient(135deg, #764ba2, #667eea);
 }
 
-/* Selection Styles */
-::selection {
-  background: rgba(102, 126, 234, 0.3);
+/* ========== NEW UI ELEMENTS ========== */
+
+/* Ratio Display */
+.ratio-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 16px;
+}
+
+.ratio-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+}
+
+.ratio-card.train .ratio-value {
+  color: #667eea;
+}
+
+.ratio-card.test .ratio-value {
+  color: #ef4444;
+}
+
+.ratio-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.ratio-label {
+  font-size: 0.75rem;
+  color: #b3b3d1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.ratio-rows {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.ratio-visual {
+  flex: 1;
+  padding: 0 1rem;
+}
+
+.ratio-bar {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+}
+
+.ratio-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.ratio-fill.train {
+  background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+.ratio-fill.test {
+  background: linear-gradient(90deg, #ef4444, #b91c1c);
+}
+
+/* Slider Labels */
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Categorical Encoding Selection */
+.selection-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.btn-secondary.small {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.encoding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.encoding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.encoding-row.active {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: #667eea;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  flex: 1;
+}
+
+.checkbox-label input {
+  display: none;
+}
+
+.checkbox-custom {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(102, 126, 234, 0.4);
+  border-radius: 6px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.checkbox-label input:checked + .checkbox-custom {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+.checkbox-label input:checked + .checkbox-custom::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.col-name {
+  font-size: 1rem;
+  color: #e0e7ef;
+  font-weight: 500;
+}
+
+.encoding-select-wrapper {
+  position: relative;
+  min-width: 180px;
+}
+
+.encoding-select {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  background: rgba(26, 26, 46, 0.8);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  color: #e0e7ef;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.encoding-select:focus {
+  border-color: #667eea;
+}
+
+.encoding-select.placeholder-active {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #94a3b8;
+  font-style: italic;
+  background: rgba(26, 26, 46, 0.4);
+  border-radius: 8px;
+}
+
+/* ==================== PREPROCESSING TOOL CARD STYLES ==================== */
+.preprocessing-tool-card {
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.preprocessing-tool-card:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.1);
+}
+
+.preprocessing-tool-card.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+}
+
+.tool-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
   color: white;
 }
 
-::-moz-selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: white;
+.tool-info {
+  flex: 1;
+  min-width: 0;
 }
+
+.tool-info h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.requires-split-inline {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tool-info p {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tool-badges-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.tool-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(71, 85, 105, 0.5);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* ==================== IMPROVED COLUMN LIST STYLES ==================== */
+
+.select-all-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.selection-count {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.column-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+/* Custom Scrollbar */
+.column-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.column-list::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 3px;
+}
+
+.column-list::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 3px;
+}
+
+.column-item {
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.column-item:hover {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.column-item.selected {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.column-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.column-actions {
+  flex-shrink: 0;
+}
+
+.mini-select {
+  padding: 0.35rem 0.75rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.mini-select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.method-description {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  padding-left: 2rem; /* Align with text, past checkbox */
+}
+
+.col-name {
+  font-size: 0.95rem;
+  color: #f1f5f9; /* Brighter white */
+  font-weight: 500;
+}
+
+.tool-badge.success-badge {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.order-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.order-badge.order-1 {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.order-badge.order-2 {
+  background: rgba(168, 85, 247, 0.2);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.order-badge.order-3 {
+  background: rgba(236, 72, 153, 0.2);
+  color: #f9a8d4;
+  border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+.order-badge.order-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.tool-footer {
+  padding: 0 1.25rem 1rem 1.25rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* ==================== MODAL SECTION STYLES ==================== */
+.modal-section {
+  padding: 1rem 0;
+}
+
+/* ==================== DISABLED BUTTON STYLES ==================== */
+.footer-btn:disabled,
+.footer-btn.continue-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: rgba(71, 85, 105, 0.5) !important;
+  border-color: rgba(71, 85, 105, 0.3) !important;
+  color: rgba(148, 163, 184, 0.7) !important;
+}
+
+.footer-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 </style>

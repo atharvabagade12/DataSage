@@ -499,8 +499,19 @@ const processFile = async (file) => {
     }, 200)
     
     // Upload to backend with better error handling
+    // Get JWT token from sessionStorage or localStorage
+    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
+    
+    console.log('🔑 Auth token found:', token ? 'Yes' : 'No')
+    
+    const headers = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    
     const response = await fetch(endpoint, {
       method: 'POST',
+      headers: headers,
       body: formData
     })
     

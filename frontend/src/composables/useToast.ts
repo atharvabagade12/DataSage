@@ -1,57 +1,93 @@
 interface Toast {
-  id: string
+  id: number
   type: 'success' | 'error' | 'warning' | 'info'
-  message: string
+  title: string
+  message?: string
   duration?: number
 }
 
-export const useToast = () => {
-  const toasts = ref<Toast[]>([])
+// Global toast state (shared across all components)
+const toasts = ref<Toast[]>([])
+let nextId = 1
 
-  const addToast = (toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substring(2, 15)
-    const newToast = { ...toast, id }
-    
-    toasts.value.push(newToast)
-    
-    // Auto remove after duration (default 5 seconds)
-    setTimeout(() => {
-      removeToast(id)
-    }, toast.duration || 5000)
-    
-    return id
-  }
-
-  const removeToast = (id: string) => {
-    const index = toasts.value.findIndex(toast => toast.id === id)
+export function toastState() {
+  const removeToast = (id: number) => {
+    const index = toasts.value.findIndex(t => t.id === id)
     if (index > -1) {
       toasts.value.splice(index, 1)
     }
   }
 
-  const success = (message: string, duration?: number) => {
-    return addToast({ type: 'success', message, duration })
+  return {
+    toasts: readonly(toasts),
+    removeToast
+  }
+}
+
+export const useToast = () => {
+  const showToast = ({ type = 'info', title, message = '', duration = 5000 }: {
+    type?: 'success' | 'error' | 'warning' | 'info'
+    title: string
+    message?: string
+    duration?: number
+  }) => {
+    const id = nextId++
+    
+    const toast: Toast = {
+      id,
+      type,
+      title,
+      message,
+      duration
+    }
+    
+    toasts.value.push(toast)
+    
+    // Auto-remove after duration (unless duration is 0)
+    if (duration > 0) {
+      setTimeout(() => {
+        removeToast(id)
+      }, duration)
+    }
+    
+    return id
   }
 
-  const error = (message: string, duration?: number) => {
-    return addToast({ type: 'error', message, duration })
+  const removeToast = (id: number) => {
+    const index = toasts.value.findIndex(t => t.id === id)
+    if (index > -1) {
+      toasts.value.splice(index, 1)
+    }
   }
 
-  const warning = (message: string, duration?: number) => {
-    return addToast({ type: 'warning', message, duration })
+  const showSuccess = (title: string, message = '', duration = 5000) => {
+    return showToast({ type: 'success', title, message, duration })
   }
 
-  const info = (message: string, duration?: number) => {
-    return addToast({ type: 'info', message, duration })
+  const showError = (title: string, message = '', duration = 7000) => {
+    return showToast({ type: 'error', title, message, duration })
+  }
+
+  const showWarning = (title: string, message = '', duration = 6000) => {
+    return showToast({ type: 'warning', title, message, duration })
+  }
+
+  const showInfo = (title: string, message = '', duration = 5000) => {
+    return showToast({ type: 'info', title, message, duration })
+  }
+
+  const clearAll = () => {
+    toasts.value = []
   }
 
   return {
     toasts: readonly(toasts),
-    addToast,
+    showToast,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo,
     removeToast,
-    success,
-    error,
-    warning,
-    info
+    clearAll
   }
 }

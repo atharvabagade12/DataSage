@@ -1,16 +1,17 @@
 <template>
   <div id="app">
     <NuxtPage />
+    <Toast />
   </div>
 </template>
 
-<script>
-export default {
-  name: 'App'
-}
+<script setup>
+import Toast from '~/components/Toast.vue'
 </script>
 
 <style>
+@import './assets/styles/design-tokens.css';
+
 * {
   margin: 0;
   padding: 0;
@@ -18,9 +19,9 @@ export default {
 }
 
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0f0f23;
-  color: #ffffff;
+  font-family: var(--font-primary);
+  background: var(--color-background);
+  color: var(--color-text-primary);
 }
 
 #app {

@@ -33,7 +33,7 @@ from sklearn.model_selection import (
     train_test_split, cross_val_score, StratifiedKFold, KFold
 )
 from sklearn.preprocessing import (
-    StandardScaler, MinMaxScaler, RobustScaler, LabelEncoder,
+    StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler, LabelEncoder,
     PolynomialFeatures
 )
 from sklearn.decomposition import PCA
@@ -55,12 +55,21 @@ import joblib
 from preprocessing import DataPreprocessor
 
 # ===== DIRECTORIES =====
-UPLOAD_DIR = "enterprise_datasets"
-MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB limit
-CHUNK_SIZE = 1024 * 1024  # 1MB chunks
+# UPLOAD_DIR = "enterprise_datasets"  <-- Deprecated
+# MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB limit
+# CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs("models", exist_ok=True)
+# os.makedirs(UPLOAD_DIR, exist_ok=True)
+# os.makedirs("models", exist_ok=True)
+
+# ===== DATABASE & STORAGE =====
+from database import get_db, engine
+from models import Dataset as DatasetModel, Model as ModelModel
+from services.file_service import FileService
+from sqlalchemy.orm import Session
+from fastapi import Depends
+
+file_service = FileService()
 
 # ===== FASTAPI APP INITIALIZATION =====
 app = FastAPI(
@@ -87,9 +96,9 @@ app.add_middleware(
 try:
     import auth
     app.include_router(auth.router)
-    print("✅ Auth router loaded successfully")
+    print("Auth router loaded successfully")
 except ImportError as e:
-    print(f"⚠️ Auth router not available: {e}")
+    print(f"Auth router not available: {e}")
 
 # ===== SINGLE SOURCE OF TRUTH: GLOBAL STORAGE =====
 datasets: Dict[str, Dict[str, Any]] = {}  # { dataset_id: { 'dataframe': df, 'metadata': {...} } }
@@ -358,92 +367,63 @@ async def health_check():
         }
 
 @app.post("/api/upload-dataset")
-async def upload_dataset(file: UploadFile = File(...)):
-    """Upload and analyze CSV dataset"""
+async def upload_dataset(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Upload and analyze CSV dataset - Persisted"""
     try:
-        print(f"📤 Receiving file upload: {file.filename}")
+        print(f"Receiving file upload: {file.filename}")
         
-        # Read CSV
-        content = await file.read()
-        df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+        # 1. Save file to disk
+        user_id = current_user['id']
+        file_path = await file_service.save_dataset(file, user_id)
         
-        print(f"✅ CSV parsed successfully: {df.shape}")
-        print(f"   Columns: {df.columns.tolist()}")
-        print(f"   First row: {df.iloc[0].to_dict() if len(df) > 0 else 'empty'}")
-        
-        dataset_id = f"dataset_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        #  CHECK DATASET SIZE LIMITS
-        row_count = len(df)
-        col_count = len(df.columns)
-        size_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
-
-        print(f"📊 Dataset size check:")
-        print(f"   Rows: {row_count:,}")
-        print(f"   Columns: {col_count}")
-        print(f"   Memory: {size_mb:.1f} MB")
-
-        # REJECT IF TOO LARGE (500K rows limit for in-memory processing)
-        if row_count > 500000:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Dataset too large: {row_count:,} rows. Maximum: 500,000 rows"
-            )
-
-        if size_mb > 1000:  # 1 GB limit
-            raise HTTPException(
-                status_code=413,
-                detail=f"Dataset too large: {size_mb:.1f}MB. Maximum: 1000MB"
-            )
-
-        #  WARN IF LARGE
-        warning = None
-        if row_count > 100000:
-            warning = f"⚠️ Large dataset ({row_count:,} rows). Preprocessing may take 30-60 seconds."
-            print(f"⚠️ {warning}")
-
-        #  STORE FULL DATASET IN MEMORY
-        datasets[dataset_id] = {
-            'dataframe': df.copy(),
-            'filename': file.filename,
-            'uploaded_at': datetime.now().isoformat(),
-            'preprocessed': False,
-            'original_shape': df.shape,
-            'total_rows': row_count, 
-            'size_mb': round(size_mb, 2),
+        # 2. Read DataFrame for analysis
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_parquet(file_path)
             
-            'is_split': False,
-            'is_scaled': False,
-            'split_info': None,
-            'X_train': None,
-            'X_test': None,
-            'y_train': None,
-            'y_test': None,
-            'scaler': None,
-            'scaling_method': None,
-            'scaled_columns': []
+        # 3. Create DB Record
+        dataset = DatasetModel(
+            user_id=user_id,
+            name=file.filename,
+            storage_path=file_path,
+            row_count=len(df),
+            column_count=len(df.columns),
+            size_bytes=os.path.getsize(file_path),
+            is_processed=False
+        )
+        db.add(dataset)
+        db.commit()
+        db.refresh(dataset)
+        
+        dataset_id = str(dataset.id)
+
+        # 3.5 Populate Global Storage
+        datasets[dataset_id] = {
+            'dataframe': df,
+            'filename': file.filename,
+            'upload_time': datetime.now(),
+            'is_processed': False
         }
 
-
-        print(f"✅ FULL dataset {dataset_id} stored in memory: {row_count:,} rows")
-        
-        
+        # 4. Prepare Response
         sample_size = min(200, len(df))
         sample_df = df.head(sample_size)
-        
-        print(f"📦 Preparing {sample_size} sample rows for response...")
         
         sample_data = []
         for idx, row in sample_df.iterrows():
             row_dict = {}
             for col in df.columns:
                 value = row[col]
-                
                 if pd.isna(value):
                     row_dict[str(col)] = None
-                elif isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                elif isinstance(value, (np.integer, np.int64, np.int32)):
                     row_dict[str(col)] = int(value)
-                elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
+                elif isinstance(value, (np.floating, np.float64)):
                     if np.isnan(value) or np.isinf(value):
                         row_dict[str(col)] = None
                     else:
@@ -452,12 +432,8 @@ async def upload_dataset(file: UploadFile = File(...)):
                     row_dict[str(col)] = bool(value)
                 else:
                     row_dict[str(col)] = str(value)
-            
             sample_data.append(row_dict)
-        
-        print(f" Sample data prepared: {len(sample_data)} rows")
-        
-        # Statistics
+            
         statistics = {}
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) > 0:
@@ -468,71 +444,258 @@ async def upload_dataset(file: UploadFile = File(...)):
                     val = stats_df.loc[stat, col]
                     col_stats[str(stat)] = float(val) if pd.notna(val) else 0.0
                 statistics[str(col)] = col_stats
-        
-        response_data = {
-        'dataset_id': dataset_id,
-        'filename': file.filename,
-        'shape': [int(df.shape[0]), int(df.shape[1])],
-        'columns': [str(col) for col in df.columns.tolist()],
-        'dtypes': {str(col): str(dtype) for col, dtype in df.dtypes.items()},
-        'missing_values': {str(col): int(df[col].isnull().sum()) for col in df.columns},
-        'sample_data': sample_data,  # ← Sample for display
-        'statistics': statistics,
-        'upload_time': datetime.now().isoformat(),
-        'success': True,
-        'total_rows': int(df.shape[0]),  # ← FULL row count
-        'total_columns': int(df.shape[1]),
-        'warning': warning  # ← NEW: Warning for large datasets
+
+        return {
+            'dataset_id': dataset_id,
+            'filename': dataset.name,
+            'shape': [dataset.row_count, dataset.column_count],
+            'columns': [str(col) for col in df.columns.tolist()],
+            'dtypes': {str(col): str(dtype) for col, dtype in df.dtypes.items()},
+            'missing_values': {str(col): int(df[col].isnull().sum()) for col in df.columns},
+            'sample_data': sample_data,
+            'statistics': statistics,
+            'upload_time': dataset.upload_date.isoformat(),
+            'success': True,
+            'total_rows': dataset.row_count,
+            'total_columns': dataset.column_count,
+            'warning': None
         }
         
-        print(f"   Returning upload response:")
-        print(f"   Dataset ID: {dataset_id}")
-        print(f"   Sample data rows: {len(sample_data)}")
-        print(f"   Total rows: {df.shape[0]}")
-        
-        return response_data
-        
     except Exception as e:
-        print(f"❌ Upload error: {str(e)}")
+        print(f"Upload error: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+@app.get("/api/export-dataset/{dataset_id}")
+async def export_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Export full dataset as CSV"""
+    try:
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+            
+        if dataset.user_id != current_user['id']:
+            raise HTTPException(status_code=403, detail="Not authorized")
+            
+        df = file_service.load_dataframe(dataset.storage_path)
+        
+        filename = dataset.name.replace(".csv", "") + "_exported.csv"
+        
+        def iter_csv():
+            chunk_size = 5000
+            for i in range(0, len(df), chunk_size):
+                buffer = io.StringIO()
+                # Write header only for the first chunk
+                header = (i == 0)
+                df.iloc[i:i+chunk_size].to_csv(buffer, index=False, header=header)
+                yield buffer.getvalue()
+        
+        return StreamingResponse(
+            iter_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Export error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export-train/{dataset_id}")
+async def export_train_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Export full training dataset as CSV (with all transformations applied)"""
+    global X_train_storage, y_train_storage
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"📥 EXPORT TRAIN DATASET: {dataset_id}")
+        print(f"{'='*80}")
+        
+        # Check if dataset exists
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Check if dataset is split
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
+        
+        # Check if split data exists
+        if dataset_id not in X_train_storage or dataset_id not in y_train_storage:
+            raise HTTPException(status_code=400, detail="Training data not found in storage")
+        
+        # Get train data
+        X_train = X_train_storage[dataset_id]
+        y_train = y_train_storage[dataset_id]
+        
+        # Combine features and target
+        train_df = pd.concat([X_train, y_train], axis=1)
+        
+        print(f"✅ Exporting training dataset: {len(train_df)} rows, {len(train_df.columns)} columns")
+        
+        # Generate filename
+        original_filename = datasets[dataset_id].get("filename", "dataset.csv")
+        filename = original_filename.replace(".csv", "") + "_train.csv"
+        
+        print(f"📄 Filename: {filename}")
+        
+        # Stream CSV
+        def iter_csv():
+            chunk_size = 5000
+            for i in range(0, len(train_df), chunk_size):
+                buffer = io.StringIO()
+                header = (i == 0)
+                train_df.iloc[i:i+chunk_size].to_csv(buffer, index=False, header=header)
+                yield buffer.getvalue()
+        
+        print(f"✅ Streaming {len(train_df)} rows...")
+        print(f"{'='*80}\n")
+        
+        return StreamingResponse(
+            iter_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Export train error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export-test/{dataset_id}")
+async def export_test_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Export full test dataset as CSV (with all transformations applied)"""
+    global X_test_storage, y_test_storage
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"📥 EXPORT TEST DATASET: {dataset_id}")
+        print(f"{'='*80}")
+        
+        # Check if dataset exists
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Check if dataset is split
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
+        
+        # Check if split data exists
+        if dataset_id not in X_test_storage or dataset_id not in y_test_storage:
+            raise HTTPException(status_code=400, detail="Test data not found in storage")
+        
+        # Get test data
+        X_test = X_test_storage[dataset_id]
+        y_test = y_test_storage[dataset_id]
+        
+        # Combine features and target
+        test_df = pd.concat([X_test, y_test], axis=1)
+        
+        print(f"✅ Exporting test dataset: {len(test_df)} rows, {len(test_df.columns)} columns")
+        
+        # Generate filename
+        original_filename = datasets[dataset_id].get("filename", "dataset.csv")
+        filename = original_filename.replace(".csv", "") + "_test.csv"
+        
+        print(f"📄 Filename: {filename}")
+        
+        # Stream CSV
+        def iter_csv():
+            chunk_size = 5000
+            for i in range(0, len(test_df), chunk_size):
+                buffer = io.StringIO()
+                header = (i == 0)
+                test_df.iloc[i:i+chunk_size].to_csv(buffer, index=False, header=header)
+                yield buffer.getvalue()
+        
+        print(f"✅ Streaming {len(test_df)} rows...")
+        print(f"{'='*80}\n")
+        
+        return StreamingResponse(
+            iter_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Export test error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 @app.get("/api/datasets/{dataset_id}")
-async def get_dataset_info(dataset_id: str):
-    """Get specific dataset information with sample data"""
+async def get_dataset_info(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Get specific dataset information with sample data - Persisted"""
     try:
-        print(f"📊 Fetching dataset info for: {dataset_id}")
+        # 1. Fetch from DB
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
         
-        if dataset_id not in datasets:
-            print(f"❌ Dataset {dataset_id} not found in memory")
-            print(f"   Available datasets: {list(datasets.keys())}")
-            raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
-        
-        data = datasets[dataset_id]
-        df = data['dataframe']
-        
-        print(f"✅ Dataset found: {df.shape}")
-        
-        #  PREPARE SAMPLE DATA (CRITICAL!)
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+            
+        # Check ownership
+        if dataset.user_id != current_user['id']:
+             raise HTTPException(status_code=403, detail="Not authorized to access this dataset")
+
+        # 2. Load Dataframe
+        try:
+            df = file_service.load_dataframe(dataset.storage_path)
+            
+            # 2.5 Populate Global Storage if missing
+            if dataset_id not in datasets:
+                print(f"🔄 Restoring dataset {dataset_id} to memory")
+                datasets[dataset_id] = {
+                    'dataframe': df,
+                    'filename': dataset.name,
+                    'upload_time': dataset.upload_date,
+                    'is_processed': dataset.is_processed,
+                    # Restore target info if available (would need DB field for this)
+                    # 'target_column': dataset.target_column 
+                }
+                
+        except FileNotFoundError:
+             raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+
+        # 3. Prepare Sample
         sample_size = min(200, len(df))
         sample_df = df.head(sample_size)
-        
-        print(f"📦 Preparing {sample_size} sample rows...")
         
         sample_data = []
         for idx, row in sample_df.iterrows():
             row_dict = {}
             for col in df.columns:
                 value = row[col]
-                
-                # Handle different data types properly
                 if pd.isna(value):
                     row_dict[str(col)] = None
-                elif isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                elif isinstance(value, (np.integer, np.int64, np.int32)):
                     row_dict[str(col)] = int(value)
-                elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
+                elif isinstance(value, (np.floating, np.float64)):
                     if np.isnan(value) or np.isinf(value):
                         row_dict[str(col)] = None
                     else:
@@ -541,194 +704,226 @@ async def get_dataset_info(dataset_id: str):
                     row_dict[str(col)] = bool(value)
                 else:
                     row_dict[str(col)] = str(value)
-            
             sample_data.append(row_dict)
-        
-        print(f"✅ Sample data prepared: {len(sample_data)} rows")
-        print(f"   First row keys: {list(sample_data[0].keys()) if sample_data else 'empty'}")
-        
-        # Prepare response
-        response_data = {
-        'dataset_id': dataset_id,
-        'filename': data.get('filename', 'unknown'),
-        'shape': [int(df.shape[0]), int(df.shape[1])],
-        'total_rows': int(df.shape[0]),  # ← NEW: Add explicit total_rows
-        'columns': [str(col) for col in df.columns.tolist()],
-        'dtypes': {str(col): str(dtype) for col, dtype in df.dtypes.items()},
-        'missing_values': {str(col): int(df[col].isnull().sum()) for col in df.columns},
-        'preprocessed': data.get('preprocessed', False),
-        'uploaded_at': data.get('uploaded_at'),
-        'sample_data': sample_data,  # ← Sample for display (200 rows)
-        'status': 'success',
-        'is_split': data.get('is_split', False),
-        'is_scaled': data.get('is_scaled', False),
-        'split_info': data.get('split_info')
-    }
-        print(f"✅ Returning response:")
-        print(f"   Total rows in backend: {df.shape[0]}")
-        print(f"   Sample rows returned: {len(sample_data)}")
-        print(f"✅ Returning response with {len(sample_data)} sample rows")
-        
-        return response_data
+
+        return {
+            'dataset_id': str(dataset.id),
+            'filename': dataset.name,
+            'shape': [dataset.row_count, dataset.column_count],
+            'total_rows': dataset.row_count,
+            'columns': [str(col) for col in df.columns.tolist()],
+            'dtypes': {str(col): str(dtype) for col, dtype in df.dtypes.items()},
+            'missing_values': {str(col): int(df[col].isnull().sum()) for col in df.columns},
+            'preprocessed': dataset.is_processed,
+            'uploaded_at': dataset.upload_date.isoformat(),
+            'sample_data': sample_data,
+            'status': 'success',
+            # TODO: Store split/scaling info in DB or separate table
+            'is_split': False, 
+            'is_scaled': False,
+            'split_info': None
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_dataset_info: {str(e)}")
+        print(f"Error in get_dataset_info: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error fetching dataset: {str(e)}")
 
 
+@app.get("/api/datasets/{dataset_id}/statistics")
+async def get_dataset_statistics(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Get complete dataset statistics calculated on ALL rows (not just preview)"""
+    try:
+        # 1. Fetch from DB
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+            
+        # Check ownership
+        if dataset.user_id != current_user['id']:
+            raise HTTPException(status_code=403, detail="Not authorized to access this dataset")
+
+        # 2. Load COMPLETE Dataframe (not just sample)
+        try:
+            df = file_service.load_dataframe(dataset.storage_path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+
+        print(f"\n📊 DEBUG: get_dataset_statistics called")
+        print(f"   Dataset ID: {dataset_id}")
+        print(f"   Dataset name: {dataset.name}")
+        print(f"   Storage path: {dataset.storage_path}")
+        print(f"   Is processed: {dataset.is_processed}")
+        print(f"   Calculating statistics on COMPLETE dataset: {len(df)} rows")
+
+        # 3. Calculate Missing Values
+        missing_values = {}
+        missing_info = []
+        
+        for col in df.columns:
+            missing_count = int(df[col].isnull().sum())
+            if missing_count > 0:
+                missing_values[str(col)] = missing_count
+                
+                # Detect column type
+                col_type = "categorical"
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    col_type = "numerical"
+                
+                missing_info.append({
+                    "name": str(col),
+                    "type": col_type,
+                    "count": missing_count,
+                    "percentage": f"{(missing_count / len(df) * 100):.1f}",
+                    "strategy": "fillmedian" if col_type == "numerical" else "fillmode"
+                })
+
+        # 4. Calculate Duplicates
+        duplicates = int(df.duplicated().sum())
+
+        # 5. Calculate Outliers (for numerical columns only)
+        outliers = 0
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        
+        for col in numeric_cols:
+            values = df[col].dropna()
+            if len(values) > 0:
+                Q1 = values.quantile(0.25)
+                Q3 = values.quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                outliers += int(((values < lower_bound) | (values > upper_bound)).sum())
+
+        print(f"✅ Statistics calculated:")
+        print(f"   Total Rows: {len(df)}")
+        print(f"   Missing Columns: {len(missing_info)}")
+        print(f"   Duplicates: {duplicates}")
+        print(f"   Outliers: {outliers}")
+
+        return {
+            "total_rows": len(df),
+            "total_columns": len(df.columns),
+            "missing_values": missing_values,
+            "missing_info": missing_info,
+            "duplicates": duplicates,
+            "outliers": outliers,
+            "status": "success"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error calculating statistics: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error calculating statistics: {str(e)}")
+
 
 @app.post("/api/preprocess")
-async def preprocess(config: dict):
-    """Apply preprocessing steps to dataset - Fully Refactored & Robust"""
-    new_dataset_id = None  # Safe initialization
-
+async def preprocess(
+    config: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Apply preprocessing steps to dataset - Persisted"""
     try:
         dataset_id = config.get("dataset_id")
         steps = config.get("steps", [])
 
-        print("=" * 80)
-        print("🔧 PREPROCESSING REQUEST")
-        print("=" * 80)
-        print(f"Dataset ID: {dataset_id}")
-        print(f"Steps: {len(steps)}")
+        print(f"Preprocessing request for Dataset {dataset_id}")
 
-        if dataset_id not in datasets:
-            return {"success": False, "error": f"Dataset {dataset_id} not found"}
+        # 1. Fetch Source Dataset
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset:
+             raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if dataset.user_id != current_user['id']:
+             raise HTTPException(status_code=403, detail="Not authorized")
 
-        # ✅ Reset split/scaling if preprocessing changes after split
-        if datasets[dataset_id].get("is_split", False):
-            print(f"⚠️ Dataset was split. Resetting split & scaling state...")
-            for key in ["is_split", "is_scaled", "X_train", "X_test", "y_train", "y_test", "scaler", "scaling_method", "split_info"]:
-                datasets[dataset_id][key] = None
-            print("✅ Split & scaling state reset complete")
-
-        # ✅ Get FULL dataset
-        df_full = datasets[dataset_id]["dataframe"].copy()
-        original_rows = len(df_full)
-        print(f"Original shape: {df_full.shape}")
-        print(f"Original rows from storage: {original_rows}")
-
+        # 2. Load Dataframe
+        df = file_service.load_dataframe(dataset.storage_path)
+        original_rows = len(df)
+        
+        # 3. Apply Preprocessing
         from preprocessing import DataPreprocessor
-        preprocessor = DataPreprocessor(df_full)
-
+        preprocessor = DataPreprocessor(df)
+        
         categorical_encoded = False
         encoded_columns = []
 
-        # Main preprocessing loop
         for i, step in enumerate(steps, 1):
             step_type = step.get("type")
-            print(f"\nStep {i}/{len(steps)}: {step_type}")
+            print(f"  Step {i}: {step_type}")
 
             if step_type == "handle_missing":
                 strategies = step.get("strategies", {})
-                print(f"  Strategies: {strategies}")
                 if strategies:
                     preprocessor.handle_missing_values(strategies)
-                    print(f"  ✅ Handled missing values")
 
             elif step_type == 'remove_columns':  
                 columns_to_remove = step.get('columns', [])
-                print(f"📋 Removing {len(columns_to_remove)} columns: {columns_to_remove}")
-                
                 if columns_to_remove:
-                    # Filter out columns that don't exist
                     existing_cols = [col for col in columns_to_remove if col in preprocessor.df.columns]
-                    missing_cols = [col for col in columns_to_remove if col not in preprocessor.df.columns]
-                    
-                    if missing_cols:
-                        print(f"⚠️ Columns not found (skipping): {missing_cols}")
-                    
                     if existing_cols:
-                        before_cols = len(preprocessor.df.columns)
                         preprocessor.df = preprocessor.df.drop(columns=existing_cols)
-                        after_cols = len(preprocessor.df.columns)
-                        
-                        print(f"✅ Columns removed: {existing_cols}")
-                        print(f"   Before: {before_cols} columns → After: {after_cols} columns")
-                        print(f"   Remaining columns: {preprocessor.df.columns.tolist()}")
-                    else:
-                        print("❌ No valid columns to remove")
-
-
 
             elif step_type == "remove_duplicates":
                 keep = step.get("keep", "first")
-                print(f"  Keep: {keep}")
-                before = len(preprocessor.df)
                 preprocessor.remove_duplicates(strategy=keep)
-                after = len(preprocessor.df)
-                print(f"  ✅ Duplicates removed: {before - after} rows")
 
             elif step_type == "handle_outliers":
                 method = step.get("method", "remove")
-                print(f"  Method: {method}")
                 numeric_cols = preprocessor.df.select_dtypes(include=np.number).columns.tolist()
                 if numeric_cols:
-                    before = len(preprocessor.df)
                     preprocessor.handle_outliers(numeric_cols, method="iqr", strategy=method)
-                    after = len(preprocessor.df)
-                    print(f"  ✅ Outliers handled: {before - after} rows")
 
             elif step_type == "encode_categorical":
                 columns_to_encode = step.get("columns", [])
                 methods = step.get("methods", {})
-                print(f"  Encoding columns: {columns_to_encode}")
                 if columns_to_encode:
                     for col in columns_to_encode:
                         if col in preprocessor.df.columns:
                             method = methods.get(col, "label")
-                            print(f"    - {col} ({method})...")
-                            try:
-                                preprocessor.encode_categorical(col, method=method)
-                                categorical_encoded = True
-                                encoded_columns.append(col)
-                                print(f"      ✅ Encoded!")
-                            except Exception as e:
-                                print(f"      ❌ Error: {e}")
-                        else:
-                            print(f"    ⚠️ Column {col} not found")
+                            preprocessor.encode_categorical(col, method=method)
+                            categorical_encoded = True
+                            encoded_columns.append(col)
 
-        # Get processed dataframe
+        # 4. Save Processed Dataset
         processed_df = preprocessor.get_processed_dataframe()
         processed_rows = len(processed_df)
+        
+        # Generate filename
+        original_name = dataset.name.replace('.csv', '').replace('.parquet', '')
+        new_filename = f"{original_name}_cleaned"
+        
+        # Save to disk
+        file_path = file_service.save_dataframe(processed_df, current_user['id'], new_filename, is_processed=True)
+        
+        # 5. Create DB Record
+        new_dataset = DatasetModel(
+            user_id=current_user['id'],
+            name=new_filename,
+            storage_path=file_path,
+            row_count=processed_rows,
+            column_count=len(processed_df.columns),
+            size_bytes=os.path.getsize(file_path),
+            is_processed=True,
+            parent_dataset_id=dataset.id
+        )
+        db.add(new_dataset)
+        db.commit()
+        db.refresh(new_dataset)
+        
+        new_dataset_id = str(new_dataset.id)
 
-        print(f"\n📊 PROCESSING COMPLETE:")
-        print(f"  Input: {original_rows} rows")
-        print(f"  Output: {processed_rows} rows")
-        print(f"  Columns: {len(processed_df.columns)}")
-
-        processed_df = processed_df.replace([np.inf, -np.inf], np.nan)
-
-        # ✅ Generate NEW cleaned dataset ID
-        new_dataset_id = f"{dataset_id}_cleaned_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        # ✅ Store the processed dataset
-        datasets[new_dataset_id] = {
-            "dataframe": processed_df.copy(),
-            "filename": f"{datasets[dataset_id]['filename']}_cleaned",
-            "uploaded_at": datasets[dataset_id]["uploaded_at"],
-            "preprocessed": True,
-            "original_dataset_id": dataset_id,
-            "processing_steps": steps,
-            "target_column": None,
-            "is_split": False,
-            "is_scaled": False,
-            "split_info": None,
-            "X_train": None,
-            "X_test": None,
-            "y_train": None,
-            "y_test": None,
-            "scaler": None,
-            "scaling_method": None,
-            "scaled_columns": []
-        }
-
-        print(f"✅ Stored processed dataset: {new_dataset_id}")
-
-        # Prepare preview for frontend
+        # 6. Prepare Preview
         sample_size = min(200, len(processed_df))
         sample_df = processed_df.head(sample_size)
         preview_data = []
@@ -751,14 +946,6 @@ async def preprocess(config: dict):
                     row_dict[str(col)] = str(value)
             preview_data.append(row_dict)
 
-        print("\n" + "=" * 80)
-        print(f"✅ SUCCESS!")
-        print(f"  Original: {original_rows}")
-        print(f"  Cleaned: {processed_rows}")
-        print(f"  Removed: {original_rows - processed_rows}")
-        print(f"  New Dataset ID: {new_dataset_id}")
-        print("=" * 80)
-
         return {
             "success": True,
             "preview": preview_data,
@@ -771,71 +958,7 @@ async def preprocess(config: dict):
         }
 
     except Exception as e:
-        print(f"❌ ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return cleaned_dataset_id only if assigned
-        error_response = {"success": False, "error": str(e)}
-        if new_dataset_id is not None:
-            error_response["cleaned_dataset_id"] = new_dataset_id
-        return error_response
-
-
-
-
-
-@app.get("/api/export-dataset/{dataset_id}")
-async def export_dataset(dataset_id: str):
-    """Export full dataset as CSV - FIXED with streaming"""
-    try:
-        print("\n" + "=" * 80)
-        print(f"📥 EXPORT REQUEST: {dataset_id}")
-        print("=" * 80)
-        
-        if dataset_id not in datasets:
-            print(f"❌ Dataset {dataset_id} not found!")
-            raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
-        
-        df = datasets[dataset_id]["dataframe"].copy()
-        
-        print(f"✅ Found dataset: {len(df)} rows, {len(df.columns)} columns")
-        
-        # ✅ CRITICAL: Generate filename
-        filename = datasets[dataset_id].get("filename", "dataset.csv")
-        filename = filename.replace(".csv", "") + "_exported.csv"
-        
-        print(f"📄 Filename: {filename}")
-        
-        # ✅ CORRECT: Use StringIO to generate CSV
-        def iter_csv():
-            """Stream CSV line by line"""
-            buffer = io.StringIO()
-            
-            # Write header
-            df.to_csv(buffer, index=False, mode='w', header=True)
-            yield buffer.getvalue()
-            
-            # Write data in chunks
-            chunk_size = 1000
-            for i in range(0, len(df), chunk_size):
-                buffer = io.StringIO()
-                df.iloc[i:i+chunk_size].to_csv(buffer, index=False, header=False)
-                yield buffer.getvalue()
-        
-        print(f"✅ Streaming {len(df)} rows...")
-        print("=" * 80)
-        
-        return StreamingResponse(
-            iter_csv(),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Export error: {e}")
-        import traceback
+        print(f"Preprocessing Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -944,13 +1067,16 @@ async def set_target(request: dict):
     try:
         dataset_id = request.get('dataset_id')
         target_column = request.get('target_column')
-        datasets[dataset_id]['target_column'] = target_column
         
         print(f"🎯 Setting target for dataset {dataset_id}: {target_column}")
         
+        # Check if dataset exists FIRST
         if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+            print(f"❌ Dataset {dataset_id} not found in datasets dictionary")
+            print(f"   Available datasets: {list(datasets.keys())}")
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
         
+        # Now safe to access
         df = datasets[dataset_id]['dataframe']
         
         if target_column not in df.columns:
@@ -1019,8 +1145,13 @@ async def split_dataset(request: Dict[str, Any]):
         if dataset_id not in datasets:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
-        # Get the target column from dataset metadata
+        # Get the target column from dataset metadata OR request
         dataset_info = datasets[dataset_id]
+        
+        # Allow passing target_column in request if not set in metadata
+        if 'target_column' in request:
+            dataset_info['target_column'] = request['target_column']
+            
         if 'target_column' not in dataset_info:
             raise HTTPException(status_code=400, detail="No target selected. Please select target first.")
         
@@ -1181,14 +1312,15 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                 
             elif method == 'onehot':
                 # One-Hot Encoding: Creates new columns
-                encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+                # Using drop='first' to avoid dummy variable trap (multicollinearity)
+                encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore', drop='first')
                 
                 # Fit on train
                 train_encoded = encoder.fit_transform(X_train[[col_name]])
                 test_encoded = encoder.transform(X_test[[col_name]])
                 
-                # Create new column names
-                feature_names = [f"{col_name}_{cat}" for cat in encoder.categories_[0]]
+                # Get feature names from encoder (this handles drop='first' correctly)
+                feature_names = encoder.get_feature_names_out([col_name]).tolist()
                 
                 # Create DataFrames for encoded columns
                 train_encoded_df = pd.DataFrame(train_encoded, columns=feature_names, index=X_train.index)
@@ -1237,6 +1369,10 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
         print(f"   Encoded columns: {encoded_columns}")
         print("=" * 80 + "\n")
         
+        # Include target column in the columns list
+        target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
+        all_columns = list(X_train.columns) + [target_col_name]
+        
         return {
             "success": True,
             "message": f"Successfully encoded {len(encoded_columns)} columns",
@@ -1245,7 +1381,7 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
             "encoded_columns": encoded_columns,
             "train_preview": train_preview,
             "test_preview": test_preview,
-            "columns": list(X_train.columns)
+            "columns": all_columns
         }
         
     except HTTPException:
@@ -1265,23 +1401,26 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
 from pydantic import BaseModel
 from typing import List, Optional
 
+class ColumnScaling(BaseModel):
+    name: str
+    method: str = 'standard'
+
 class ScalingRequest(BaseModel):
     dataset_id: str
-    method: str = 'standard'
-    columns: Optional[List[str]] = None
+    columns: List[ColumnScaling]
 
 @app.post("/api/datasets/apply-scaling")
+@app.post("/api/datasets/apply-scaling")
 async def apply_scaling(request: ScalingRequest):
-    """Apply feature scaling to numerical columns"""
+    """Apply feature scaling to specified numerical columns"""
     global X_train_storage, X_test_storage, split_scalers
     
     try:
         dataset_id = request.dataset_id
-        scaling_method = request.method
-        columns = request.columns
+        columns_to_scale = request.columns
         
         print(f"Scaling request for dataset: {dataset_id}")
-        print(f"Method: {scaling_method}")
+        print(f"Columns to scale: {len(columns_to_scale)}")
         
         if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
             raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
@@ -1289,63 +1428,87 @@ async def apply_scaling(request: ScalingRequest):
         X_train = X_train_storage[dataset_id].copy()
         X_test = X_test_storage[dataset_id].copy()
         
-        # If no columns specified, scale all numerical columns
-        if not columns:
-            columns = X_train.select_dtypes(include=[np.number]).columns.tolist()
+        if not columns_to_scale:
+            raise HTTPException(status_code=400, detail="No columns specified for scaling")
+            
+        scalers_used = {}
+        scaled_columns = []
         
-        if not columns:
-            raise HTTPException(status_code=400, detail="No numerical columns found for scaling")
-        
-        print(f"Scaling columns: {columns}")
-        
-        # Select scaler
-        if scaling_method == 'standard':
-            scaler = StandardScaler()
-        elif scaling_method == 'minmax':
-            scaler = MinMaxScaler()
-        elif scaling_method == 'robust':
-            scaler = RobustScaler()
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown scaling method: {scaling_method}")
-        
-        # Apply scaling
-        X_train[columns] = scaler.fit_transform(X_train[columns])
-        X_test[columns] = scaler.transform(X_test[columns])
+        for col_info in columns_to_scale:
+            col_name = col_info.name
+            method = col_info.method.lower()
+            
+            if col_name not in X_train.columns:
+                print(f"⚠️ Column {col_name} not found, skipping...")
+                continue
+                
+            print(f"Scaling {col_name} using {method}...")
+            
+            # Select scaler
+            if method == 'standard':
+                scaler = StandardScaler()
+            elif method == 'minmax':
+                scaler = MinMaxScaler()
+            elif method == 'robust':
+                scaler = RobustScaler()
+            elif method == 'maxabs':
+                scaler = MaxAbsScaler()
+            else:
+                print(f"⚠️ Unknown scaling method: {method}")
+                continue
+                
+            # Apply scaling
+            # Reshape for single column scaling
+            X_train[[col_name]] = scaler.fit_transform(X_train[[col_name]])
+            X_test[[col_name]] = scaler.transform(X_test[[col_name]])
+            
+            scalers_used[col_name] = {
+                'scaler': scaler,
+                'method': method
+            }
+            scaled_columns.append(col_name)
         
         # Update storage
         X_train_storage[dataset_id] = X_train
         X_test_storage[dataset_id] = X_test
-        split_scalers[dataset_id] = {
-            'scaler': scaler,
-            'columns': columns,
-            'method': scaling_method
-        }
+        split_scalers[dataset_id] = scalers_used
         
         # Update dataset metadata
         datasets[dataset_id]['is_scaled'] = True
-        datasets[dataset_id]['scaling_method'] = scaling_method
-        datasets[dataset_id]['scaled_columns'] = columns
+        datasets[dataset_id]['scaled_columns'] = scaled_columns
+        datasets[dataset_id]['scalers'] = list(scalers_used.keys())
         
         # Create preview data for frontend
         y_train = y_train_storage.get(dataset_id)
         y_test = y_test_storage.get(dataset_id)
         
-        train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
-        test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
+        # Ensure y_train/y_test are DataFrames/Series with correct index
+        if y_train is not None and y_test is not None:
+             train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
+             test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
+        else:
+             train_preview_df = X_train.head(200)
+             test_preview_df = X_test.head(200)
         
         train_preview = train_preview_df.to_dict('records')
         test_preview = test_preview_df.to_dict('records')
         
-        print(f"✅ Scaling complete: {len(columns)} columns scaled")
+        print(f"✅ Scaling complete: {len(scaled_columns)} columns scaled")
         
+        # Include target column in the columns list if it exists
+        all_columns = list(X_train.columns)
+        if y_train is not None:
+             target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
+             all_columns.append(target_col_name)
+
         return {
             "success": True,
-            "message": f"Scaling applied using {scaling_method} scaler",
-            "columns_scaled": len(columns),
-            "scaled_columns": columns,
-            "scaler_type": scaling_method,
+            "message": f"Successfully scaled {len(scaled_columns)} columns",
+            "columns_scaled": len(scaled_columns),
+            "scaled_columns": scaled_columns,
             "scaled_train_preview": train_preview,
-            "scaled_test_preview": test_preview
+            "scaled_test_preview": test_preview,
+            "columns": all_columns
         }
         
     except HTTPException:
@@ -1419,37 +1582,30 @@ async def detect_problem_type_endpoint(request: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Detection error: {str(e)}")
 
 @app.get("/api/datasets")
-async def list_datasets():
-    """List all available datasets"""
+async def get_datasets(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """List all datasets for current user - Persisted"""
     try:
-        dataset_list = []
-        for dataset_id, data in datasets.items():
-            df = data['dataframe']
-            dataset_list.append({
-                'dataset_id': dataset_id,
-                'filename': data.get('filename', 'unknown'),
-                'shape': list(df.shape),
-                'columns': df.columns.tolist(),
-                'preprocessed': data.get('preprocessed', False),
-                'uploaded_at': data.get('uploaded_at')
-            })
-        
-        return {
-            'datasets': dataset_list,
-            'total_datasets': len(datasets),
-            'status': 'success'
-        }
+        datasets = db.query(DatasetModel).filter(DatasetModel.user_id == current_user['id']).all()
+        return [
+            {
+                "id": str(d.id),
+                "filename": d.name,
+                "upload_time": d.upload_date.isoformat(),
+                "size_bytes": d.size_bytes,
+                "row_count": d.row_count,
+                "column_count": d.column_count,
+                "is_processed": d.is_processed
+            }
+            for d in datasets
+        ]
     except Exception as e:
-        return {
-            'datasets': [],
-            'total_datasets': 0,
-            'status': 'error',
-            'error': str(e)
-        }
+        print(f"Error listing datasets: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-    
-    
 @app.get("/api/missing-values/{dataset_id}")
 async def get_missing_values(dataset_id: str):
     """Get missing values information for a dataset"""
@@ -1886,6 +2042,6 @@ async def debug_info():
 # ===== RUN SERVER =====
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting DataSage ML Backend...")
-    print("✅ Features: Upload, Preprocess (SimpleImputer), Train, Predict")
+    print("Starting DataSage ML Backend...")
+    print("Features: Upload, Preprocess (SimpleImputer), Train, Predict")
     uvicorn.run(app, host="127.0.0.1", port=8000)

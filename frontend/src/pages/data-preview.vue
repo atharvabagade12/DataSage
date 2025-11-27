@@ -38,31 +38,59 @@
     </nav>
 
     <!-- Hero Section -->
-    <div class="hero-section">
+    <section class="hero-section">
       <div class="hero-content">
-        <div class="hero-icon"></div>
-        <h1>Data Preprocessing</h1>
-        <p>Clean and prepare your dataset for machine learning</p>
+        <!-- Centered Header -->
+        <div class="hero-header-centered">
+          <h1 class="gradient-text">Data Preprocessing</h1>
+          <p class="hero-subtitle">Clean and prepare your dataset for machine learning</p>
+        </div>
+        
+        <!-- Stats Grid -->
         <div class="dataset-summary">
-          <span class="summary-item"
-            >Dataset: <strong>{{ fileName }}</strong></span>
-          <span class="summary-divider"></span>
-          <span class="summary-item">
-            {{ displayedRowCount }} rows
-          </span>
-          <span class="summary-divider"></span>
-          <span class="summary-item">{{ dataInfo.columns }} columns</span>
-          <div class="quality-indicator">
-            <div
-              class="quality-score"
-              :class="getHealthLevel(dataQuality.score)"
-            >
-              {{ dataQuality.score }}% Quality
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Dataset</span>
+              <span class="stat-value" :title="fileName">{{ fileName }}</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3,3H21V21H3V3M5,5V19H19V5H5M7,7H9V9H7V7M11,7H13V9H11V7M15,7H17V9H15V7Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Rows</span>
+              <span class="stat-value">{{ displayedRowCount.toLocaleString() }}</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat">
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2,2H8V4H16V2H22V8H20V16H22V22H16V20H8V22H2V16H4V8H2V2M16,8V6H8V8H6V16H8V18H16V16H18V8H16M4,4V6H6V4H4M18,4V6H20V4H18M4,18V20H6V18H4M18,18V20H20V18H18Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Columns</span>
+              <span class="stat-value">{{ dataInfo.columns }}</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat">
+            <div class="quality-indicator">
+              <div class="quality-score" :class="getHealthLevel(dataQuality.score)">
+                <svg class="quality-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,2L2,7V13.5C2,19.75 6.5,25.5 12,27C17.5,25.5 22,19.75 22,13.5V7L12,2M12,4.18L20,8.09V13.5C20,18.87 16.25,23.74 12,25.13C7.75,23.74 4,18.87 4,13.5V8.09L12,4.18Z"/>
+                </svg>
+                <span>{{ dataQuality.score }}% Quality</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- Main Content Container -->
     <div class="main-container">
@@ -86,14 +114,7 @@
             >
               Cleaned Data
             </button>
-            <div v-if="hasCleanedData" class="data-stats">
-              <span class="stat">{{ cleanedDataset.length }} rows</span>
-              <span class="stat-value">{{
-                getCleanedColumns.value?.length || columns.length
-              }}</span>
-
-              <span class="stat">{{ finalQuality }}% quality</span>
-            </div>
+            
           </div>
         </div>
 
@@ -252,14 +273,7 @@
         </div>
       </section>
 
-      <!-- Data Preprocessing Toolkit Section (YOUR EXISTING SECTION) -->
-      <!-- <section class="preprocessing-section">
-        <div class="section-header">
-          <h2>Data Preprocessing Toolkit</h2>
-          <p class="section-description">
-            Select and configure preprocessing steps to clean your data
-          </p>
-        </div> -->
+      
 
         <!-- Data Preprocessing Toolkit Section -->
         <section class="preprocessing-section">
@@ -270,871 +284,559 @@
             </p>
           </div>
 
-          <div class="preprocessing-grid">
-            <!-- Column Selection Tool - FIXED WITH DROPDOWN STATE MANAGEMENT -->
-            <div
-              class="preprocessing-tool"
-              :class="{
-                active: isToolEnabled('columnSelection'),
-                expanded: isDropdownOpen('columnSelection'),
-              }"
-            >
-              <div class="tool-header">
-                <div class="tool-info">
-                  <h3>Column Selection</h3>
-                  <p>
-                    Remove irrelevant columns (IDs, names, URLs) that don't help
-                    in learning
+          <!-- Help Section: Why Order Matters -->
+          <Card variant="info" class="preprocessing-help-section">
+            <details class="help-details">
+              <summary class="help-summary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="help-icon">
+                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                </svg>
+                <strong>Why does preprocessing order matter?</strong>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="chevron-icon">
+                  <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/>
+                </svg>
+              </summary>
+              <div class="help-content">
+                <p>Preprocessing steps can affect each other in unexpected ways:</p>
+                <ul class="help-list">
+                  <li>
+                    <strong>Capping outliers</strong> may create new duplicates by setting multiple extreme values to the same threshold
+                  </li>
+                  <li>
+                    <strong>Removing duplicates</strong> may change the data distribution, causing new values to become outliers
+                  </li>
+                </ul>
+                <div class="recommended-order-box">
+                  <p class="order-title"><strong>📋 Recommended Order:</strong></p>
+                  <ol class="order-list">
+                    <li><span class="order-number">1</span> Handle Missing Values</li>
+                    <li><span class="order-number">2</span> Handle Outliers</li>
+                    <li><span class="order-number">3</span> Remove Duplicates</li>
+            
+                  </ol>
+                  <p class="order-note">
+                    💡 Following this order ensures optimal results and prevents unexpected behavior.
                   </p>
                 </div>
-                <div class="tool-actions">
-                  <span class="tool-badge">{{ columns.length }} columns</span>
-
-                  <!--Separate Configure/Close button -->
-                  <button
-                    @click="toggleDropdown('columnSelection')"
-                    class="config-btn"
-                    :class="{ active: isDropdownOpen('columnSelection') }"
-                    v-if="isToolEnabled('columnSelection')"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        v-if="!isDropdownOpen('columnSelection')"
-                        d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"
-                      />
-                      <path
-                        v-else
-                        d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"
-                      />
-                    </svg>
-                    {{
-                      isDropdownOpen("columnSelection") ? "Close" : "Configure"
-                    }}
-                  </button>
-
-                  <button
-                    @click="
-                      isToolEnabled('columnSelection')
-                        ? disableTool('columnSelection')
-                        : enableTool('columnSelection')
-                    "
-                    class="tool-btn"
-                    :class="{ active: isToolEnabled('columnSelection') }"
-                  >
-                    {{
-                      isToolEnabled("columnSelection") ? "Disable" : "Enable"
-                    }}
-                  </button>
-                </div>
               </div>
+            </details>
+          </Card>
 
-              <div v-if="isDropdownOpen('columnSelection')" class="tool-config">
-                <div class="config-header">
-                  <h4>Select columns to REMOVE from dataset:</h4>
-                  <div class="config-actions">
-                    <button @click="selectNoColumns" class="action-link">
-                      Remove None
-                    </button>
-                    <button
-                      @click="selectIrrelevantColumns"
-                      class="action-btn small"
-                    >
-                      Auto-select Irrelevant
-                    </button>
-                    <button
-                      @click="selectAllColumns"
-                      class="action-link danger"
-                    >
-                      Remove All
-                    </button>
-
-                    <button
-                      @click="
-                        resetToolSettingsColumnSelection('columnSelection')
-                      "
-                      class="reset-btn small"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path
-                          d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"
-                        />
-                      </svg>
-                      Reset
-                    </button>
+          <div class="preprocessing-grid">
+            <!-- Column Selection Tool - REFACTORED WITH MODAL -->
+            <Card class="preprocessing-tool-card" hover>
+              <div class="tool-header">
+                <div class="tool-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2,2H8V4H16V2H22V8H20V16H22V22H16V20H8V22H2V16H4V8H2V2M16,8V6H8V8H6V16H8V18H16V16H18V8H16M4,4V6H6V4H4M18,4V6H20V4H18M4,18V20H6V18H4M18,18V20H20V18H18Z"/>
+                  </svg>
+                </div>
+                <div class="tool-info">
+                  <h3>Column Selection</h3>
+                  <p>Remove irrelevant columns that don't contribute to learning</p>
+                </div>
+                <div class="tool-badge">{{ columns.length }} columns</div>
+              </div>
+              
+              <div class="tool-footer">
+                <Button variant="primary" @click="showColumnModal = true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.4,13C19.8,13 20.1,13.3 20.1,13.7V19.4C20.1,19.8 19.8,20.1 19.4,20.1H13.7C13.3,20.1 13,19.8 13,19.4V13.7C13,13.3 13.3,13 13.7,13H19.4M19.4,3.9C19.8,3.9 20.1,4.2 20.1,4.6V10.3C20.1,10.7 19.8,11 19.4,11H13.7C13.3,11 13,10.7 13,10.3V4.6C13,4.2 13.3,3.9 13.7,3.9H19.4M10.3,13C10.7,13 11,13.3 11,13.7V19.4C11,19.8 10.7,20.1 10.3,20.1H4.6C4.2,20.1 3.9,19.8 3.9,19.4V13.7C3.9,13.3 4.2,13 4.6,13H10.3M10.3,3.9C10.7,3.9 11,4.2 11,4.6V10.3C11,10.7 10.7,11 10.3,11H4.6C4.2,11 3.9,10.7 3.9,10.3V4.6C3.9,4.2 4.2,3.9 4.6,3.9H10.3Z"/>
+                  </svg>
+                  Configure Columns
+                </Button>
+              </div>
+            </Card>
+            
+            <!-- Column Selection Modal -->
+            <Modal v-model="showColumnModal" title="Column Selection" size="xl">
+              <div class="modal-section">
+                <div class="modal-section-header">
+                  <h4>Select columns to remove from dataset</h4>
+                  <div class="quick-actions">
+                    <Button variant="ghost" size="sm" @click="selectNoColumns">
+                      Clear All
+                    </Button>
+                    <Button variant="outline" size="sm" @click="selectIrrelevantColumns">
+                      Auto-Select Irrelevant
+                    </Button>
+                    <Button variant="ghost" size="sm" @click="selectAllColumns">
+                      Select All
+                    </Button>
                   </div>
                 </div>
-
-                <div class="columns-grid">
-                  <label
-                    v-for="column in columns"
+                
+                <div class="columns-grid-modal">
+                  <Card 
+                    v-for="column in columns" 
                     :key="column.name"
-                    class="column-card"
-                    :class="{ 'to-remove': column.remove }"
+                    class="column-card-modal"
+                    :class="{ 'column-to-remove': column.remove }"
                   >
-                    <input
-                      type="checkbox"
-                      v-model="column.remove"
-                      :value="column.name"
-                    />
-                    <div class="column-content">
-                      <div class="column-header">
-                        <span class="column-name">{{ column.name }}</span>
-                        <span class="column-type" :class="column.type">{{
-                          column.type
-                        }}</span>
-                        <span v-if="column.remove" class="remove-badge"
-                          >Will Remove</span
-                        >
-                      </div>
-                      <div class="column-stats">
-                        <span class="stat-item"
-                          >{{ column.unique }} unique</span
-                        >
-                        <span
-                          v-if="column.missing > 0"
-                          class="stat-item missing"
-                          >{{ column.missing }} missing</span
-                        >
-                      </div>
-                      <div class="column-sample">
-                        <span class="sample-label">Sample:</span>
-                        <span class="sample-text">{{
-                          getColumnSample(column)
-                        }}</span>
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                <div class="selection-summary">
-                  <div class="summary-stats">
-                    <span class="summary-stat keep"
-                      >{{ getColumnsToKeep().length }} columns to keep</span
-                    >
-                    <span class="summary-stat remove"
-                      >{{ getColumnsToRemove().length }} columns to remove</span
-                    >
-                  </div>
-                  <div
-                    v-if="getColumnsToRemove().length > 0"
-                    class="removal-list"
-                  >
-                    <span class="removal-label">Will remove:</span>
-                    <div class="removal-tags">
-                      <span
-                        v-for="col in getColumnsToRemove()"
-                        :key="col.name"
-                        class="removal-tag"
-                      >
-                        {{ col.name }}
+                    <div class="column-card-header">
+                      <label class="column-checkbox-native">
+                        <input 
+                          type="checkbox"
+                          v-model="column.remove"
+                          class="checkbox-input"
+                        />
+                        <span class="checkbox-label">{{ column.name }}</span>
+                      </label>
+                      <span class="column-type-badge" :class="`type-${column.type}`">
+                        {{ column.type }}
                       </span>
                     </div>
-                  </div>
+                    
+                    <div class="column-card-body">
+                      <div class="column-stats-row">
+                        <span class="stat-chip">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z"/>
+                          </svg>
+                          {{ column.unique }} unique
+                        </span>
+                        <span v-if="column.missing > 0" class="stat-chip missing">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                          </svg>
+                          {{ column.missing }} missing
+                        </span>
+                      </div>
+                      
+                      <div class="column-sample">
+                        <span class="sample-label">Sample:</span>
+                        <span class="sample-value">{{ getColumnSample(column) }}</span>
+                      </div>
+                    </div>
+                    
+                    <div v-if="column.remove" class="column-remove-badge">
+                      Will be removed
+                    </div>
+                  </Card>
                 </div>
-
-                <div class="dropdown-footer">
-                  <button
-                    @click="toggleDropdown('columnSelection')"
-                    class="close-dropdown-btn"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                      />
-                    </svg>
-                    Close Configuration
-                  </button>
+                
+                <div v-show="getColumnsToRemove().length > 0" class="selection-summary-modal">
+                  <Card variant="warning">
+                    <div class="summary-content">
+                      <div class="summary-header">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                        </svg>
+                        <strong>{{ getColumnsToRemove().length }} columns will be removed</strong>
+                      </div>
+                      <div class="removal-tags">
+                        <span v-for="col in getColumnsToRemove()" :key="col.name" class="removal-tag">
+                          {{ col.name }}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
                 </div>
               </div>
-            </div>
+              
+              <template #footer>
+                <Button variant="ghost" @click="showColumnModal = false">
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  :loading="isProcessing"
+                  @click="applyColumnChanges"
+                  :disabled="getColumnsToRemove().length === 0"
+                >
+                  Apply Changes
+                </Button>
+              </template>
+            </Modal>
 
-            <!-- Missing Values Tool - ENHANCED PER-COLUMN STRATEGY -->
-            <div
-              class="preprocessing-tool"
-              :class="{
-                active: isToolEnabled('missingValues'),
-                expanded: isDropdownOpen('missingValues'),
-              }"
-            >
+            <!-- Missing Values Tool - REFACTORED WITH MODAL -->
+            <Card class="preprocessing-tool-card" hover>
               <div class="tool-header">
+                <div class="tool-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z"/>
+                  </svg>
+                </div>
                 <div class="tool-info">
                   <h3>Handle Missing Values</h3>
-                  <p>Choose strategy for each column with missing values</p>
+                  <p>Choose strategy for columns with missing data</p>
                 </div>
-
-                <div class="tool-actions">
-                  <span v-if="missingStats.count > 0" class="tool-badge">
+                <div class="tool-badges-container">
+                  <span class="order-badge order-1">1️⃣ First</span>
+                  <div class="tool-badge" v-if="missingStats.count > 0">
                     {{ missingStats.count }} columns affected
-                  </span>
-
-                  <button
-                    @click="toggleDropdown('missingValues')"
-                    class="config-btn"
-                    :class="{ active: isDropdownOpen('missingValues') }"
-                    v-if="isToolEnabled('missingValues')"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        v-if="!isDropdownOpen('missingValues')"
-                        d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"
-                      />
-                      <path
-                        v-else
-                        d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"
-                      />
-                    </svg>
-                    {{
-                      isDropdownOpen("missingValues") ? "Close" : "Configure"
-                    }}
-                  </button>
-
-                  <button
-                    @click="
-                      isToolEnabled('missingValues')
-                        ? disableTool('missingValues')
-                        : enableTool('missingValues')
-                    "
-                    class="tool-btn"
-                    :class="{ active: isToolEnabled('missingValues') }"
-                  >
-                    {{ isToolEnabled("missingValues") ? "Disable" : "Enable" }}
-                  </button>
+                  </div>
+                  <div class="tool-badge success-badge" v-else>
+                    ✓ No missing values
+                  </div>
                 </div>
               </div>
-
-              <!-- Configuration Dropdown -->
-              <div v-if="isDropdownOpen('missingValues')" class="tool-config">
-                <!-- Missing Columns List -->
-                <div
-                  v-if="missingColumnsDetailed.length > 0"
-                  class="missing-columns-config"
-                >
-                  <div class="config-header">
-                    <h4>Select strategy for each column</h4>
-                    <div class="config-actions">
-                      <button
-                        @click="applyGlobalMissingStrategy"
-                        class="action-btn small"
-                      >
-                        Apply "{{ getStrategyName(globalMissingStrategy) }}" to
-                        All
-                      </button>
-                      <button
-                        @click="autoSelectMissingStrategies"
-                        class="action-btn small"
-                      >
-                        Auto-select Strategies
-                      </button>
-                      <button
-                        @click="resetToolSettingsMissingValues('missingValues')"
-                        class="reset-btn small"
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                        >
-                          <path
-                            d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"
-                          />
-                        </svg>
-                        Reset
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Global Strategy Selector -->
-                  <div class="global-strategy-selector">
-                    <label class="global-strategy-label">
-                      <span>Global Strategy (apply to all):</span>
-                      <select
-                        v-model="globalMissingStrategy"
-                        class="strategy-select"
-                      >
-                        <option value="droprows">
-                          Drop Rows with Missing Values
-                        </option>
-                        <option value="fillmean">
-                          Fill with Mean (numerical only)
-                        </option>
-                        <option value="fillmedian">
-                          Fill with Median (numerical only)
-                        </option>
-                        <option value="fillmode">
-                          Fill with Most Frequent Value
-                        </option>
+              
+              <div class="tool-footer">
+                <Button variant="primary" @click="showMissingModal = true" :disabled="missingStats.count === 0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                  </svg>
+                  Configure Strategies
+                </Button>
+              </div>
+            </Card>
+            
+            <!-- Missing Values Modal -->
+            <Modal v-model="showMissingModal" title="Missing Values Strategy" size="xl">
+              <div class="modal-section">
+                <!-- Global Strategy Section -->
+                <Card variant="primary" v-show="missingColumnsDetailed.length > 0">
+                  <div class="global-strategy-section">
+                    <h4>Quick Apply to All Columns</h4>
+                    <div class="global-controls">
+                      <select v-model="globalMissingStrategy" class="native-select-global">
+                        <option value="droprows">Drop Rows with Missing Values</option>
+                        <option value="fillmean">Fill with Mean (numerical only)</option>
+                        <option value="fillmedian">Fill with Median (numerical only)</option>
+                        <option value="fillmode">Fill with Most Frequent Value</option>
                         <option value="fillzero">Fill with Zero</option>
                         <option value="fillunknown">Fill with "Unknown"</option>
                       </select>
-                    </label>
+                      <Button variant="outline" size="sm" @click="applyGlobalMissingStrategy">
+                        Apply to All
+                      </Button>
+                      <Button variant="ghost" size="sm" @click="autoSelectMissingStrategies">
+                        Auto-Select
+                      </Button>
+                    </div>
                   </div>
-
-                  <!-- Individual Column Strategies -->
-                  <div class="missing-columns-list">
-                    <div
-                      v-for="col in missingColumnsDetailed"
-                      :key="col.name"
-                      class="missing-column-row"
+                </Card>
+                
+                <!-- Per-Column Strategies -->
+                <div class="columns-flex-modal" v-show="missingColumnsDetailed.length > 0">
+                  <Card 
+                    v-for="col in missingColumnsDetailed" 
+                    :key="col.name"
+                    class="column-card-modal missing-column-card"
+                  >
+                    <div class="column-card-header">
+                      <span class="column-name-text">{{ col.name }}</span>
+                      <span class="column-type-badge" :class="`type-${col.type}`">
+                        {{ col.type }}
+                      </span>
+                    </div>
+                    
+                    <div class="missing-stats-row">
+                      <span class="stat-chip missing">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z"/>
+                        </svg>
+                        {{ col.count }} missing ({{ col.percentage }}%)
+                      </span>
+                    </div>
+                    
+                    <select 
+                      v-model="col.strategy" 
+                      @change="updateMissingStrategy(col.name, col.strategy)"
+                      class="native-select-strategy"
                     >
-                      <!-- Column Info -->
-                      <div class="column-info-section">
-                        <div class="column-header">
-                          <span class="column-name">{{ col.name }}</span>
-                          <span class="column-type" :class="col.type">{{
-                            col.type
-                          }}</span>
-                        </div>
-                        <div class="missing-stats">
-                          <span class="stat-badge missing">
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                            >
-                              <path
-                                d="M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z"
-                              />
-                            </svg>
-                            {{ col.count }} missing ({{ col.percentage }}%)
-                          </span>
-                        </div>
-                      </div>
-
-                      <!-- Strategy Selector -->
-                      <div class="strategy-selector-section">
-                        <select
-                          v-model="col.strategy"
-                          @change="
-                            updateMissingStrategy(col.name, col.strategy)
-                          "
-                          class="column-strategy-select"
-                          :class="getStrategyClass(col.strategy)"
-                        >
-                          <option value="droprows">Drop Rows</option>
-                          <option
-                            value="fillmean"
-                            :disabled="col.type !== 'numerical'"
-                          >
-                            Fill with Mean
-                            {{
-                              col.type !== "numerical" ? "(numerical only)" : ""
-                            }}
-                          </option>
-                          <option
-                            value="fillmedian"
-                            :disabled="col.type !== 'numerical'"
-                          >
-                            Fill with Median
-                            {{
-                              col.type !== "numerical" ? "(numerical only)" : ""
-                            }}
-                          </option>
-                          <option value="fillmode">
-                            Fill with Mode (most frequent)
-                          </option>
-                          <option value="fillzero">Fill with Zero</option>
-                          <option value="fillunknown">
-                            Fill with "Unknown"
-                          </option>
-                          <option value="keep">
-                            Keep Missing (not recommended)
-                          </option>
-                        </select>
-
-                        <!-- Strategy Description -->
-                        <span class="strategy-hint">{{
-                          getStrategyDescription(col.strategy, col.type)
-                        }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Summary -->
-                  <div class="missing-summary">
-                    <div class="summary-stats">
-                      <span class="summary-stat">
-                        <strong>{{ missingColumnsDetailed.length }}</strong>
-                        columns with missing values
-                      </span>
-                      <span class="summary-divider"></span>
-                      <span class="summary-stat">
-                        <strong>{{ missingStats.totalMissing }}</strong> total
-                        missing cells
-                      </span>
-                    </div>
-                  </div>
+                      <option value="droprows">Drop Rows</option>
+                      <option value="fillmean" :disabled="col.type !== 'numerical'">
+                        Fill with Mean {{ col.type !== 'numerical' ? '(numerical only)' : '' }}
+                      </option>
+                      <option value="fillmedian" :disabled="col.type !== 'numerical'">
+                        Fill with Median {{ col.type !== 'numerical' ? '(numerical only)' : '' }}
+                      </option>
+                      <option value="fillmode">Fill with Mode (most frequent)</option>
+                      <option value="fillzero">Fill with Zero</option>
+                      <option value="fillunknown">Fill with "Unknown"</option>
+                      <option value="keep">Keep Missing (not recommended)</option>
+                    </select>
+                    
+                    <p class="strategy-hint">{{ getStrategyDescription(col.strategy, col.type) }}</p>
+                  </Card>
                 </div>
-
+                
                 <!-- No Missing Values -->
-                <div v-else class="no-missing-values">
-                  <div class="no-missing-icon"></div>
-                  <h4>No Missing Values Found!</h4>
-                  <p>
-                    Your dataset doesn't have any missing values. You can skip
-                    this step.
-                  </p>
-                </div>
-
-                <!-- Dropdown Footer -->
-                <div class="dropdown-footer">
-                  <button
-                    @click="toggleDropdown('missingValues')"
-                    class="close-dropdown-btn"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                      />
+                <Card v-show="missingColumnsDetailed.length === 0">
+                  <div class="no-data-message">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-success)">
+                      <path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M11,16.5L6.5,12L7.91,10.59L11,13.67L16.59,8.09L18,9.5L11,16.5Z"/>
                     </svg>
-                    Close Configuration
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Duplicate Removal Tool - SAME PATTERN -->
-            <div
-              class="preprocessing-tool"
-              :class="{
-                active: isToolEnabled('duplicateRemoval'),
-                expanded: isDropdownOpen('duplicateRemoval'),
-              }"
-            >
-              <div class="tool-header">
-                <div class="tool-info">
-                  <h3>Remove Duplicates</h3>
-                  <p>Remove duplicate rows from your dataset</p>
-                </div>
-                <div class="tool-actions">
-                  <span class="tool-badge" v-if="duplicateStats.count > 0"
-                    >{{ duplicateStats.count }} duplicates found</span
-                  >
-
-                  <button
-                    @click="toggleDropdown('duplicateRemoval')"
-                    class="config-btn"
-                    :class="{ active: isDropdownOpen('duplicateRemoval') }"
-                    v-if="isToolEnabled('duplicateRemoval')"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        v-if="!isDropdownOpen('duplicateRemoval')"
-                        d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"
-                      />
-                      <path
-                        v-else
-                        d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"
-                      />
-                    </svg>
-                    {{
-                      isDropdownOpen("duplicateRemoval") ? "Close" : "Configure"
-                    }}
-                  </button>
-
-                  <button
-                    @click="
-                      isToolEnabled('duplicateRemoval')
-                        ? disableTool('duplicateRemoval')
-                        : enableTool('duplicateRemoval')
-                    "
-                    class="tool-btn"
-                    :class="{ active: isToolEnabled('duplicateRemoval') }"
-                  >
-                    {{
-                      isToolEnabled("duplicateRemoval") ? "Disable" : "Enable"
-                    }}
-                  </button>
-                </div>
-              </div>
-
-              <div
-                v-if="isDropdownOpen('duplicateRemoval')"
-                class="tool-config"
-              >
-                <div class="strategy-selector">
-                  <h4>Choose duplicate handling strategy:</h4>
-                  <div class="strategy-grid">
-                    <label
-                      class="strategy-card"
-                      :class="{ selected: duplicateStrategy === 'keep_first' }"
-                    >
-                      <input
-                        type="radio"
-                        v-model="duplicateStrategy"
-                        value="keep_first"
-                      />
-                      <div class="strategy-content">
-                        <div class="strategy-icon"></div>
-                        <h5>Keep First</h5>
-                        <p>Keep the first occurrence of duplicate rows</p>
-                      </div>
-                    </label>
-
-                    <label
-                      class="strategy-card"
-                      :class="{ selected: duplicateStrategy === 'keep_last' }"
-                    >
-                      <input
-                        type="radio"
-                        v-model="duplicateStrategy"
-                        value="keep_last"
-                      />
-                      <div class="strategy-content">
-                        <div class="strategy-icon"></div>
-                        <h5>Keep Last</h5>
-                        <p>Keep the last occurrence of duplicate rows</p>
-                      </div>
-                    </label>
+                    <h4>No Missing Values Found!</h4>
+                    <p>Your dataset doesn't have any missing values. You can skip this step.</p>
                   </div>
-                </div>
-
-                <div class="dropdown-footer">
-                  <button
-                    @click="toggleDropdown('duplicateRemoval')"
-                    class="close-dropdown-btn"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                      />
-                    </svg>
-                    Close Configuration
-                  </button>
-                </div>
+                </Card>
+                
+                <!-- Summary -->
+                <Card variant="warning" v-show="missingColumnsDetailed.length > 0">
+                  <div class="summary-content">
+                    <div class="summary-header">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                      </svg>
+                      <strong>{{ missingColumnsDetailed.length }} columns</strong> with 
+                      <strong>{{ missingStats.totalMissing }} total missing cells</strong>
+                    </div>
+                  </div>
+                </Card>
               </div>
-            </div>
+              
+              <template #footer>
+                <Button variant="ghost" @click="showMissingModal = false">
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  :loading="isProcessing"
+                  @click="applyMissingStrategies"
+                  :disabled="missingColumnsDetailed.length === 0"
+                >
+                  Apply Strategies
+                </Button>
+              </template>
+            </Modal>
 
-            <!-- Outlier Handling Tool - SAME PATTERN -->
-            <div
-              class="preprocessing-tool"
-              :class="{
-                active: isToolEnabled('outlierHandling'),
-                expanded: isDropdownOpen('outlierHandling'),
-              }"
-            >
+
+
+<!-- Outlier Handling Tool - SAME PATTERN -->
+            <!-- Outlier Handling Tool - REFACTORED WITH MODAL -->
+            <Card class="preprocessing-tool-card" hover>
               <div class="tool-header">
+                <div class="tool-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16,6L18.29,8.29L13.41,13.17L9.41,9.17L2,16.59L3.41,18L9.41,12L13.41,16L19.71,9.71L22,12V6H16Z" />
+                  </svg>
+                </div>
                 <div class="tool-info">
                   <h3>Handle Outliers</h3>
                   <p>Detect and handle extreme values in numerical columns</p>
                 </div>
-                <div class="tool-actions">
-                  <span class="tool-badge" v-if="outlierStats.count > 0"
-                    >{{ outlierStats.count }} outliers detected</span
-                  >
-
-                  <button
-                    @click="toggleDropdown('outlierHandling')"
-                    class="config-btn"
-                    :class="{ active: isDropdownOpen('outlierHandling') }"
-                    v-if="isToolEnabled('outlierHandling')"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        v-if="!isDropdownOpen('outlierHandling')"
-                        d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"
-                      />
-                      <path
-                        v-else
-                        d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"
-                      />
-                    </svg>
-                    {{
-                      isDropdownOpen("outlierHandling") ? "Close" : "Configure"
-                    }}
-                  </button>
-
-                  <button
-                    @click="
-                      isToolEnabled('outlierHandling')
-                        ? disableTool('outlierHandling')
-                        : enableTool('outlierHandling')
-                    "
-                    class="tool-btn"
-                    :class="{ active: isToolEnabled('outlierHandling') }"
-                  >
-                    {{
-                      isToolEnabled("outlierHandling") ? "Disable" : "Enable"
-                    }}
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="isDropdownOpen('outlierHandling')" class="tool-config">
-                <div class="strategy-selector">
-                  <h4>Select outlier handling method:</h4>
-                  <div class="strategy-grid">
-                    <label
-                      class="strategy-card"
-                      :class="{ selected: outlierStrategy === 'remove' }"
-                    >
-                      <input
-                        type="radio"
-                        v-model="outlierStrategy"
-                        value="remove"
-                      />
-                      <div class="strategy-content">
-                        <div class="strategy-icon"></div>
-                        <h5>Remove Outliers</h5>
-                        <p>Remove rows containing outlier values</p>
-                      </div>
-                    </label>
-
-                    <label
-                      class="strategy-card"
-                      :class="{ selected: outlierStrategy === 'cap' }"
-                    >
-                      <input
-                        type="radio"
-                        v-model="outlierStrategy"
-                        value="cap"
-                      />
-                      <div class="strategy-content">
-                        <div class="strategy-icon"></div>
-                        <h5>Cap Outliers</h5>
-                        <p>Limit outliers to reasonable bounds</p>
-                      </div>
-                    </label>
-
-                    <label
-                      class="strategy-card"
-                      :class="{ selected: outlierStrategy === 'keep' }"
-                    >
-                      <input
-                        type="radio"
-                        v-model="outlierStrategy"
-                        value="keep"
-                      />
-                      <div class="strategy-content">
-                        <div class="strategy-icon"></div>
-                        <h5>Keep Outliers</h5>
-                        <p>Keep all values, just flag them</p>
-                      </div>
-                    </label>
+                <div class="tool-badges-container">
+                  <span class="order-badge order-2">2️⃣ Second</span>
+                  <div class="tool-badge" v-if="outlierStats.count > 0">
+                    {{ outlierStats.count }} outliers detected
+                  </div>
+                  <div class="tool-badge success-badge" v-else>
+                    ✓ No outliers found
                   </div>
                 </div>
-
-                <div class="dropdown-footer">
-                  <button
-                    @click="toggleDropdown('outlierHandling')"
-                    class="close-dropdown-btn"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                      />
-                    </svg>
-                    Close Configuration
-                  </button>
-                </div>
               </div>
-            </div>
-
-            <!-- Categorical Encoding Tool - ENHANCED -->
-            <div
-              class="preprocessing-tool"
-              :class="{
-                active: isToolEnabled('categoricalEncoding'),
-                expanded: isDropdownOpen('categoricalEncoding'),
-              }"
-            >
-              <div class="tool-header">
-                <div class="tool-info">
-                  <h3>Encode Categorical Data</h3>
-                  <p>
-                    Convert categorical text data to numbers for machine
-                    learning
-                  </p>
-                </div>
-                <div class="tool-actions">
-                  <span class="tool-badge"
-                    >{{ categoricalColumns.length }} categorical columns</span
-                  >
-
-                  <button
-                    @click="toggleDropdown('categoricalEncoding')"
-                    class="config-btn"
-                    :class="{ active: isDropdownOpen('categoricalEncoding') }"
-                    v-if="isToolEnabled('categoricalEncoding')"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        v-if="!isDropdownOpen('categoricalEncoding')"
-                        d="M12,18.17L8.83,15L7.42,16.41L12,21L16.58,16.41L15.17,15M12,5.83L15.17,9L16.58,7.59L12,3L7.42,7.59L8.83,9L12,5.83Z"
-                      />
-                      <path
-                        v-else
-                        d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"
-                      />
-                    </svg>
-                    {{
-                      isDropdownOpen("categoricalEncoding")
-                        ? "Close"
-                        : "Configure"
-                    }}
-                  </button>
-
-                  <button
-                    @click="
-                      isToolEnabled('categoricalEncoding')
-                        ? disableTool('categoricalEncoding')
-                        : enableTool('categoricalEncoding')
-                    "
-                    class="tool-btn"
-                    :class="{ active: isToolEnabled('categoricalEncoding') }"
-                  >
-                    {{
-                      isToolEnabled("categoricalEncoding")
-                        ? "Disable"
-                        : "Enable"
-                    }}
-                  </button>
-                </div>
+              
+              <div class="tool-footer">
+                <Button variant="primary" @click="showOutlierModal = true" :disabled="outlierStats.count === 0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                  </svg>
+                  Configure Handling
+                </Button>
               </div>
-
-              <div
-                v-if="isDropdownOpen('categoricalEncoding')"
-                class="tool-config"
-              >
-                <div class="encoding-config">
-                  <h4>Choose which categorical columns to encode:</h4>
-                  <div class="encoding-list">
-                    <div
-                      v-for="column in categoricalColumns"
-                      :key="column.name"
-                      class="encoding-row"
-                    >
-                      <!--FIXED: Checkbox to enable/disable encoding for this column -->
-                      <label class="encoding-checkbox">
-                      <input 
-                        type="checkbox" 
-                        v-model="column.encode"
-                        @change="toggleColumnEncoding(column)"  
-                      />
-                      <div class="column-details">
-                        <span class="column-name">{{ column.name }}</span>
-                        <span class="column-info">{{ column.unique }} unique values</span>
-                        <div class="sample-values">
-                          <span class="sample-label">Sample:</span>
-                          <span class="sample-text">{{ getColumnSample(column) }}</span>
-                        </div>
-                      </div>
-                    </label>
-
-                      <!-- Only show encoding selector if column is selected for encoding -->
-                      <div v-if="column.encode" class="encoding-selector">
-                        <select
-                          v-model="column.encoding"
-                          class="encoding-select"
-                        >
-                          <option value="onehot">One-Hot Encoding</option>
-                          <option value="label">Label Encoding</option>
-                          <option value="ordinal">Ordinal Encoding</option>
-                        </select>
-                      </div>
-                      <div v-else class="not-encoded">
-                        <span class="not-encoded-text"
-                          >Will keep original values</span
-                        >
+            </Card>
+            
+            <!-- Outlier Handling Modal -->
+            <Modal v-model="showOutlierModal" title="Outlier Handling" size="md">
+              <div class="modal-section">
+                <Card>
+                  <div class="duplicate-info">
+                    <div class="info-stat">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-warning)">
+                        <path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z" />
+                      </svg>
+                      <div>
+                        <strong>{{ outlierStats.count }} outliers detected</strong>
+                        <p>Across {{ outlierStats.columns }} numerical columns</p>
                       </div>
                     </div>
                   </div>
-
-                  <!--  Quick selection buttons -->
-                  <div class="encoding-actions">
-                    <button
-                      @click="selectAllCategoricalColumns"
-                      class="action-btn small"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      @click="deselectAllCategoricalColumns"
-                      class="action-btn small"
-                    >
-                      Select None
-                    </button>
-                    <button
-                      @click="autoSelectForEncoding"
-                      class="action-btn small"
-                    >
-                      Auto-select (exclude likely targets)
-                    </button>
-                  </div>
-                </div>
-
-                <div class="dropdown-footer">
-                  <button
-                    @click="toggleDropdown('categoricalEncoding')"
-                    class="close-dropdown-btn"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path
-                        d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-                      />
-                    </svg>
-                    Close Configuration
-                  </button>
+                </Card>
+                
+                <div class="strategy-options">
+                  <h4>Select Handling Strategy</h4>
+                  
+                  <label class="radio-option">
+                    <input type="radio" v-model="outlierStrategy" value="cap" class="native-radio" />
+                    <div class="option-content">
+                      <strong>Cap Outliers (Winsorization)</strong>
+                      <p>Limit extreme values to the 5th and 95th percentiles</p>
+                    </div>
+                  </label>
+                  
+                  <label class="radio-option">
+                    <input type="radio" v-model="outlierStrategy" value="remove" class="native-radio" />
+                    <div class="option-content">
+                      <strong>Remove Rows</strong>
+                      <p>Remove rows containing outlier values</p>
+                    </div>
+                  </label>
+                  
+                  <label class="radio-option">
+                    <input type="radio" v-model="outlierStrategy" value="keep" class="native-radio" />
+                    <div class="option-content">
+                      <strong>Keep (Do Nothing)</strong>
+                      <p>Keep outliers as they are (for analysis)</p>
+                    </div>
+                  </label>
                 </div>
               </div>
-            </div>
-            </div>
+              
+              <template #footer>
+                <Button variant="ghost" @click="showOutlierModal = false">
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  :loading="isProcessing"
+                  @click="applyOutlierHandling"
+                >
+                  Apply Strategy
+                </Button>
+              </template>
+            </Modal>
+
+
+
+            <!-- Duplicate Removal Tool - REFACTORED WITH MODAL -->
+            <Card class="preprocessing-tool-card" hover>
+              <div class="tool-header">
+                <div class="tool-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16,9H21.5L16,3.5V9M7,2H17L23,8V18A2,2 0 0,1 21,20H7C5.89,20 5,19.1 5,18V4A2,2 0 0,1 7,2M3,6V22H21V24H3A2,2 0 0,1 1,22V6H3Z" />
+                  </svg>
+                </div>
+                <div class="tool-info">
+                  <h3>Remove Duplicates</h3>
+                  <p>Remove duplicate rows from your dataset</p>
+                </div>
+                <div class="tool-badges-container">
+                  <span class="order-badge order-3">3️⃣ Third</span>
+                  <div class="tool-badge" v-if="duplicateStats.count > 0">
+                    {{ duplicateStats.count }} duplicates found
+                  </div>
+                  <div class="tool-badge success-badge" v-else>
+                    ✓ No duplicates found
+                  </div>
+                </div>
+              </div>
+              
+              <div class="tool-footer">
+                <Button variant="primary" @click="showDuplicateModal = true" :disabled="duplicateStats.count === 0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                  </svg>
+                  Configure Removal
+                </Button>
+              </div>
+            </Card>
+            
+            <!-- Duplicate Removal Modal -->
+            <Modal v-model="showDuplicateModal" title="Duplicate Removal" size="md">
+              <div class="modal-section">
+                <Card>
+                  <div class="duplicate-info">
+                    <div class="info-stat">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-info)">
+                        <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" />
+                      </svg>
+                      <div>
+                        <strong>{{ duplicateStats.count }} duplicate rows</strong> found
+                        <p v-if="totalRows > 0">{{ ((duplicateStats.count / totalRows) * 100).toFixed(1) }}% of total rows</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+                
+                <div class="strategy-options">
+                  <h4>Select Duplicate Handling Strategy</h4>
+                  
+                  <label class="radio-option">
+                    <input type="radio" v-model="duplicateStrategy" value="keep_first" class="native-radio" />
+                    <div class="option-content">
+                      <strong>Keep First Occurrence</strong>
+                      <p>Remove all duplicates except the first occurrence</p>
+                    </div>
+                  </label>
+                  
+                  <label class="radio-option">
+                    <input type="radio" v-model="duplicateStrategy" value="keep_last" class="native-radio" />
+                    <div class="option-content">
+                      <strong>Keep Last Occurrence</strong>
+                      <p>Remove all duplicates except the last occurrence</p>
+                    </div>
+                  </label>
+                  
+                  <label class="radio-option">
+                    <input type="radio" v-model="duplicateStrategy" value="remove_all" class="native-radio" />
+                    <div class="option-content">
+                      <strong>Remove All Duplicates</strong>
+                      <p>Remove all duplicate rows (including originals)</p>
+                    </div>
+                  </label>
+                </div>
+                
+                <Card variant="warning" v-show="duplicateStrategy === 'remove_all'">
+                  <div class="warning-content">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" />
+                    </svg>
+                    <div>
+                      <strong>Warning:</strong> This will remove ALL duplicate rows, including the original occurrences.
+                    </div>
+                  </div>
+                </Card>
+              </div>
+              
+              <template #footer>
+                <Button variant="ghost" @click="showDuplicateModal = false">
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  :loading="isProcessing"
+                  @click="applyDuplicateRemoval"
+                >
+                  Remove Duplicates
+                </Button>
+              </template>
+            </Modal>
+            
+            <!-- Reset Confirmation Modal -->
+            <Modal v-model="showResetModal" title="Reset All Changes" size="md">
+              <div class="modal-section">
+                <Card variant="warning">
+                  <div class="warning-content">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-warning)">
+                      <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" />
+                    </svg>
+                    <div>
+                      <strong>Warning:</strong> This action will reset all preprocessing changes.
+                    </div>
+                  </div>
+                </Card>
+                
+                <div class="reset-info">
+                  <h4>The following will be reset:</h4>
+                  <ul class="reset-list">
+                    <li>✓ All preprocessing operations will be discarded</li>
+                    <li>✓ Original dataset will be restored</li>
+                    <li>✓ All tool configurations will be reset to defaults</li>
+                    <li>✓ Cleaned data will be removed</li>
+                  </ul>
+                  <p class="reset-note">
+                    You will need to reapply any preprocessing steps if you want to use them again.
+                  </p>
+                </div>
+              </div>
+              
+              <template #footer>
+                <Button variant="ghost" @click="showResetModal = false">
+                  Cancel
+                </Button>
+                <Button 
+                  variant="danger" 
+                  :loading="isProcessing"
+                  @click="confirmReset"
+                >
+                  Reset All Changes
+                </Button>
+              </template>
+            </Modal>
+        </div>
           </section>
 
             
@@ -1287,39 +989,13 @@
           </div>
         </div>
 
-        <!-- Dataset Stats -->
-        <div class="final-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{
-              hasCleanedData ? cleanedDataset.length : originalDataset.length
-            }}</span>
-            <span class="stat-label"
-              >{{ hasCleanedData ? "Final" : "Original" }} Rows</span
-            >
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{
-              hasCleanedData
-                ? getCleanedColumns.value?.length || columns.length
-                : columns.length
-            }}</span>
-            <span class="stat-label"
-              >{{ hasCleanedData ? "Final" : "Original" }} Columns</span
-            >
-          </div>
-          <div class="stat-item">
-            <span class="stat-value"
-              >{{ hasCleanedData ? finalQuality : dataQuality.score }}%</span
-            >
-            <span class="stat-label">Data Quality</span>
-          </div>
-        </div>
+        
 
         <!-- Action Buttons -->
         <div class="footer-actions">
           <button
             v-if="hasCleanedData"
-            @click="resetAllChanges"
+            @click="showResetModal = true"
             class="footer-btn secondary"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -1327,11 +1003,11 @@
                 d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"
               />
             </svg>
-            Reset Changes
+            Reset All Changes
           </button>
 
           <!-- Always show the Continue button -->
-          <button @click="proceedToTargetSelection" class="footer-btn primary">
+          <button @click="proceedToTargetSelection" class="footer-btn continue-btn primary">
             <span>{{
               hasCleanedData
                 ? "Continue with Cleaned Data"
@@ -1344,6 +1020,44 @@
         </div>
       </div>
     </div>
+
+    <!-- Reset All Changes Confirmation Modal -->
+    <Modal v-model="showResetModal" title="Reset All Changes?" size="md">
+      <div class="modal-section">
+        <div class="config-group">
+          <p style="margin-bottom: 1rem; color: #e0e7ef; line-height: 1.6;">
+            Are you sure you want to reset all preprocessing changes?
+          </p>
+          <p style="margin-bottom: 1rem; color: #94a3b8; line-height: 1.6;">
+            This will:
+          </p>
+          <ul style="color: #94a3b8; margin-left: 1.5rem; line-height: 1.8;">
+            <li>Reload the original dataset</li>
+            <li>Remove all preprocessing transformations</li>
+            <li>Clear missing value handling</li>
+            <li>Clear duplicate removal</li>
+            <li>Clear outlier handling</li>
+            
+          </ul>
+          <p style="margin-top: 1rem; color: #fbbf24; line-height: 1.6;">
+            ⚠️ This action cannot be undone.
+          </p>
+        </div>
+      </div>
+      
+      <template #footer>
+        <Button variant="ghost" @click="showResetModal = false">
+          Cancel
+        </Button>
+        <Button 
+          variant="primary" 
+          @click="confirmResetAllChanges"
+          style="background: #ef4444; border-color: #ef4444;"
+        >
+          Reset All Changes
+        </Button>
+      </template>
+    </Modal>
 
     <!-- Loading Overlay -->
     <div v-if="isProcessing" class="loading-overlay">
@@ -1371,7 +1085,22 @@ import {
 import { useRouter } from "vue-router";
 import { useMLDataFlowStore } from "~/stores/mlDataFlow";
 const mlStore = useMLDataFlowStore();
-import axios from 'axios'
+
+
+import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch'
+const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
+
+// Import new components
+import { useToast } from '~/composables/useToast'
+import Button from '~/components/Button.vue'
+import Card from '~/components/Card.vue'
+import Modal from '~/components/Modal.vue'
+import Input from '~/components/Input.vue'
+import Checkbox from '~/components/Checkbox.vue'
+import Select from '~/components/Select.vue'
+import LoadingSpinner from '~/components/LoadingSpinner.vue'
+
+const { showSuccess, showError, showWarning, showInfo } = useToast()
 
 const router = useRouter();
 
@@ -1400,6 +1129,16 @@ const originalDatasetBackup = ref([]);
 const totalRowsInBackend = ref(0);
 const preprocessingComplete = ref(true);
 
+// ===== COMPLETE DATASET STATISTICS =====
+const completeDatasetStats = ref({
+  totalRows: 0,
+  totalColumns: 0,
+  missingValues: {},
+  duplicates: 0,
+  outliers: 0
+});
+
+
 
 
 
@@ -1414,6 +1153,339 @@ const openDropdowns = ref([]);
 const missingStrategy = ref("fill_mean");
 const duplicateStrategy = ref("keep_first");
 const outlierStrategy = ref("cap");
+
+// Modal states
+const showColumnModal = ref(false);
+const showMissingModal = ref(false);
+const showDuplicateModal = ref(false);
+const showOutlierModal = ref(false);
+const showEncodingModal = ref(false);
+const showResetModal = ref(false);
+
+const categoricalEncodingState = ref([]);
+
+
+
+
+
+
+// Helper methods for column operations
+const applyColumnChanges = async () => {
+  try {
+    const columnsToRemove = getColumnsToRemove();
+    
+    if (columnsToRemove.length === 0) {
+      showWarning('No Changes', 'Please select at least one column to remove');
+      return;
+    }
+    
+    isProcessing.value = true;
+    processingMessage.value = `Removing ${columnsToRemove.length} columns...`;
+    
+    // Call backend preprocessing with just column removal
+    const steps = [{
+      type: 'remove_columns',
+      columns: columnsToRemove.map(col => col.name)
+    }];
+    
+    const datasetToUse = cleanedDatasetId.value || datasetId.value;
+    
+    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
+      dataset_id: datasetToUse,
+      steps: steps
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove columns');
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update with cleaned data
+      cleanedDatasetId.value = result.cleaned_dataset_id;
+      datasetId.value = cleanedDatasetId.value;
+      cleanedDataset.value = result.preview || [];
+      totalRowsInBackend.value = result.total_rows;
+      
+      // Update columns
+      if (cleanedDataset.value.length > 0) {
+        const actualColumns = Object.keys(cleanedDataset.value[0]);
+        columns.value = actualColumns.map(colName => {
+          const existingCol = columns.value.find(c => c.name === colName);
+          return {
+            name: colName,
+            type: existingCol?.type || 'categorical',
+            unique: existingCol?.unique || 0,
+            missing: 0,
+            remove: false,
+            encode: existingCol?.encode || false,
+            encoding: existingCol?.encoding || 'onehot'
+          };
+        });
+      }
+      
+      // Update mlStore
+      mlStore.updateAfterPreprocessing(
+        result.cleaned_dataset_id,
+        cleanedDataset.value,
+        fileName.value,
+        columns.value
+      );
+      
+      // Switch to cleaned view
+      showOriginal.value = false;
+      
+      // Fetch updated statistics
+      await fetchCompleteStatisticsFromBackend();
+      
+      // Show detailed success message
+      const removedCount = columnsToRemove.length;
+      showSuccess(
+        'Columns Removed', 
+        `Successfully removed ${removedCount} column${removedCount !== 1 ? 's' : ''}. Dataset now has ${columns.value.length} columns.`
+      );
+      showColumnModal.value = false;
+    } else {
+      throw new Error(result.error || 'Preprocessing failed');
+    }
+    
+  } catch (error) {
+    showError('Operation Failed', error.message || 'Failed to apply column changes');
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
+  }
+};
+
+// Apply missing values strategies
+const applyMissingStrategies = async () => {
+  try {
+    if (missingColumnsDetailed.value.length === 0) {
+      showWarning('No Missing Values', 'No columns with missing values to process');
+      return;
+    }
+    
+    console.log('\n🔍 DEBUG: applyMissingStrategies called');
+    console.log('   Missing columns detailed:', missingColumnsDetailed.value);
+    
+    isProcessing.value = true;
+    processingMessage.value = `Applying missing value strategies...`;
+    
+    // Build strategies object
+    const strategies = {};
+    missingColumnsDetailed.value.forEach(col => {
+      strategies[col.name] = col.strategy;
+      console.log(`   Column "${col.name}" (${col.type}): strategy = "${col.strategy}"`);
+    });
+    
+    console.log('   Strategies object to send:', strategies);
+    
+    // Call backend preprocessing with just missing values handling
+    const steps = [{
+      type: 'handle_missing',
+      strategies: strategies
+    }];
+    
+    console.log('   Steps to send to backend:', steps);
+    
+    const datasetToUse = cleanedDatasetId.value || datasetId.value;
+    console.log(`   Using dataset ID: ${datasetToUse}`);
+    
+    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
+      dataset_id: datasetToUse,
+      steps: steps
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('   ❌ Backend error:', errorText);
+      throw new Error('Failed to apply missing value strategies');
+    }
+    
+    const result = await response.json();
+    console.log('   ✅ Backend response:', result);
+    
+    if (result.success) {
+      // Update with cleaned data
+      cleanedDatasetId.value = result.cleaned_dataset_id;
+      datasetId.value = cleanedDatasetId.value;
+      cleanedDataset.value = result.preview || [];
+      totalRowsInBackend.value = result.total_rows;
+      
+      // Update mlStore
+      mlStore.updateAfterPreprocessing(
+        result.cleaned_dataset_id,
+        cleanedDataset.value,
+        fileName.value,
+        columns.value
+      );
+      
+      // Switch to cleaned view
+      showOriginal.value = false;
+      
+      // Fetch updated statistics
+      await fetchCompleteStatisticsFromBackend();
+      
+      // Show detailed success message
+      const affectedColumns = Object.keys(strategies).length;
+      showSuccess(
+        'Missing Values Handled', 
+        `Successfully filled missing values in ${affectedColumns} column${affectedColumns !== 1 ? 's' : ''}. Data quality improved!`
+      );
+      showMissingModal.value = false;
+      console.log('✅ Missing values strategies applied successfully\n');
+    } else {
+      throw new Error(result.error || 'Preprocessing failed');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in applyMissingStrategies:', error);
+    showError('Operation Failed', error.message || 'Failed to apply missing value strategies');
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
+  }
+};
+
+// Apply duplicate removal strategy
+const applyDuplicateRemoval = async () => {
+  try {
+    if (duplicateStats.value.count === 0) {
+      showWarning('No Duplicates', 'No duplicate rows found in the dataset');
+      return;
+    }
+    
+    isProcessing.value = true;
+    processingMessage.value = `Removing duplicates...`;
+    
+    // Call backend preprocessing with just duplicate removal
+    const steps = [{
+      type: 'remove_duplicates',
+      keep: duplicateStrategy.value === 'keep_first' ? 'first' : 'last'
+    }];
+    
+    const datasetToUse = cleanedDatasetId.value || datasetId.value;
+    
+    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
+      dataset_id: datasetToUse,
+      steps: steps
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove duplicates');
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update with cleaned data
+      cleanedDatasetId.value = result.cleaned_dataset_id;
+      datasetId.value = cleanedDatasetId.value;
+      cleanedDataset.value = result.preview || [];
+      totalRowsInBackend.value = result.total_rows;
+      
+      // Update mlStore
+      mlStore.updateAfterPreprocessing(
+        result.cleaned_dataset_id,
+        cleanedDataset.value,
+        fileName.value,
+        columns.value
+      );
+      
+      // Switch to cleaned view
+      showOriginal.value = false;
+      
+      // Fetch updated statistics
+      await fetchCompleteStatisticsFromBackend();
+      
+      // Show detailed success message
+      showSuccess(
+        'Duplicates Removed', 
+        `Removed ${result.rows_removed || 0} duplicate row${result.rows_removed !== 1 ? 's' : ''}. Dataset now has ${result.total_rows.toLocaleString()} rows.`
+      );
+      showDuplicateModal.value = false;
+    } else {
+      throw new Error(result.error || 'Preprocessing failed');
+    }
+    
+  } catch (error) {
+    showError('Operation Failed', error.message || 'Failed to remove duplicates');
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
+  }
+};
+
+// Apply outlier handling strategy
+const applyOutlierHandling = async () => {
+  try {
+    if (outlierStats.value.count === 0) {
+      showWarning('No Outliers', 'No outliers detected in the dataset');
+      return;
+    }
+    
+    isProcessing.value = true;
+    processingMessage.value = `Handling outliers...`;
+    
+    // Call backend preprocessing with just outlier handling
+    const steps = [{
+      type: 'handle_outliers',
+      method: outlierStrategy.value || 'cap'
+    }];
+    
+    const datasetToUse = cleanedDatasetId.value || datasetId.value;
+    
+    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
+      dataset_id: datasetToUse,
+      steps: steps
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to handle outliers');
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update with cleaned data
+      cleanedDatasetId.value = result.cleaned_dataset_id;
+      datasetId.value = cleanedDatasetId.value;
+      cleanedDataset.value = result.preview || [];
+      totalRowsInBackend.value = result.total_rows;
+      
+      // Update mlStore
+      mlStore.updateAfterPreprocessing(
+        result.cleaned_dataset_id,
+        cleanedDataset.value,
+        fileName.value,
+        columns.value
+      );
+      
+      // Switch to cleaned view
+      showOriginal.value = false;
+      
+      // Fetch updated statistics
+      await fetchCompleteStatisticsFromBackend();
+      
+      // Show detailed success message
+      showSuccess(
+        'Outliers Handled', 
+        `Successfully ${outlierStrategy.value === 'cap' ? 'capped' : 'removed'} outliers. Data quality improved!`
+      );
+      showOutlierModal.value = false;
+    } else {
+      throw new Error(result.error || 'Preprocessing failed');
+    }
+    
+  } catch (error) {
+    showError('Operation Failed', error.message || 'Failed to handle outliers');
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
+  }
+};
+
 
 
 
@@ -1440,6 +1512,15 @@ const dataInfo = computed(() => ({
 }));
 
 const dataQuality = computed(() => {
+  // Use backend statistics if available for accurate quality score
+  if (completeDatasetStats.value.totalRows > 0 && completeDatasetStats.value.totalColumns > 0) {
+    const totalCells = completeDatasetStats.value.totalRows * completeDatasetStats.value.totalColumns;
+    const missingCells = Object.values(completeDatasetStats.value.missingValues).reduce((sum, count) => sum + count, 0);
+    const score = Math.max(0, Math.round(((totalCells - missingCells) / totalCells) * 100));
+    return { score };
+  }
+  
+  // Fallback to preview data calculation
   if (!originalDataset.value.length || !columns.value.length)
     return { score: 0 };
 
@@ -1472,6 +1553,12 @@ const categoricalColumns = computed(() => {
 });
 
 const duplicateStats = computed(() => {
+  // Prefer backend statistics if available
+  if (completeDatasetStats.value.duplicates !== undefined && completeDatasetStats.value.duplicates !== 0) {
+    return { count: completeDatasetStats.value.duplicates };
+  }
+
+  // Fallback to frontend calculation on preview data
   const dataset = datasetForAnalysis.value;
   if (!dataset || dataset.length === 0) {
     return { count: 0 };
@@ -1493,6 +1580,14 @@ const duplicateStats = computed(() => {
 });
 
 const missingStats = computed(() => {
+  // Prefer backend statistics if available
+  if (completeDatasetStats.value.missingValues && Object.keys(completeDatasetStats.value.missingValues).length > 0) {
+    const count = Object.keys(completeDatasetStats.value.missingValues).length;
+    const totalMissing = Object.values(completeDatasetStats.value.missingValues).reduce((sum, val) => sum + val, 0);
+    return { count, totalMissing };
+  }
+
+  // Fallback to frontend calculation on preview data
   const dataset = datasetForAnalysis.value;
   if (!dataset || dataset.length === 0) {
     return { count: 0, totalMissing: 0 };
@@ -1543,6 +1638,12 @@ const missingStats = computed(() => {
 });
 
 const outlierStats = computed(() => {
+  // Prefer backend statistics if available
+  if (completeDatasetStats.value.outliers !== undefined && completeDatasetStats.value.outliers !== 0) {
+    return { count: completeDatasetStats.value.outliers, columns: 0 };
+  }
+
+  // Fallback to frontend calculation on preview data
   const dataset = datasetForAnalysis.value;
   if (!dataset || dataset.length === 0) {
     return { count: 0 };
@@ -1715,6 +1816,30 @@ const hasActiveTools = computed(() => {
   return activeTools.value.length > 0;
 });
 
+// ===== RESET FUNCTION =====
+const confirmResetAllChanges = async () => {
+  try {
+    showResetModal.value = false;
+    
+    // Clear any cleaned dataset ID from localStorage to ensure original loads
+    if (cleanedDatasetId.value) {
+      localStorage.removeItem('cleanedDatasetId');
+    }
+    
+    // Show success message before reload
+    showSuccess('Resetting...', 'Reloading original dataset');
+    
+    // Reload the page to get fresh original data
+    setTimeout(() => {
+      window.location.reload();
+    }, 500); // Small delay to show the toast
+    
+  } catch (error) {
+    console.error('❌ Reset error:', error);
+    showError('Reset Failed', error.message);
+  }
+};
+
 // ===== ADD THESE MISSING HELPER FUNCTIONS =====
 
 const getToolName = (toolId) => {
@@ -1730,8 +1855,8 @@ const getToolName = (toolId) => {
 };
 
 const displayedRowCount = computed(() => {
-  
-  return totalRows.value;
+  // Use backend total rows if available, otherwise fall back to preview length
+  return completeDatasetStats.value.totalRows || totalRowsInBackend.value || totalRows.value;
 });
 
 
@@ -1824,48 +1949,62 @@ const calculateMissingValuesFrontend = () => {
 
 // ===== NEW: BACKEND API FUNCTIONS =====
 
-// Fetch missing values info from backend
-const fetchMissingValuesInfo = async () => {
+const fetchCompleteStatisticsFromBackend = async () => {
   if (!backendConnected.value || !datasetId.value) {
-    console.log("Backend not connected or no dataset ID, skipping fetch");
+    console.log("Backend not connected or no dataset ID, using frontend calculation");
     return;
   }
 
   try {
-    console.log("Fetching missing values info from backend...");
-    const response = await fetch("http://localhost:8000/api/preprocess", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dataset_id: datasetId.value,
-        get_missing_info: true,
-      }),
-    });
+    console.log("\n📊 DEBUG: fetchCompleteStatisticsFromBackend called");
+    console.log(`   Current datasetId: ${datasetId.value}`);
+    console.log(`   Current cleanedDatasetId: ${cleanedDatasetId.value}`);
+    console.log(`   Original datasetId: ${originalDatasetId.value}`);
+    console.log(`   Fetching statistics from: /api/datasets/${datasetId.value}/statistics`);
+    
+    const response = await authenticatedGet(
+      `http://localhost:8000/api/datasets/${datasetId.value}/statistics`
+    );
 
-    if (!response.ok) throw new Error("Failed to fetch missing info");
-
-    const data = await response.json();
-
-    missingColumnsDetailed.value = (data.missing_info || []).map((col) => ({
-      ...col,
-      strategy: col.strategy || "fillmean",
-    }));
-
-    // Check if we got any data
-    if (missingColumnsDetailed.value.length === 0) {
-      console.warn(
-        "⚠️ No missing info from backend, using frontend calculation"
-      );
-      calculateMissingValuesFrontend();
-    } else {
-      console.log(
-        "✅ Fetched missing info from backend:",
-        missingColumnsDetailed.value
-      );
+    if (!response.ok) {
+      console.warn("Failed to fetch statistics, falling back to frontend calculation");
+      return;
     }
+
+    const stats = await response.json();
+    
+    console.log("   ✅ Statistics received from backend:");
+    console.log(`      Total Rows: ${stats.total_rows}`);
+    console.log(`      Duplicates: ${stats.duplicates}`);
+    console.log(`      Outliers: ${stats.outliers}`);
+    console.log(`      Missing Columns: ${stats.missing_info?.length || 0}`);
+
+    // Update complete dataset statistics
+    completeDatasetStats.value = {
+      totalRows: stats.total_rows || 0,
+      totalColumns: stats.total_columns || 0,
+      missingValues: stats.missing_values || {},
+      duplicates: stats.duplicates || 0,
+      outliers: stats.outliers || 0
+    };
+
+    // Update missing columns detailed with backend data
+    if (stats.missing_info && Array.isArray(stats.missing_info)) {
+      missingColumnsDetailed.value = stats.missing_info.map(col => ({
+        ...col,
+        strategy: col.strategy || (col.type === 'numerical' ? 'fillmedian' : 'fillmode')
+      }));
+    }
+
+    console.log("✅ Complete statistics fetched from backend");
+    console.log(`   Total Rows: ${completeDatasetStats.value.totalRows}`);
+    console.log(`   Missing Columns: ${missingColumnsDetailed.value.length}`);
+    console.log(`   Duplicates: ${completeDatasetStats.value.duplicates}`);
+    console.log(`   Outliers: ${completeDatasetStats.value.outliers}`);
+
   } catch (error) {
-    console.error("Error fetching missing info:", error);
-    // Fallback to frontend calculation on error
+    console.error("Error fetching complete statistics:", error);
+    // Fallback to frontend calculation on preview data
     calculateMissingValuesFrontend();
   }
 };
@@ -2139,14 +2278,10 @@ const applyBackendPreprocessing = async () => {
 
     processingMessage.value = "Sending request to backend...";
 
-    const response = await fetch("http://localhost:8000/api/preprocess", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dataset_id: datasetToUse,
-        steps: steps,
-      }),
-    });
+    const response = await authenticatedPost("http://localhost:8000/api/preprocess", {
+  dataset_id: datasetToUse,
+  steps: steps,
+});
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -3380,28 +3515,27 @@ const autoSelectForEncoding = () => {
   console.log("Auto-selected columns for encoding (excluded likely targets)");
 };
 
-// 5. Reset all changes
-const resetAllChanges = async () => {
+// 5. Reset all changes - Show confirmation modal
+const resetAllChanges = () => {
+  showResetModal.value = true;
+};
+
+// 6. Confirm and execute reset
+const confirmReset = async () => {
   console.log("\n" + "=".repeat(80));
   console.log("🔄 RESETTING ALL CHANGES");
   console.log("=".repeat(80));
 
-  if (
-    !confirm(
-      "Are you sure you want to reset all preprocessing? This will restore the original dataset."
-    )
-  ) {
-    return;
-  }
-
   try {
     isProcessing.value = true;
     processingMessage.value = "Resetting to original dataset...";
+    showResetModal.value = false;
 
     // 1. Reset backend state if using backend
     if (backendConnected.value && originalDatasetId.value) {
       console.log("🔄 Resetting backend state...");
       cleanedDatasetId.value = null;
+      datasetId.value = originalDatasetId.value; // Restore original dataset ID
     }
 
     // 2. Reset preprocessing state
@@ -3414,11 +3548,12 @@ const resetAllChanges = async () => {
     activeTools.value = [];
     openDropdowns.value = [];
 
-    // 4. Restore original dataset
+    // 4. Restore original dataset from backup
     if (originalDatasetBackup.value && originalDatasetBackup.value.length > 0) {
       originalDataset.value = JSON.parse(
         JSON.stringify(originalDatasetBackup.value)
       );
+      console.log(`✅ Restored ${originalDataset.value.length} rows from backup`);
     }
 
     // 5. Reset all tool settings
@@ -3444,9 +3579,9 @@ const resetAllChanges = async () => {
     await nextTick();
     analyzeColumns();
 
-    // Fetch fresh missing values from backend or calculate
-    if (backendConnected.value && datasetId.value) {
-      await fetchMissingValuesInfo();
+    // 7. Fetch fresh statistics from backend
+    if (backendConnected.value && originalDatasetId.value) {
+      await fetchCompleteStatisticsFromBackend();
     } else {
       calculateMissingValuesFrontend();
     }
@@ -3458,12 +3593,16 @@ const resetAllChanges = async () => {
     console.log(`   Rows: ${originalDataset.value.length}`);
     console.log(`   Columns: ${columns.value.length}\n`);
 
-    alert("✅ All changes have been reset! Using original dataset.");
+    showSuccess(
+      'Reset Complete',
+      `All preprocessing has been reset successfully.`
+    )
   } catch (error) {
     console.error("❌ Error during reset:", error);
-    alert(`Reset failed: ${error.message}`);
+    showError('Reset Failed', error.message || 'Failed to reset preprocessing changes');
   } finally {
     isProcessing.value = false;
+    processingMessage.value = '';
   }
 };
 
@@ -3533,10 +3672,14 @@ const exportData = async () => {
     console.log(`📤 Exporting from backend: ${datasetToExport}`);
 
     // ✅ Fetch CSV directly from backend (StreamingResponse)
+    const token = localStorage.getItem('authToken');
     const response = await fetch(
       `http://localhost:8000/api/export-dataset/${datasetToExport}`,
       {
         method: "GET",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       }
     );
 
@@ -3569,15 +3712,13 @@ const exportData = async () => {
     console.log(`   Filename: ${link.download}`);
     console.log(`   Status: ${isCleanedData ? "✅ CLEANED" : "⏭️ ORIGINAL"}`);
 
-    alert(
-      `✅ Export Successful!\n\n` +
-        `Filename: ${link.download}\n` +
-        `Status: ${isCleanedData ? "CLEANED DATASET" : "ORIGINAL DATASET"}\n` +
-        `Download started!`
+    showSuccess(
+      'Export Successful',
+      `Dataset downloaded as ${link.download}`
     );
   } catch (error) {
     console.error("❌ Export failed:", error);
-    alert(`❌ Export failed: ${error.message}`);
+    showError('Export Failed', error.message);
   }
 };
 
@@ -3747,7 +3888,8 @@ const analyzeColumns = () => {
 
   columns.value = analyzed;
   detectCategoricalColumns();
-  recalculateMissingColumnsDetailed();
+  // NOTE: Don't call recalculateMissingColumnsDetailed() here
+  // It will be populated by fetchCompleteStatisticsFromBackend() with accurate data
 };
 
 
@@ -3809,19 +3951,23 @@ const loadFromMlStore = async () => {
   preprocessingHistory.value = [];
   fileName.value = mlStore.fileName || "Dataset";
 
-  // Load data (limit to 200 rows for preview)
+  // Load PREVIEW data (limit to 200 rows for UI display)
   originalDataset.value = (mlStore.dataset || []).slice(0, 200);
   originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
 
+  // Store the ACTUAL total row count
+  completeDatasetStats.value.totalRows = mlStore.dataset?.length || 0;
+
   console.log(`Dataset ID: ${datasetId.value}`);
-  console.log(`Rows: ${originalDataset.value.length}`);
+  console.log(`Preview Rows: ${originalDataset.value.length}`);
+  console.log(`Actual Total Rows: ${completeDatasetStats.value.totalRows}`);
 
   // Analyze column types
   analyzeColumns();
 
-  // Fetch additional backend info if available
+  // Fetch COMPLETE statistics from backend if available
   if (backendConnected.value && datasetId.value) {
-    await fetchMissingValuesInfo();
+    await fetchCompleteStatisticsFromBackend();
   }
 
   return true;
@@ -3852,11 +3998,13 @@ const loadFromLocalStorage = async () => {
     preprocessingHistory.value = [];
     fileName.value = processedData.fileName || "Dataset";
 
-    // Load data (limit to 200 rows for preview)
+    // Load PREVIEW data (limit to 200 rows for UI display)
     originalDataset.value = (processedData.data || []).slice(0, 200);
 
+    // Store the ACTUAL total row count from backend
     if (processedData.totalRowsInBackend) {
       totalRowsInBackend.value = processedData.totalRowsInBackend;
+      completeDatasetStats.value.totalRows = processedData.totalRowsInBackend;
     }
 
     // Validate data exists
@@ -3873,9 +4021,9 @@ const loadFromLocalStorage = async () => {
     originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
     analyzeColumns();
 
-    // Fetch additional backend info if available
+    // Fetch COMPLETE statistics from backend if available
     if (backendConnected.value && datasetId.value) {
-      await fetchMissingValuesInfo();
+      await fetchCompleteStatisticsFromBackend();
     }
 
     return true;
@@ -3947,13 +4095,9 @@ const fetchDatasetFromBackend = async (datasetIdParam) => {
   console.log("=".repeat(80));
 
   try {
-    const response = await fetch(
-      `http://localhost:8000/api/datasets/${datasetIdParam}`,
-      {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const response = await authenticatedGet(
+  `http://localhost:8000/api/datasets/${datasetIdParam}`
+);
 
     if (!response.ok) throw new Error(`Status: ${response.status}`);
 
@@ -4002,111 +4146,7 @@ const fetchDatasetFromBackend = async (datasetIdParam) => {
   }
 };
 
-// Add this NEW function to initialize state when loading data
-const initializePreprocessingState = () => {
-  console.log("🔧 Initializing preprocessing state...");
 
-  cleanedDatasetId.value = null;
-  cleanedDataset.value = [];
-  hasCleanedData.value = false;
-  showOriginal.value = true;
-  activeTools.value = [];
-  preprocessingHistory.value = [];
-
-  console.log("✅ Initialized");
-};
-
-// In dashboard.vue - handleFileUploadBackend function
-
-const handleFileUploadBackend = async (file) => {
-  try {
-    console.log(" Processing file with DIRECT-TO-BACKEND approach:", file.name);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const uploadUrl = "http://localhost:8000/api/upload-dataset";
-    console.log(
-      ` Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(
-        1
-      )}MB) to ${uploadUrl}`
-    );
-
-    const response = await fetch(uploadUrl, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || "Upload failed");
-    }
-
-    const result = await response.json();
-
-    console.log("   File uploaded successfully:", result.dataset_id);
-    console.log("   Shape:", result.shape);
-    console.log("   Columns:", result.columns.length);
-    console.log("   Sample data rows:", result.sample_data?.length || 0);
-
-    // 1. Register in mlStore
-    const mlStore = useMLDataFlowStore();
-
-    await mlStore.registerDataset({
-      dataset_id: result.dataset_id,
-      filename: result.filename,
-      shape: result.shape,
-      columns: result.columns,
-      dtypes: result.dtypes,
-      upload_time: result.upload_time,
-    });
-
-    // 2. Set dataset data in mlStore
-    mlStore.setDataset(
-      result.sample_data || [], // Actual data
-      result.filename,
-      result.dataset_id
-    );
-
-    // 3. FIXED: Store in localStorage with actual data
-    localStorage.setItem(
-      "processedData",
-      JSON.stringify({
-        data: result.sample_data || [], // â† CRITICAL: Must have actual data
-        fileName: result.filename,
-        datasetId: result.dataset_id,
-        backendDatasetId: result.dataset_id,
-        uploadTime: result.upload_time || new Date().toISOString(),
-        shape: result.shape,
-        columns: result.columns,
-      })
-    );
-
-    console.log("   Upload completed successfully with backend integration!");
-    console.log("   Data stored:", {
-      mlStore: mlStore.dataset.length,
-      localStorage: result.sample_data?.length || 0,
-    });
-
-    // Verify backend has the dataset
-    const verified = await mlStore.verifyDatasetInBackend(result.dataset_id);
-    if (verified) {
-      console.log(" Dataset verified in backend");
-    } else {
-      console.warn(" Dataset not found in backend");
-    }
-
-    // Navigate to data preview
-    console.log(
-      " Navigating to data preview with backend dataset:",
-      result.dataset_id
-    );
-    router.push("/data-preview");
-  } catch (error) {
-    console.error("Backend upload failed:", error);
-    alert(`Upload failed: ${error.message}`);
-  }
-};
 
 const sortByColumn = (columnName) => {
   if (sortColumn.value === columnName) {
@@ -4287,10 +4327,10 @@ onMounted(async () => {
 
     // Step 4: Try to enhance with backend data
     if (backendConnected.value && datasetId.value) {
-      console.log("🔄 Fetching enhanced missing values info from backend...");
+      console.log("🔄 Fetching complete statistics from backend...");
       try {
-        await fetchMissingValuesInfo();
-        console.log("✅ Backend data fetched successfully");
+        await fetchCompleteStatisticsFromBackend();
+        console.log("✅ Backend statistics fetched successfully");
       } catch (error) {
         console.warn(
           "⚠️ Backend fetch failed, using frontend calculation:",
@@ -6570,8 +6610,6 @@ onMounted(async () => {
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
   animation: pulse 2s infinite;
-  min-width: 200px;
-  justify-content: center;
 }
 
 .footer-btn.secondary {
@@ -6955,4 +6993,1137 @@ onMounted(async () => {
   background: rgba(102, 126, 234, 0.3);
   color: white;
 }
+
+/* ============================================
+   NEW HERO CARD STYLES
+   ============================================ */
+
+.hero-card {
+  margin: 2rem 0;
+  position: relative;
+  overflow: visible;
+}
+
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.hero-content {
+  padding: 2rem;
+}
+
+.hero-header-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.hero-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-glow-primary);
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.hero-icon {
+  color: var(--color-text-primary);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+}
+
+.gradient-text {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 0.5rem 0;
+  background: var(--gradient-primary);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.dataset-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all var(--transition-fast);
+}
+
+.summary-stat:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.stat-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stat-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value {
+  display: block;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quality-indicator {
+  width: 100%;
+}
+
+.quality-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+.quality-icon {
+  flex-shrink: 0;
+}
+
+.quality-score.excellent {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1));
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.quality-score.good {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.1));
+  color: var(--color-info);
+  border: 1px solid var(--color-info);
+}
+
+.quality-score.fair {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.1));
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
+
+.quality-score.poor {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1));
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+
+@media (max-width: 768px) {
+  .hero-header-centered {
+    gap: 1.5rem;
+  }
+  
+  .hero-icon-wrapper {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .gradient-text {
+    font-size: var(--font-size-2xl);
+  }
+  
+  .dataset-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
+   PREPROCESSING TOOL CARDS (REFACTORED)
+   ============================================ */
+
+.preprocessing-tool-card {
+  transition: all var(--transition-base);
+}
+
+.preprocessing-tool-card .tool-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.preprocessing-tool-card .tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+}
+
+.preprocessing-tool-card .tool-icon svg {
+  color: var(--color-text-primary);
+}
+
+.preprocessing-tool-card .tool-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preprocessing-tool-card .tool-info h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.preprocessing-tool-card .tool-info p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.preprocessing-tool-card .tool-badge {
+  padding: 0.375rem 0.75rem;
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.preprocessing-tool-card .tool-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ============================================
+   COLUMN SELECTION MODAL STYLES
+   ============================================ */
+
+.modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.modal-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.modal-section-header h4 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.columns-grid-modal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Responsive: 3 columns on desktop */
+@media (min-width: 1201px) {
+  .columns-grid-modal .column-card-modal {
+    width: calc(33.333% - 0.67rem);
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+}
+
+/* Responsive: 2 columns on medium screens */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .columns-grid-modal .column-card-modal {
+    width: calc(50% - 0.5rem);
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+}
+
+/* Responsive: 1 column on small screens */
+@media (max-width: 768px) {
+  .columns-grid-modal .column-card-modal {
+    width: 100%;
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+}
+
+.columns-grid-modal * {
+  box-sizing: border-box;
+}
+
+.column-card-modal {
+  position: relative;
+  transition: all var(--transition-fast);
+  box-sizing: border-box;
+}
+
+/* Force Card component to maintain width */
+.column-card-modal :deep(.card) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.column-card-modal :deep(.card-body) {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.column-card-modal.column-to-remove {
+  opacity: 0.6;
+  border-color: var(--color-error);
+}
+
+.column-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.column-checkbox-native {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.checkbox-input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary, #667eea);
+}
+
+.checkbox-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-base, 1rem);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary, #ffffff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-type-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.column-type-badge.type-numeric,
+.column-type-badge.type-int64,
+.column-type-badge.type-float64 {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--color-info);
+  border: 1px solid var(--color-info);
+}
+
+.column-type-badge.type-object,
+.column-type-badge.type-string {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
+
+.column-type-badge.type-bool,
+.column-type-badge.type-boolean {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.column-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.column-stats-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.stat-chip svg {
+  flex-shrink: 0;
+}
+
+.stat-chip.missing {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+}
+
+.column-sample {
+  display: flex;
+  gap: 0.5rem;
+  font-size: var(--font-size-xs);
+}
+
+.sample-label {
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+.sample-value {
+  color: var(--color-text-secondary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.column-rename-input-native {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border, rgba(102, 126, 234, 0.2));
+  border-radius: var(--radius-md, 8px);
+  color: var(--color-text-primary, #ffffff);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-family: var(--font-primary);
+  transition: all var(--transition-fast, 150ms);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.column-rename-input-native::placeholder {
+  color: var(--color-text-tertiary, #8b8ba7);
+}
+
+.column-rename-input-native:focus {
+  border-color: var(--color-primary, #667eea);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.column-remove-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-error);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  z-index: 1;
+}
+
+.selection-summary-modal {
+  margin-top: 1rem;
+}
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-warning);
+}
+
+.removal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.removal-tag {
+  padding: 0.375rem 0.75rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-error);
+}
+
+/* ============================================
+   MISSING VALUES MODAL STYLES
+   ============================================ */
+
+/* Flexbox Grid Pattern (Prevents Shrinking) */
+.columns-flex-modal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Responsive: 3 columns on desktop */
+@media (min-width: 1201px) {
+  .columns-flex-modal .column-card-modal {
+    width: calc(33.333% - 0.67rem);
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+}
+
+/* Responsive: 2 columns on medium screens */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .columns-flex-modal .column-card-modal {
+    width: calc(50% - 0.5rem);
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+}
+
+/* Responsive: 1 column on small screens */
+@media (max-width: 768px) {
+  .columns-flex-modal .column-card-modal {
+    width: 100%;
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+}
+
+.columns-flex-modal * {
+  box-sizing: border-box;
+}
+
+/* Force Card component to maintain width in flex grid */
+.columns-flex-modal :deep(.card) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.columns-flex-modal :deep(.card-body) {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Global Strategy Section */
+.global-strategy-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.global-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Native Select Styling */
+.native-select-global,
+.native-select-strategy {
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border, rgba(102, 126, 234, 0.2));
+  border-radius: var(--radius-md, 8px);
+  color: var(--color-text-primary, #ffffff);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-family: var(--font-primary);
+  transition: all var(--transition-fast, 150ms);
+  outline: none;
+  cursor: pointer;
+}
+
+.native-select-global {
+  flex: 1;
+  min-width: 200px;
+}
+
+.native-select-strategy {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.native-select-global:focus,
+.native-select-strategy:focus {
+  border-color: var(--color-primary, #667eea);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.native-select-global option,
+.native-select-strategy option {
+  background: #1a1a2e; /* Fallback dark background */
+  color: #ffffff;
+}
+
+/* Missing Column Card Specifics */
+.missing-column-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.column-name-text {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.missing-stats-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.strategy-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin-top: 0.25rem;
+  min-height: 1.2em; /* Prevent layout shift */
+}
+
+.no-data-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  gap: 1rem;
+}
+
+.no-data-message h4 {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.no-data-message p {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ============================================
+   DUPLICATES MODAL STYLES
+   ============================================ */
+
+.duplicate-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.info-stat {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.info-stat strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+}
+
+.info-stat p {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.strategy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.strategy-options h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.radio-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-primary-light);
+}
+
+.radio-option:has(input:checked) {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--color-primary);
+}
+
+.native-radio {
+  margin-top: 0.25rem;
+  accent-color: var(--color-primary);
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+}
+
+.option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.option-content strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+}
+
+.option-content p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.warning-content {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  color: #fbbf24; /* Warning color */
+}
+
+.warning-content strong {
+  color: #f59e0b;
+}
+
+/* Reset Modal Styles */
+.reset-info {
+  margin-top: 1.5rem;
+}
+
+.reset-info h4 {
+  margin: 0 0 1rem 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.reset-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reset-list li {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  padding-left: 0.5rem;
+}
+
+.reset-note {
+  margin: 1rem 0 0 0;
+  padding: 0.75rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+/* Preprocessing Order Guidance Styles */
+.preprocessing-help-section {
+  margin-bottom: 2rem;
+}
+
+.help-details {
+  cursor: pointer;
+}
+
+.help-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.help-summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-icon {
+  color: var(--color-info);
+  flex-shrink: 0;
+}
+
+.chevron-icon {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  transition: transform var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.help-details[open] .chevron-icon {
+  transform: rotate(180deg);
+}
+
+.help-content {
+  padding: 1rem 0 0.5rem 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.help-list {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.help-list li {
+  margin-bottom: 0.75rem;
+}
+
+.recommended-order-box {
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.order-title {
+  margin: 0 0 1rem 0;
+  color: var(--color-text-primary);
+}
+
+.order-list {
+  margin: 0 0 1rem 0;
+  padding-left: 1.5rem;
+  list-style: none;
+  counter-reset: order-counter;
+}
+
+.order-list li {
+  counter-increment: order-counter;
+  margin-bottom: 0.75rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.order-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-right: 0.75rem;
+}
+
+.order-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* Order Badges on Tool Cards */
+.tool-badges-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.order-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: white;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.order-badge.order-1 {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.order-badge.order-2 {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.order-badge.order-3 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+/* Success Badge for No Issues Found */
+.success-badge {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #10b981 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.continue-btn {
+  animation: none !important;
+}
+
+
+/* Hero Section - Glassmorphism Effect */
+.hero-section {
+  padding: 2rem;
+  text-align: center;
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  margin: 1.5rem 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.hero-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero-header-centered {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.gradient-text {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-subtitle {
+  font-size: 1.125rem;
+  color: #b3b3d1;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.dataset-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.summary-stat:hover {
+  background: rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #b3b3d1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.quality-indicator {
+  width: 100%;
+}
+
+.quality-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.quality-score.excellent {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.quality-score.good {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.quality-score.fair {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.quality-score.poor {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.quality-icon {
+  flex-shrink: 0;
+}
+
+/* Compact Hero Overrides */
+.hero-header-centered {
+  margin-bottom: 1.5rem !important;
+  gap: 0.5rem !important;
+}
+
+.hero-content {
+  padding: 1.5rem !important;
+}
+
 </style>

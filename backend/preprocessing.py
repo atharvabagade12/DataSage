@@ -9,7 +9,29 @@ class DataPreprocessor:
     Professional data preprocessing using scikit-learn
     """
     
+    
     def __init__(self, df):
+        print(f"DEBUG: DataPreprocessor.__init__ called")
+        print(f"   DataFrame shape: {df.shape}")
+        
+        # ✅ FIX: Normalize missing values - convert empty strings and other representations to NaN
+        print(f"   Normalizing missing values...")
+        missing_before = df.isnull().sum().sum()
+        
+        # Replace various missing value representations with NaN
+        df = df.replace(['', ' ', '  ', 'null', 'NULL', 'None', 'NA', 'N/A', 'n/a', 'NaN'], np.nan)
+        df = df.replace({None: np.nan})
+        
+        # Also handle whitespace-only strings
+        for col in df.columns:
+            if df[col].dtype == 'object':  # Only for string columns
+                df[col] = df[col].apply(lambda x: np.nan if isinstance(x, str) and x.strip() == '' else x)
+        
+        missing_after = df.isnull().sum().sum()
+        print(f"   Missing values before normalization: {missing_before}")
+        print(f"   Missing values after normalization: {missing_after}")
+        print(f"   Converted {missing_after - missing_before} empty strings/nulls to NaN")
+        
         self.df = df.copy()
         self.original_df = df.copy()
         self.preprocessing_log = []
@@ -69,6 +91,9 @@ class DataPreprocessor:
         Returns:
             DataFrame: Preprocessed dataframe
         """
+        print(f"\nDEBUG: handle_missing_values called")
+        print(f"   Strategies received: {strategies}")
+        
         df_processed = self.df.copy()
         rows_before = len(df_processed)
         
@@ -76,14 +101,18 @@ class DataPreprocessor:
         strategy_groups = {}
         for col, strategy in strategies.items():
             if col not in df_processed.columns:
+                print(f"   Column '{col}' not found in dataframe, skipping")
                 continue
                 
             if strategy not in strategy_groups:
                 strategy_groups[strategy] = []
             strategy_groups[strategy].append(col)
         
+        print(f"   Strategy groups: {strategy_groups}")
+        
         # Process each strategy group
         for strategy, cols in strategy_groups.items():
+            print(f"\n   Processing strategy '{strategy}' for columns: {cols}")
             
             if strategy == 'droprows':
                 # Drop rows with missing values in these columns
@@ -93,6 +122,7 @@ class DataPreprocessor:
                     'columns': cols,
                     'rows_removed': rows_before - len(df_processed)
                 })
+                print(f"   Dropped rows with missing values")
                 
             elif strategy == 'keep':
                 # Do nothing - keep missing values
@@ -100,24 +130,40 @@ class DataPreprocessor:
                     'action': 'keep_missing',
                     'columns': cols
                 })
+                print(f"   Kept missing values as-is")
                 
             else:
                 # Use SimpleImputer for fill strategies
                 numerical_cols = [c for c in cols if self.column_types.get(c) == 'numerical']
                 categorical_cols = [c for c in cols if self.column_types.get(c) == 'categorical']
                 
+                print(f"   Numerical columns: {numerical_cols}")
+                print(f"   Categorical columns: {categorical_cols}")
+                
                 # Handle numerical columns
                 if numerical_cols:
                     if strategy == 'fillmean':
                         imputer = SimpleImputer(strategy='mean')
+                        print(f"   Using SimpleImputer(strategy='mean') for numerical columns")
                     elif strategy == 'fillmedian':
                         imputer = SimpleImputer(strategy='median')
+                        print(f"   Using SimpleImputer(strategy='median') for numerical columns")
                     elif strategy == 'fillzero':
                         imputer = SimpleImputer(strategy='constant', fill_value=0)
+                        print(f"   Using SimpleImputer(strategy='constant', fill_value=0) for numerical columns")
+                    elif strategy == 'fillmode':
+                        imputer = SimpleImputer(strategy='most_frequent')
+                        print(f"   Using SimpleImputer(strategy='most_frequent') for numerical columns (fillmode)")
                     else:
                         imputer = SimpleImputer(strategy='most_frequent')
+                        print(f"   Using SimpleImputer(strategy='most_frequent') for numerical columns (default)")
                     
-                    df_processed[numerical_cols] = imputer.fit_transform(df_processed[numerical_cols])
+                    try:
+                        df_processed[numerical_cols] = imputer.fit_transform(df_processed[numerical_cols])
+                        print(f"   Successfully imputed numerical columns")
+                    except Exception as e:
+                        print(f"   Error imputing numerical columns: {e}")
+                        raise
                     
                     self.preprocessing_log.append({
                         'action': f'impute_{strategy}',
@@ -128,14 +174,39 @@ class DataPreprocessor:
                 
                 # Handle categorical columns
                 if categorical_cols:
+                    # Log missing counts BEFORE imputation
+                    print(f"   Missing values BEFORE imputation:")
+                    for col in categorical_cols:
+                        missing_before = df_processed[col].isnull().sum()
+                        print(f"      {col}: {missing_before} missing values")
+                    
                     if strategy == 'fillmode':
                         imputer = SimpleImputer(strategy='most_frequent')
+                        print(f"   Using SimpleImputer(strategy='most_frequent') for categorical columns (fillmode)")
                     elif strategy == 'fillunknown':
                         imputer = SimpleImputer(strategy='constant', fill_value='Unknown')
+                        print(f"   Using SimpleImputer(strategy='constant', fill_value='Unknown') for categorical columns")
                     else:
                         imputer = SimpleImputer(strategy='most_frequent')
+                        print(f"   Using SimpleImputer(strategy='most_frequent') for categorical columns (default)")
                     
-                    df_processed[categorical_cols] = imputer.fit_transform(df_processed[categorical_cols])
+                    try:
+                        df_processed[categorical_cols] = imputer.fit_transform(df_processed[categorical_cols])
+                        
+                        # Log missing counts AFTER imputation
+                        print(f"   Missing values AFTER imputation:")
+                        for col in categorical_cols:
+                            missing_after = df_processed[col].isnull().sum()
+                            print(f"      {col}: {missing_after} missing values")
+                            
+                            # Show sample of imputed values
+                            sample_values = df_processed[col].value_counts().head(3)
+                            print(f"      {col} top values: {sample_values.to_dict()}")
+                        
+                        print(f"   Successfully imputed categorical columns")
+                    except Exception as e:
+                        print(f"   Error imputing categorical columns: {e}")
+                        raise
                     
                     self.preprocessing_log.append({
                         'action': f'impute_{strategy}',
@@ -144,6 +215,7 @@ class DataPreprocessor:
                         'method': 'SimpleImputer'
                     })
         
+        print(f"\nhandle_missing_values completed successfully\n")
         self.df = df_processed
         return df_processed
     
@@ -235,7 +307,7 @@ class DataPreprocessor:
                 # ✅ Fit and transform
                 self.df[column] = le.fit_transform(col_data)
                 
-                print(f"✅ Label encoded {column}: {le.classes_.tolist()}")
+                print(f"Label encoded {column}: {le.classes_.tolist()}")
                 self.preprocessinglog.append({
                     'action': 'label_encode',
                     'column': column,
@@ -255,7 +327,7 @@ class DataPreprocessor:
                 self.df = pd.concat([self.df.drop(columns=[column]), dummies], axis=1)
                 
                 print(f"✅ One-hot encoded {column}: created {len(dummies.columns)} columns")
-                print(f"   Values: 1 (True), 0 (False) ✅")
+                print(f"   Values: 1 (True), 0 (False)")
                 self.preprocessinglog.append({
                     'action': 'onehot_encode',
                     'column': column,
@@ -274,7 +346,7 @@ class DataPreprocessor:
                 # ✅ Convert to int
                 self.df[column] = oe.fit_transform(col_data.values.reshape(-1, 1)).astype(int)
                 
-                print(f"✅ Ordinal encoded {column}: {oe.categories_[0].tolist()}")
+                print(f"Ordinal encoded {column}: {oe.categories_[0].tolist()}")
                 self.preprocessinglog.append({
                     'action': 'ordinal_encode',
                     'column': column,
@@ -285,7 +357,7 @@ class DataPreprocessor:
             return self.df
         
         except Exception as e:
-            print(f"❌ Error encoding {column}: {e}")
+            print(f"Error encoding {column}: {e}")
             import traceback
             traceback.print_exc()
             return self.df

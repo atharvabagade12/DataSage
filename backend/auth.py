@@ -5,9 +5,12 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
-import sqlite3
-import json
+from sqlalchemy.orm import Session
 import traceback
+
+# Import database and models
+from database import get_db
+from models import User as UserModel
 
 # ============================================
 # CONFIGURATION
@@ -25,32 +28,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/token")
 # Router
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
-# ============================================
-# DATABASE SETUP
-# ============================================
-def init_db():
-    """Initialize SQLite database"""
-    conn = sqlite3.connect('datasage_users.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            hashed_password TEXT NOT NULL,
-            full_name TEXT,
-            created_at TEXT NOT NULL,
-            is_active BOOLEAN DEFAULT 1,
-            last_login TEXT
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+print("Auth router loaded successfully")
 
-# Initialize database on import
-init_db()
 
 # ============================================
 # MODELS
@@ -100,56 +79,104 @@ def get_password_hash(password):
 
 
 
-def get_user_by_username(username: str):
-    """Get user from database by username"""
-    conn = sqlite3.connect('datasage_users.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
-        return dict(user)
-    return None
+def get_user_by_username(username: str, db: Session = None):
+    """Get user from PostgreSQL database by username"""
+    should_close = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        should_close = True
 
-def get_user_by_email(email: str):
-    """Get user from database by email"""
-    conn = sqlite3.connect('datasage_users.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
-        return dict(user)
-    return None
+    try:
+        user = db.query(UserModel).filter(UserModel.username == username).first()
+        if user:
+            return {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'hashed_password': user.hashed_password,
+                'full_name': user.full_name,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'is_active': user.is_active,
+                'last_login': user.last_login.isoformat() if user.last_login else None
+            }
+        return None
+    finally:
+        if should_close:
+            db.close()
 
-def create_user(username: str, email: str, hashed_password: str, full_name: str = None):
-    """Create new user in database"""
-    conn = sqlite3.connect('datasage_users.db')
-    cursor = conn.cursor()
+def get_user_by_email(email: str, db: Session = None):
+    """Get user from PostgreSQL database by email"""
+    should_close = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        should_close = True
     
     try:
-        cursor.execute('''
-            INSERT INTO users (username, email, hashed_password, full_name, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (username, email, hashed_password, full_name, datetime.utcnow().isoformat()))
+        user = db.query(UserModel).filter(UserModel.email == email).first()
+        if user:
+            return {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'hashed_password': user.hashed_password,
+                'full_name': user.full_name,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'is_active': user.is_active,
+                'last_login': user.last_login.isoformat() if user.last_login else None
+            }
+        return None
+    finally:
+        if should_close:
+            db.close()
+
+def create_user(username: str, email: str, hashed_password: str, full_name: str = None, db: Session = None):
+    """Create new user in PostgreSQL database"""
+    should_close = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        should_close = True
+    
+    try:
+        # Check if user already exists
+        existing_user = db.query(UserModel).filter(
+            (UserModel.username == username) | (UserModel.email == email)
+        ).first()
         
-        conn.commit()
-        user_id = cursor.lastrowid
-        conn.close()
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Username or email already exists"
+            )
         
-        return user_id
-    except sqlite3.IntegrityError as e:
-        conn.close()
-        raise HTTPException(
-            status_code=400,
-            detail="Username or email already exists"
+        # Create new user
+        new_user = UserModel(
+            username=username,
+            email=email,
+            hashed_password=hashed_password,
+            full_name=full_name,
+            created_at=datetime.utcnow(),
+            is_active=True
         )
+        
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        return new_user.id
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating user: {str(e)}"
+        )
+    finally:
+        if should_close:
+            db.close()
 
 def authenticate_user(username: str, password: str):
     """Authenticate user credentials"""
@@ -195,17 +222,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     
     return user
 
-def update_last_login(username: str):
-    """Update user's last login time"""
-    conn = sqlite3.connect('datasage_users.db')
-    cursor = conn.cursor()
+def update_last_login(username: str, db: Session = None):
+    """Update user's last login time in PostgreSQL"""
+    should_close = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        should_close = True
     
-    cursor.execute('''
-        UPDATE users SET last_login = ? WHERE username = ?
-    ''', (datetime.utcnow().isoformat(), username))
-    
-    conn.commit()
-    conn.close()
+    try:
+        user = db.query(UserModel).filter(UserModel.username == username).first()
+        if user:
+            user.last_login = datetime.utcnow()
+            db.commit()
+    finally:
+        if should_close:
+            db.close()
 
 # ============================================
 # API ENDPOINTS
@@ -214,7 +246,7 @@ def update_last_login(username: str):
 async def register(user: UserRegister):
     """Register new user"""
     try:
-        print(f"📝 Registration attempt: {user.username}")
+        print(f"Registration attempt: {user.username}")
         
         # Check if username exists
         if get_user_by_username(user.username):
@@ -228,7 +260,7 @@ async def register(user: UserRegister):
         safe_password = str(user.password)[:72]
         hashed_password = get_password_hash(safe_password)
         
-        print(f"✅ Password hashed successfully")
+        print(f"Password hashed successfully")
         
         # Create user
         user_id = create_user(
@@ -238,7 +270,7 @@ async def register(user: UserRegister):
             full_name=user.full_name
         )
         
-        print(f"✅ User created with ID: {user_id}")
+        print(f"User created with ID: {user_id}")
         
         return {
             "success": True,
@@ -250,7 +282,7 @@ async def register(user: UserRegister):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Registration error: {str(e)}")
+        print(f"Registration error: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
