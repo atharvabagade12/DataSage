@@ -30,7 +30,7 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 
 # ===== PREPROCESSING IMPORTS =====
 from sklearn.model_selection import (
-    train_test_split, cross_val_score, StratifiedKFold, KFold
+    train_test_split, cross_val_score, cross_validate, StratifiedKFold, KFold
 )
 from sklearn.preprocessing import (
     StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler, LabelEncoder,
@@ -157,9 +157,7 @@ def detect_problem_type(y: pd.Series) -> str:
 def get_algorithm_for_problem_type(algorithm_name: str, problem_type: str):
     """Get the correct algorithm based on problem type"""
     
-    if algorithm_name in ALGORITHMS:
-        return ALGORITHMS[algorithm_name]
-    
+    # Define mapping for algorithms with both classifier and regressor variants
     algorithm_mapping = {
         'Random Forest': {
             'classification': RandomForestClassifier,
@@ -207,10 +205,15 @@ def get_algorithm_for_problem_type(algorithm_name: str, problem_type: str):
         },
     }
     
-    
+    # PRIORITY 1: Check algorithm_mapping first (for algorithms with variants)
     if algorithm_name in algorithm_mapping:
         return algorithm_mapping[algorithm_name][problem_type]
     
+    # PRIORITY 2: Check ALGORITHMS dict (for single-variant algorithms)
+    if algorithm_name in ALGORITHMS:
+        return ALGORITHMS[algorithm_name]
+    
+    # PRIORITY 3: Default fallback
     return RandomForestClassifier if problem_type == 'classification' else RandomForestRegressor
 
 
@@ -1055,12 +1058,13 @@ async def get_engineering_preview(dataset_id: str):
         raise HTTPException(500, str(e))
 
 
-
-
-
 # ===== TARGET VARIABLE SELECTION =====
 @app.post("/api/set-target")
-async def set_target(request: dict):
+async def set_target(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """
     Set target variable and detect problem type
     """
@@ -1070,13 +1074,39 @@ async def set_target(request: dict):
         
         print(f"🎯 Setting target for dataset {dataset_id}: {target_column}")
         
-        # Check if dataset exists FIRST
+        # Check if dataset exists in memory
         if dataset_id not in datasets:
-            print(f"❌ Dataset {dataset_id} not found in datasets dictionary")
-            print(f"   Available datasets: {list(datasets.keys())}")
-            raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
-        
-        # Now safe to access
+            print(f"⚠️ Dataset {dataset_id} not in memory, attempting restoration...")
+            
+            # Try to restore from DB
+            dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+            
+            if not dataset:
+                print(f"❌ Dataset {dataset_id} not found in DB")
+                raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
+                
+            # Check ownership
+            if dataset.user_id != current_user['id']:
+                raise HTTPException(status_code=403, detail="Not authorized")
+                
+            # Restore to memory
+            try:
+                df = file_service.load_dataframe(dataset.storage_path)
+                datasets[dataset_id] = {
+                    'dataframe': df,
+                    'filename': dataset.name,
+                    'upload_time': dataset.upload_date,
+                    'is_processed': dataset.is_processed
+                }
+                print(f"✅ Dataset {dataset_id} restored to memory")
+            except Exception as e:
+                print(f"❌ Failed to restore dataset: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to restore dataset: {str(e)}")
+
+        # Proceed with target setting
+        if dataset_id not in datasets:
+             raise HTTPException(status_code=404, detail="Dataset not found even after restoration attempt")
+             
         df = datasets[dataset_id]['dataframe']
         
         if target_column not in df.columns:
@@ -1680,10 +1710,9 @@ async def train_model_websocket(websocket: WebSocket):
         # Extract configuration
         dataset_id = config['dataset_id']
         target_column = config['target_column']
-        algorithm_name = config['algorithm']
+        algorithm_name = config['algorithm_name']
         test_size = config.get('test_size', 0.2)
-        scaling_method = config.get('scaling', 'none')
-        feature_engineering = config.get('featureEngineering', {})
+
         validation_method = config.get('validation_method', 'train_test_split')
         cv_folds = config.get('cv_folds', 5)
         hyperparameters = config.get('hyperparameters', {})
@@ -1702,63 +1731,70 @@ async def train_model_websocket(websocket: WebSocket):
             }))
             return
         
-        # Get preprocessed dataframe
-        df = datasets[dataset_id]['dataframe'].copy()
-        
-        # 🔍 ADD THESE LINES TO VERIFY FULL DATASET
-        print("="*80)
-        print(f"🔍 TRAINING DATA VERIFICATION")
-        print(f"Dataset ID: {dataset_id}")
-        print(f"Full Dataset Shape: {df.shape}")
-        print(f"Total Rows Being Used: {len(df)}")
-        print(f"Total Columns: {len(df.columns)}")
-        print("="*80)
-        
         await websocket.send_text(json.dumps({
             'status': 'started',
             'message': f'🚀 Starting {algorithm_name} training...',
-            'timestamp': datetime.now().timestamp()
+        # Check if preprocessed data exists (validate all 4 storage dicts)
         }))
-        
-        # ===== VALIDATE TARGET COLUMN =====
-        if target_column not in df.columns:
+        if (dataset_id not in X_train_storage or dataset_id not in X_test_storage or
+            dataset_id not in y_train_storage or dataset_id not in y_test_storage):
+            error_msg = f"❌ Preprocessed data not found for dataset {dataset_id}. Please complete data splitting in Advanced Preprocessing first."
+            print(error_msg)
             await websocket.send_text(json.dumps({
                 'status': 'failed',
-                'message': f'❌ Target column "{target_column}" not found',
+                'message': error_msg,
                 'timestamp': datetime.now().timestamp()
             }))
             return
         
-        # ===== DATA PREPARATION =====
+        # Retrieve preprocessed data and make copies to avoid mutation
+        X_train = X_train_storage[dataset_id].copy()
+        X_test = X_test_storage[dataset_id].copy()
+        y_train = y_train_storage[dataset_id].copy()
+        y_test = y_test_storage[dataset_id].copy()
+        
+        print(f"✅ Retrieved preprocessed data:")
+        print(f"   X_train shape: {X_train.shape}")
+        print(f"   X_test shape: {X_test.shape}")
+        print(f"   y_train shape: {y_train.shape}")
+        print(f"   y_test shape: {y_test.shape}")
+        print("="*80)
+        
         await websocket.send_text(json.dumps({
-            'status': 'preprocessing',
-            'message': '🔧 Preparing data for training...',
+            'status': 'data_loaded',
+            'message': f'✅ Loaded preprocessed data: {len(X_train)} train, {len(X_test)} test samples',
             'timestamp': datetime.now().timestamp()
         }))
         
-        # Handle categorical variables (exclude target)
-        categorical_columns = df.select_dtypes(include=['object']).columns
+        # ===== ENCODE CATEGORICAL FEATURES =====
+        # Check if data is DataFrame and has categorical columns
         label_encoders = {}
+        if hasattr(X_train, 'select_dtypes'):
+            categorical_columns = X_train.select_dtypes(include=['object', 'category']).columns
+            
+            if len(categorical_columns) > 0:
+                await websocket.send_text(json.dumps({
+                    'status': 'preprocessing',
+                    'message': f'🔤 Encoding {len(categorical_columns)} categorical features...',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+                for col in categorical_columns:
+                    le = LabelEncoder()
+                    # Fit on combined train+test to ensure consistent encoding
+                    combined_values = pd.concat([X_train[col], X_test[col]]).astype(str)
+                    le.fit(combined_values)
+                    
+                    X_train[col] = le.transform(X_train[col].astype(str))
+                    X_test[col] = le.transform(X_test[col].astype(str))
+                    label_encoders[col] = le
+                
+                print(f"✅ Encoded {len(categorical_columns)} categorical columns: {list(categorical_columns)}")
+
+                
         
-        for col in categorical_columns:
-            if col != target_column:
-                le = LabelEncoder()
-                df[col] = le.fit_transform(df[col].astype(str))
-                label_encoders[col] = le
-        
-        # Separate features and target
-        X = df.drop(columns=[target_column])
-        y = df[target_column]
-        
-        print("="*80)
-        print(f"🎯 FEATURE PREPARATION VERIFICATION")
-        print(f"Features Shape: {X.shape}")
-        print(f"Target Shape: {y.shape}")
-        print(f"Feature Columns: {list(X.columns)}")
-        print("="*80)
-        
-        # ===== DETECT PROBLEM TYPE =====
-        problem_type = detect_problem_type(y)
+        # ===== DETECT PROBLEM TYPE FROM PREPROCESSED DATA =====
+        problem_type = detect_problem_type(y_train)
         
         await websocket.send_text(json.dumps({
             'status': 'analyzing',
@@ -1766,82 +1802,32 @@ async def train_model_websocket(websocket: WebSocket):
             'timestamp': datetime.now().timestamp()
         }))
         
-        # Encode target if categorical (for classification)
+        # ===== ENCODE TARGET IF CATEGORICAL =====
         target_encoder = None
-        if problem_type == 'classification' and pd.api.types.is_object_dtype(y):
+        # Only encode if it's classification AND target is categorical
+        if problem_type == 'classification' and hasattr(y_train, 'dtype') and pd.api.types.is_object_dtype(y_train):
             target_encoder = LabelEncoder()
-            y = target_encoder.fit_transform(y)
+            y_train = target_encoder.fit_transform(y_train.astype(str))
+            y_test = target_encoder.transform(y_test.astype(str))
+            
             await websocket.send_text(json.dumps({
                 'status': 'preprocessing',
-                'message': f'🏷️ Encoded {len(target_encoder.classes_)} target classes',
+                'message': f'🏷️ Encoded target: {len(target_encoder.classes_)} classes',
                 'timestamp': datetime.now().timestamp()
             }))
         
-        # ===== TRAIN/TEST SPLIT =====
-        print("="*80)
-        print(f"📊 TRAIN/TEST SPLIT VERIFICATION")
-        print(f"Test Size: {test_size}")
-        print(f"Using Stratification: {problem_type == 'classification' and len(np.unique(y)) > 1}")
-        try:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, 
-                test_size=test_size, 
-                random_state=42,
-                stratify=y if problem_type == 'classification' and len(np.unique(y)) > 1 else None
-            )
-            print(f"Train Set Size: {len(X_train)} samples")
-            print(f"Test Set Size: {len(X_test)} samples")
-            print(f"Features in Train Set: {X_train.shape[1]}")
-            print(f"Verification - Total Size: {len(X_train) + len(X_test)} (matches original: {len(X_train) + len(X_test) == len(X)})")
-            print("="*80)
-        except ValueError as e:
-            # Handle case where stratify fails (e.g., too few samples per class)
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42
-            )
+        # ===== CONVERT TO NUMPY IF NEEDED =====
+        # Ensure data is in numpy array format for sklearn
+        if hasattr(X_train, 'values'):
+            X_train = X_train.values
+        if hasattr(X_test, 'values'):
+            X_test = X_test.values
+        if hasattr(y_train, 'values'):
+            y_train = y_train.values
+        if hasattr(y_test, 'values'):
+            y_test = y_test.values
         
-        await websocket.send_text(json.dumps({
-            'status': 'splitting',
-            'message': f'🔪 Split: {len(X_train)} train, {len(X_test)} test samples',
-            'timestamp': datetime.now().timestamp()
-        }))
-        
-        # ===== FEATURE SCALING =====
         model_id = f"model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        scaler = None
-        
-        if scaling_method != 'none':
-            X_train, X_test, scaler = apply_feature_scaling(
-                X_train.values, X_test.values, scaling_method, model_id
-            )
-            await websocket.send_text(json.dumps({
-                'status': 'preprocessing',
-                'message': f'⚖️ Applied {scaling_method} scaling',
-                'timestamp': datetime.now().timestamp()
-            }))
-        else:
-            X_train, X_test = X_train.values, X_test.values
-        
-        # ===== FEATURE ENGINEERING =====
-        transformers = None
-        if any(feature_engineering.values()):
-            X_train, X_test, transformers = apply_feature_engineering(
-                X_train, X_test, feature_engineering, y_train, problem_type, model_id
-            )
-            
-            feature_names = []
-            if feature_engineering.get('polynomial'):
-                feature_names.append('Polynomial Features')
-            if feature_engineering.get('pca'):
-                feature_names.append('PCA')
-            if feature_engineering.get('featureSelection'):
-                feature_names.append('Feature Selection')
-            
-            await websocket.send_text(json.dumps({
-                'status': 'feature_engineering',
-                'message': f'🔧 Applied: {", ".join(feature_names)}',
-                'timestamp': datetime.now().timestamp()
-            }))
         
         # ===== MODEL INITIALIZATION (REFACTORED) =====
         await websocket.send_text(json.dumps({
@@ -1874,83 +1860,174 @@ async def train_model_websocket(websocket: WebSocket):
             }))
             return
         
-        # ===== TRAINING =====
-        await websocket.send_text(json.dumps({
-            'status': 'training',
-            'message': f'🎯 Training {model_class_name}...',
-            'timestamp': datetime.now().timestamp()
-        }))
-        
-        try:
-            model.fit(X_train, y_train)
-            
+        # ===== TRAINING & VALIDATION =====
+        if validation_method == 'kfold_cv':
+            # --- K-FOLD CROSS-VALIDATION ---
             await websocket.send_text(json.dumps({
-                'status': 'training_complete',
-                'message': f'✅ Model trained successfully',
+                'status': 'training',
+                'message': f'🔄 Starting {cv_folds}-Fold Cross-Validation...',
                 'timestamp': datetime.now().timestamp()
             }))
             
-        except Exception as e:
-            await websocket.send_text(json.dumps({
-                'status': 'failed',
-                'message': f'❌ Training failed: {str(e)}',
-                'timestamp': datetime.now().timestamp()
-            }))
-            return
-        
-        # ===== PREDICTIONS & EVALUATION =====
-        await websocket.send_text(json.dumps({
-            'status': 'evaluating',
-            'message': '📊 Evaluating model performance...',
-            'timestamp': datetime.now().timestamp()
-        }))
-        
-        train_pred = model.predict(X_train)
-        test_pred = model.predict(X_test)
-        
-        # Calculate metrics based on problem type
-        if problem_type == 'classification':
-            final_metrics = {
-                'train_accuracy': float(accuracy_score(y_train, train_pred)),
-                'test_accuracy': float(accuracy_score(y_test, test_pred)),
-                'train_f1': float(f1_score(y_train, train_pred, average='weighted')),
-                'test_f1': float(f1_score(y_test, test_pred, average='weighted')),
-                'problem_type': problem_type,
-                'n_classes': int(len(np.unique(y)))
-            }
-            
-            # Add precision and recall
             try:
-                final_metrics['train_precision'] = float(precision_score(y_train, train_pred, average='weighted'))
-                final_metrics['test_precision'] = float(precision_score(y_test, test_pred, average='weighted'))
-                final_metrics['train_recall'] = float(recall_score(y_train, train_pred, average='weighted'))
-                final_metrics['test_recall'] = float(recall_score(y_test, test_pred, average='weighted'))
-            except:
-                pass
+                # Combine data for CV
+                if hasattr(X_train, 'values'):
+                    X_full = np.concatenate((X_train.values, X_test.values), axis=0)
+                    y_full = np.concatenate((y_train.values, y_test.values), axis=0)
+                else:
+                    X_full = np.concatenate((X_train, X_test), axis=0)
+                    y_full = np.concatenate((y_train, y_test), axis=0)
+                
+                # Setup CV
+                if problem_type == 'classification':
+                    cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
+                    scoring = ['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted']
+                else:
+                    cv = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
+                    scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error']
+                
+                # Run CV
+                cv_results = cross_validate(
+                    model, X_full, y_full, 
+                    cv=cv, 
+                    scoring=scoring,
+                    return_train_score=True,
+                    n_jobs=-1
+                )
+                
+                # Calculate metrics
+                final_metrics = {
+                    'validation_method': 'kfold_cv',
+                    'n_folds': cv_folds,
+                    'problem_type': problem_type,
+                    'cv_mean': float(cv_results['test_accuracy'].mean() if problem_type == 'classification' else cv_results['test_r2'].mean()),
+                    'cv_std': float(cv_results['test_accuracy'].std() if problem_type == 'classification' else cv_results['test_r2'].std()),
+                    'cv_scores': [float(s) for s in (cv_results['test_accuracy'] if problem_type == 'classification' else cv_results['test_r2'])],
+                    'train_mean': float(cv_results['train_accuracy'].mean() if problem_type == 'classification' else cv_results['train_r2'].mean())
+                }
+                
+                # Add detailed metrics
+                if problem_type == 'classification':
+                    final_metrics.update({
+                        'test_accuracy': final_metrics['cv_mean'], # Use CV mean as main accuracy
+                        'test_f1': float(cv_results['test_f1_weighted'].mean()),
+                        'test_precision': float(cv_results['test_precision_weighted'].mean()),
+                        'test_recall': float(cv_results['test_recall_weighted'].mean()),
+                        'n_classes': int(len(np.unique(y_full)))
+                    })
+                    main_metric = f"CV Accuracy: {final_metrics['cv_mean']*100:.2f}% (±{final_metrics['cv_std']*100:.2f}%)"
+                else:
+                    final_metrics.update({
+                        'test_r2': final_metrics['cv_mean'],
+                        'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
+                        'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
+                        'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
+                    })
+                    main_metric = f"CV R²: {final_metrics['cv_mean']:.4f} (±{final_metrics['cv_std']:.4f})"
+
+                # Train final model on full dataset
+                await websocket.send_text(json.dumps({
+                    'status': 'training',
+                    'message': f'🎯 Training final model on full dataset...',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                model.fit(X_full, y_full)
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training_complete',
+                    'message': f'✅ Cross-validation completed',
+                    'timestamp': datetime.now().timestamp()
+                }))
+
+            except Exception as e:
+                await websocket.send_text(json.dumps({
+                    'status': 'failed',
+                    'message': f'❌ Cross-validation failed: {str(e)}',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                return
+
+        else:
+            # --- STANDARD TRAIN/TEST SPLIT ---
+            await websocket.send_text(json.dumps({
+                'status': 'training',
+                'message': f'🎯 Training {model_class_name}...',
+                'timestamp': datetime.now().timestamp()
+            }))
             
-            main_metric = f"Test Accuracy: {final_metrics['test_accuracy']*100:.2f}%"
+            try:
+                model.fit(X_train, y_train)
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training_complete',
+                    'message': f'✅ Model trained successfully',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+            except Exception as e:
+                await websocket.send_text(json.dumps({
+                    'status': 'failed',
+                    'message': f'❌ Training failed: {str(e)}',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                return
             
-        else:  # regression
-            final_metrics = {
-                'train_r2': float(r2_score(y_train, train_pred)),
-                'test_r2': float(r2_score(y_test, test_pred)),
-                'train_mse': float(mean_squared_error(y_train, train_pred)),
-                'test_mse': float(mean_squared_error(y_test, test_pred)),
-                'train_rmse': float(np.sqrt(mean_squared_error(y_train, train_pred))),
-                'test_rmse': float(np.sqrt(mean_squared_error(y_test, test_pred))),
-                'train_mae': float(mean_absolute_error(y_train, train_pred)),
-                'test_mae': float(mean_absolute_error(y_test, test_pred)),
-                'problem_type': problem_type
-            }
-            main_metric = f"Test R²: {final_metrics['test_r2']:.4f}"
+            # ===== PREDICTIONS & EVALUATION =====
+            await websocket.send_text(json.dumps({
+                'status': 'evaluating',
+                'message': '📊 Evaluating model performance...',
+                'timestamp': datetime.now().timestamp()
+            }))
+            
+            train_pred = model.predict(X_train)
+            test_pred = model.predict(X_test)
+            
+            # Calculate metrics based on problem type
+            if problem_type == 'classification':
+                final_metrics = {
+                    'train_accuracy': float(accuracy_score(y_train, train_pred)),
+                    'test_accuracy': float(accuracy_score(y_test, test_pred)),
+                    'train_f1': float(f1_score(y_train, train_pred, average='weighted')),
+                    'test_f1': float(f1_score(y_test, test_pred, average='weighted')),
+                    'problem_type': problem_type,
+                    'n_classes': int(len(np.unique(y_train)))
+                }
+                
+                # Add precision and recall
+                try:
+                    final_metrics['train_precision'] = float(precision_score(y_train, train_pred, average='weighted'))
+                    final_metrics['test_precision'] = float(precision_score(y_test, test_pred, average='weighted'))
+                    final_metrics['train_recall'] = float(recall_score(y_train, train_pred, average='weighted'))
+                    final_metrics['test_recall'] = float(recall_score(y_test, test_pred, average='weighted'))
+                except:
+                    pass
+                
+                main_metric = f"Test Accuracy: {final_metrics['test_accuracy']*100:.2f}%"
+                
+            else:  # regression
+                final_metrics = {
+                    'train_r2': float(r2_score(y_train, train_pred)),
+                    'test_r2': float(r2_score(y_test, test_pred)),
+                    'train_mse': float(mean_squared_error(y_train, train_pred)),
+                    'test_mse': float(mean_squared_error(y_test, test_pred)),
+                    'train_rmse': float(np.sqrt(mean_squared_error(y_train, train_pred))),
+                    'test_rmse': float(np.sqrt(mean_squared_error(y_test, test_pred))),
+                    'train_mae': float(mean_absolute_error(y_train, train_pred)),
+                    'test_mae': float(mean_absolute_error(y_test, test_pred)),
+                    'problem_type': problem_type
+                }
+                main_metric = f"Test R²: {final_metrics['test_r2']:.4f}"
         
         # ===== SAVE MODEL =====
+       
+        import os
+        os.makedirs('models', exist_ok=True)
         model_path = f"models/{model_id}.joblib"
         joblib.dump(model, model_path)
         
         await websocket.send_text(json.dumps({
             'status': 'saving',
-            'message': f'💾 Saving model to {model_path}...',
+            'message': f'💾 {model_path}...',
             'timestamp': datetime.now().timestamp()
         }))
         
@@ -1962,20 +2039,15 @@ async def train_model_websocket(websocket: WebSocket):
             'model_class': model_class_name,
             'problem_type': problem_type,
             'target_column': target_column,
-            'feature_columns': list(X.columns) if hasattr(X, 'columns') else list(range(X.shape[1])),
             'n_features': int(X_train.shape[1]),
             'n_samples_train': int(len(X_train)),
             'n_samples_test': int(len(X_test)),
-            'label_encoders': {k: list(v.classes_) for k, v in label_encoders.items()},
-            'target_encoder': list(target_encoder.classes_) if target_encoder else None,
-            'scaler_type': scaling_method,
-            'feature_engineering': feature_engineering,
             'hyperparameters': hyperparameters,
             'final_metrics': final_metrics,
             'dataset_id': dataset_id,
             'trained_at': datetime.now().isoformat(),
-            'test_size': test_size,
-            'validation_method': validation_method
+            'validation_method': validation_method,
+            'uses_preprocessed_data': True  # Flag to indicate this model used preprocessed data
         }
         
         trained_models[model_id] = model_info

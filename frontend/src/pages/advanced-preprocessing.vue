@@ -998,6 +998,8 @@ import { useRouter } from "vue-router";
 import { useMLDataFlowStore } from "~/stores/mlDataFlow";
 import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch'
 import { useToast } from '~/composables/useToast'
+import { addPreprocessingStep } from '@/utils/preprocessingTracker';
+
 
 const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
 const { showSuccess, showError, showWarning, showInfo } = useToast()
@@ -1612,7 +1614,18 @@ const applySplit = async () => {
         'Dataset Split Applied!',
         `Train: ${data.train_size.toLocaleString()} rows | Test: ${data.test_size.toLocaleString()} rows`
       );
-      
+
+      addPreprocessingStep('Train/Test Split');
+
+      // CRITICAL: Save the dataset ID immediately after successful split
+      // This ensures that even if the user navigates via sidebar (skipping proceedToAlgorithmSelection),
+      // the correct dataset ID is available for training.
+      if (datasetId.value) {
+        localStorage.setItem('backendDatasetId', datasetId.value);
+        localStorage.setItem('datasetId', datasetId.value);
+        console.log('✅ Saved processed dataset ID to localStorage (on split success):', datasetId.value);
+      }
+
       // Close the modal
       showSplitModal.value = false;
     } else {
@@ -1766,7 +1779,9 @@ const applyScaling = async () => {
         'Feature Scaling Applied!',
         `Scaled ${scaledCount} column${scaledCount !== 1 ? 's' : ''}: ${scaledList}${moreText}`
       );
-      
+
+      addPreprocessingStep('Feature Scaling');
+
       // Close the modal
       showScalingModal.value = false;
     } else {
@@ -1962,6 +1977,8 @@ async function applyCategoricalEncoding() {
       `Encoded ${encodedCount} column${encodedCount !== 1 ? 's' : ''}: ${encodedList}${moreText}`
     );
     
+    addPreprocessingStep('Categorical Encoding');
+
     // Close the modal
     showEncodingModal.value = false;
     // Refresh table, preview, columns, etc. here as needed
@@ -2004,8 +2021,22 @@ const proceedToAlgorithmSelection = () => {
       scalingMethod: scalingMethod.value,
       trainRows: trainRows.value,
       testRows: testRows.value,
+      processedDatasetId: datasetId.value // CRITICAL: Save ID here too for model-training.vue
     })
   );
+
+  // CRITICAL: Save the processed dataset ID (this is the dataset with split/encode/scale applied)
+  if (datasetId.value) {
+    console.log('🔍 DEBUG: Current datasetId.value:', datasetId.value);
+    console.log('🔍 DEBUG: mlStore.cleanedDatasetId:', mlStore.cleanedDatasetId);
+    console.log('🔍 DEBUG: mlStore.datasetId:', mlStore.datasetId);
+    
+    localStorage.setItem('backendDatasetId', datasetId.value);
+    localStorage.setItem('datasetId', datasetId.value);
+    console.log('✅ Saved processed dataset ID to localStorage:', datasetId.value);
+  } else {
+    console.error('❌ WARNING: datasetId.value is empty! Cannot save to localStorage');
+  }
 
   // Ensure pipeline state has targetColumn for navigation guard
   const pipelineState = JSON.parse(

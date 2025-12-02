@@ -9,14 +9,14 @@
               d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
             />
           </svg>
-          Back to Target Selection
+           Back to Advanced Preprocessing
         </button>
         <div class="breadcrumb">
           <span>DataSage</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
           </svg>
-          <span>Target Selection</span>
+          <span>Advanced Preprocessing</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
           </svg>
@@ -24,24 +24,7 @@
         </div>
       </div>
 
-      <!-- âœ… ADD THIS: Backend Status -->
-      <div class="backend-status" v-if="backendConnected !== null">
-        <div
-          class="status-indicator"
-          :class="{
-            connected: backendConnected,
-            disconnected: !backendConnected,
-          }"
-        >
-          <div class="status-dot"></div>
-          <span class="status-text">
-            {{ backendConnected ? "ML Backend Ready" : "Frontend Mode" }}
-          </span>
-          <span class="dataset-id" v-if="backendConnected && datasetId">
-            ID: {{ datasetId.substring(0, 8) }}...
-          </span>
-        </div>
-      </div>
+      
       <div class="target-summary" v-if="selectedTarget">
         <span class="target-info">
           Target: <strong>{{ selectedTarget.name }}</strong>
@@ -61,27 +44,7 @@
           We'll recommend the best machine learning algorithms based on your
           data and target variable
         </p>
-        <div class="dataset-summary" v-if="datasetStats.rows">
-          <span class="summary-item">
-            {{ formatNumber(datasetStats.rows) }} rows</span
-          >
-          <span class="summary-divider"></span>
-          <span class="summary-item">
-            {{ datasetStats.features }} features</span
-          >
-          <span class="summary-divider"></span>
-          <span class="summary-item">
-            {{ formatProblemType(problemType.type) }}</span
-          >
-          <div class="confidence-indicator">
-            <div
-              class="confidence-score"
-              :class="getConfidenceLevel(problemType.confidence)"
-            >
-              {{ Math.round(problemType.confidence * 100) }}% Confidence
-            </div>
-          </div>
-        </div>
+        
       </div>
     </div>
 
@@ -93,72 +56,164 @@
 
     <!-- Main Content -->
     <div v-else class="main-container">
-      <!-- Problem Analysis Section -->
+      <!-- Understanding Your Machine Learning Task Section -->
       <section class="analysis-section">
         <div class="section-header">
-          <h2>Problem Analysis</h2>
+          <h2>Understanding Your Machine Learning Task</h2>
           <p class="section-description">
-            Understanding your machine learning task
+            Review your problem setup and data characteristics
           </p>
         </div>
 
         <div class="analysis-grid">
+          <!-- Card 1: Problem Type & Target Analysis -->
           <div class="analysis-card">
-            <div class="card-icon"></div>
-            <h3>Problem Type</h3>
-            <div class="problem-info">
-              <span class="problem-label">{{
-                formatProblemType(problemType.type)
-              }}</span>
-              <div class="problem-details">
-                <p>{{ getProblemDescription(problemType.type) }}</p>
-                <div class="problem-metrics">
-                  <span class="metric">
-                    <span class="metric-label">Target Variable:</span>
-                    <span class="metric-value"
-                      >{{ selectedTarget.name }} ({{
-                        selectedTarget.type
-                      }})</span
-                    >
-                  </span>
-                  <span class="metric" v-if="selectedTarget.uniqueValues">
-                    <span class="metric-label">Unique Values:</span>
-                    <span class="metric-value">{{
-                      selectedTarget.uniqueValues
-                    }}</span>
-                  </span>
+            <div class="card-header">
+              <div class="card-icon">🎯</div>
+              <h3>Problem Type & Target Analysis</h3>
+            </div>
+            
+            <div class="card-content">
+              <!-- Problem Type Badge -->
+              <div class="info-section">
+                <label class="info-label">Problem Type</label>
+                <div class="problem-type-badge" :class="problemType.type">
+                  {{ formatProblemType(problemType.type) }}
                 </div>
               </div>
+
+              <!-- Confidence Meter -->
+              <div class="info-section">
+                <label class="info-label">Detection Confidence</label>
+                <div class="confidence-meter">
+                  <div 
+                    class="meter-fill" 
+                    :class="getConfidenceLevel(problemType.confidence)"
+                    :style="{ width: (problemType.confidence * 100) + '%' }"
+                  ></div>
+                </div>
+                <span class="confidence-value">
+                  {{ Math.round(problemType.confidence * 100) }}%
+                </span>
+              </div>
+
+              <div class="card-divider"></div>
+
+              <!-- Target Details -->
+              <div class="target-details">
+                <div class="detail-row">
+                  <span class="detail-label">Target Variable:</span>
+                  <span class="detail-value">{{ selectedTarget.name }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Data Type:</span>
+                  <span class="detail-value">{{ selectedTarget.type }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Unique Values:</span>
+                  <span class="detail-value">{{ selectedTarget.uniqueValues }}</span>
+                </div>
+              </div>
+
+              <div class="card-divider"></div>
+
+              <!-- Insight Box -->
+              <div class="insight-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A1.5,1.5 0 0,1 10.5,15.5A1.5,1.5 0 0,1 12,14A1.5,1.5 0 0,1 13.5,15.5A1.5,1.5 0 0,1 12,17M13.5,13H10.5V7H13.5V13Z"/>
+                </svg>
+                <p>{{ getProblemDescription(problemType.type) }}</p>
+              </div>
             </div>
           </div>
 
+          <!-- Card 2: Dataset Profile -->
           <div class="analysis-card">
-            <div class="card-icon"></div>
-            <h3>Dataset Profile</h3>
-            <div class="dataset-profile">
-              <div class="profile-metric">
-                <span class="profile-label">Size Category</span>
-                <span class="profile-value">{{
-                  getDatasetSizeCategory()
-                }}</span>
+            <div class="card-header">
+              <div class="card-icon">📊</div>
+              <h3>Dataset Profile</h3>
+            </div>
+            
+            <div class="card-content">
+              <!-- Dataset Characteristics -->
+              <div class="info-section">
+                <label class="info-label">Dataset Characteristics</label>
+                <div class="stats-grid">
+                  <div class="stat-box">
+                    <span class="stat-value">{{ formatNumber(datasetStats.rows) }}</span>
+                    <span class="stat-label">Rows</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-value">{{ datasetStats.features }}</span>
+                    <span class="stat-label">Features</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-value">{{ getDatasetSizeCategory() }}</span>
+                    <span class="stat-label">Size</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-value">{{ getDatasetComplexity() }}</span>
+                    <span class="stat-label">Complexity</span>
+                  </div>
+                </div>
               </div>
-              <div class="profile-metric">
-                <span class="profile-label">Complexity</span>
-                <span class="profile-value">{{ getDatasetComplexity() }}</span>
+
+              <div class="card-divider"></div>
+
+              <!-- Feature Breakdown -->
+              <div class="info-section">
+                <label class="info-label">Feature Breakdown</label>
+                <div class="feature-breakdown">
+                  <div class="breakdown-item">
+                    <span class="breakdown-label">Total Features</span>
+                    <span class="breakdown-value">{{ datasetStats.features }}</span>
+                  </div>
+                </div>
               </div>
-              <div class="profile-metric">
-                <span class="profile-label">Recommended Focus</span>
-                <span class="profile-value">{{ getRecommendedFocus() }}</span>
+
+              <div class="card-divider"></div>
+
+              <!-- Recommendation -->
+              <div class="insight-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A1.5,1.5 0 0,1 10.5,15.5A1.5,1.5 0 0,1 12,14A1.5,1.5 0 0,1 13.5,15.5A1.5,1.5 0 0,1 12,17M13.5,13H10.5V7H13.5V13Z"/>
+                </svg>
+                <p><strong>Recommendation:</strong> {{ getRecommendedFocus() }}</p>
               </div>
             </div>
           </div>
 
+          <!-- Card 3: Preprocessing Applied -->
           <div class="analysis-card">
-            <div class="card-icon"></div>
-            <h3>Preprocessing Applied</h3>
-            <div class="preprocessing-summary">
+            <div class="card-header">
+              <div class="card-icon">✅</div>
+              <h3>Preprocessing Applied</h3>
+              <span class="steps-badge" v-if="preprocessingSteps.length > 0">
+                {{ preprocessingSteps.length }} Steps
+              </span>
+            </div>
+            
+            <div class="card-content">
+              <div v-if="preprocessingSteps.length > 0" class="preprocessing-timeline">
+                <div 
+                  v-for="(step, index) in preprocessingSteps" 
+                  :key="index"
+                  class="timeline-item"
+                >
+                  <div class="timeline-marker">{{ index + 1 }}</div>
+                  <div class="timeline-content">
+                    <h4>{{ formatPreprocessingStep(step) }}</h4>
+                  </div>
+                </div>
+              </div>
               
-              
+              <div v-else class="no-preprocessing">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                  <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                </svg>
+                <p>No preprocessing steps applied yet</p>
+                <span class="warning-note">Data will be used as-is for training</span>
+              </div>
             </div>
           </div>
         </div>
@@ -306,11 +361,11 @@
                     <span v-if="algorithm.recommended" class="badge recommended"
                       >Recommended</span
                     >
-                    <span
+                    <!-- <span
                       class="badge complexity"
                       :class="algorithm.complexity.toLowerCase()"
-                      >{{ algorithm.complexity }}</span
-                    >
+                      >{{ algorithm.complexity}}<p>Complexity</p></span
+                    > -->
                     <span v-if="algorithm.needsScaling" class="badge scaling"
                       >Needs Scaling</span
                     >
@@ -419,363 +474,12 @@
         </div>
       </section>
 
-      <!-- Configuration Section -->
-      <section v-if="selectedAlgorithm" class="configuration-section">
-        <div class="section-header">
-          <h2>Configure {{ selectedAlgorithm.name }}</h2>
-          <p class="section-description">
-            Fine-tune hyperparameters and preprocessing options
-          </p>
-        </div>
+      
 
-        <div class="config-grid">
-          <!-- Hyperparameters -->
-          <div class="config-panel">
-            <div class="panel-header">
-              <h3>
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"
-                  />
-                </svg>
-                Hyperparameters
-              </h3>
-              <div class="panel-actions">
-                <button @click="resetHyperparameters" class="reset-params-btn">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"
-                    />
-                  </svg>
-                  Reset to Defaults
-                </button>
-                <button @click="useOptimalParams" class="optimal-btn">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M12,2A3,3 0 0,1 15,5A3,3 0 0,1 12,8A3,3 0 0,1 9,5A3,3 0 0,1 12,2M21,9V7H15L13.5,7.5C13.14,7.19 12.79,6.89 12.4,6.62L13.5,6H21V9M21,16V14H13.91C13.65,14.76 13.34,15.5 13,16H21M21,23V21H13C13,21.34 13,21.67 13,22C13,22.35 13,22.67 13,23H21M9,10H12L13.5,15L15,10H18V8H9V10Z"
-                    />
-                  </svg>
-                  Use Optimal Settings
-                </button>
-              </div>
-            </div>
+      
 
-            <div class="hyperparameters-container">
-              <div
-                v-for="paramGroup in getKeyParameters(selectedAlgorithm.name)"
-                :key="paramGroup.name"
-                class="param-group"
-              >
-                <div class="param-group-header">
-                  <span class="group-icon">{{ paramGroup.icon }}</span>
-                  <h4>{{ paramGroup.name }}</h4>
-                </div>
-
-                <div class="params-list">
-                  <div
-                    v-for="param in paramGroup.params"
-                    :key="param.name"
-                    class="param-item"
-                  >
-                    <div class="param-header">
-                      <label class="param-label">{{ param.label }}</label>
-                      <span class="param-impact" :class="param.impact"
-                        >{{ param.impact }} impact</span
-                      >
-                    </div>
-
-                    <!-- Slider Parameter -->
-                    <div v-if="param.type === 'slider'" class="param-control">
-                      <div class="slider-container">
-                        <input
-                          type="range"
-                          :min="param.min"
-                          :max="param.max"
-                          :step="param.step"
-                          v-model="hyperparameters[param.name]"
-                          class="param-slider"
-                        />
-                        <div class="slider-value">
-                          {{
-                            formatParameterValue(
-                              param.name,
-                              hyperparameters[param.name]
-                            )
-                          }}
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Select Parameter -->
-                    <div
-                      v-else-if="param.type === 'select'"
-                      class="param-control"
-                    >
-                      <select
-                        v-model="hyperparameters[param.name]"
-                        class="param-select"
-                      >
-                        <option
-                          v-for="option in param.options"
-                          :key="option.value"
-                          :value="option.value"
-                        >
-                          {{ option.label }}
-                        </option>
-                      </select>
-                    </div>
-
-                    <p class="param-description">{{ param.description }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Preprocessing Options -->
-          <div class="config-panel">
-            <div class="panel-header">
-              <h3>
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M6,2A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"
-                  />
-                </svg>
-                Feature Scaling & Engineering
-              </h3>
-            </div>
-
-            <div class="preprocessing-options">
-              <!-- Feature Scaling -->
-              <div class="option-group">
-                <h4>Feature Scaling</h4>
-                <div class="scaling-options">
-                  <label
-                    class="option-card"
-                    :class="{ selected: selectedScaling === 'none' }"
-                  >
-                    <input
-                      type="radio"
-                      v-model="selectedScaling"
-                      value="none"
-                    />
-                    <div class="option-content">
-                      <div class="option-icon"></div>
-                      <span class="option-title">No Scaling</span>
-                      <p class="option-desc">
-                        Use raw features (good for tree-based algorithms)
-                      </p>
-                    </div>
-                  </label>
-
-                  <label
-                    class="option-card"
-                    :class="{ selected: selectedScaling === 'standard' }"
-                  >
-                    <input
-                      type="radio"
-                      v-model="selectedScaling"
-                      value="standard"
-                    />
-                    <div class="option-content">
-                      <div class="option-icon"></div>
-                      <span class="option-title">Standard Scaling</span>
-                      <p class="option-desc">
-                        Zero mean, unit variance (recommended for most
-                        algorithms)
-                      </p>
-                    </div>
-                  </label>
-
-                  <label
-                    class="option-card"
-                    :class="{ selected: selectedScaling === 'minmax' }"
-                  >
-                    <input
-                      type="radio"
-                      v-model="selectedScaling"
-                      value="minmax"
-                    />
-                    <div class="option-content">
-                      <div class="option-icon"></div>
-                      <span class="option-title">MinMax Scaling</span>
-                      <p class="option-desc">
-                        Scale to [0,1] range (good for neural networks)
-                      </p>
-                    </div>
-                  </label>
-
-                  <label
-                    class="option-card"
-                    :class="{ selected: selectedScaling === 'robust' }"
-                  >
-                    <input
-                      type="radio"
-                      v-model="selectedScaling"
-                      value="robust"
-                    />
-                    <div class="option-content">
-                      <div class="option-icon"></div>
-                      <span class="option-title">Robust Scaling</span>
-                      <p class="option-desc">
-                        Median and IQR-based (resistant to outliers)
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <!-- Feature Engineering -->
-              <div class="option-group">
-                <h4>Feature Engineering</h4>
-                <div class="engineering-options">
-                  <label class="checkbox-option">
-                    <input
-                      type="checkbox"
-                      v-model="featureEngineering.polynomial"
-                    />
-                    <span class="checkbox-custom"></span>
-                    <div class="option-content">
-                      <span class="option-title">Polynomial Features</span>
-                      <p class="option-desc">
-                        Create interaction and polynomial terms
-                      </p>
-                    </div>
-                  </label>
-
-                  <label class="checkbox-option">
-                    <input type="checkbox" v-model="featureEngineering.pca" />
-                    <span class="checkbox-custom"></span>
-                    <div class="option-content">
-                      <span class="option-title"
-                        >Principal Component Analysis</span
-                      >
-                      <p class="option-desc">
-                        Reduce dimensionality while preserving variance
-                      </p>
-                    </div>
-                  </label>
-
-                  <label class="checkbox-option">
-                    <input
-                      type="checkbox"
-                      v-model="featureEngineering.featureSelection"
-                    />
-                    <span class="checkbox-custom"></span>
-                    <div class="option-content">
-                      <span class="option-title">Feature Selection</span>
-                      <p class="option-desc">
-                        Select most important features automatically
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Training Configuration -->
-      <section v-if="selectedAlgorithm" class="training-section">
-        <div class="section-header">
-          <h2>Training Configuration</h2>
-          <p class="section-description">
-            Set up model validation and training parameters
-          </p>
-        </div>
-
-        <div class="training-config">
-          <div class="config-row">
-            <div class="config-item">
-              <label class="config-label">Validation Method</label>
-              <select v-model="validationMethod" class="config-select">
-                <option value="train_test_split">Train/Test Split</option>
-                <option value="cross_validation">Cross Validation</option>
-                <option value="stratified">Stratified Validation</option>
-              </select>
-            </div>
-
-            <div
-              class="config-item"
-              v-if="validationMethod === 'train_test_split'"
-            >
-              <label class="config-label">Test Size</label>
-              <div class="slider-input">
-                <input
-                  type="range"
-                  min="0.1"
-                  max="0.5"
-                  step="0.05"
-                  v-model="testSize"
-                  class="config-slider"
-                />
-                <span class="slider-value"
-                  >{{ Math.round(testSize * 100) }}%</span
-                >
-              </div>
-            </div>
-
-            <div
-              class="config-item"
-              v-if="validationMethod === 'cross_validation'"
-            >
-              <label class="config-label">CV Folds</label>
-              <select v-model="cvFolds" class="config-select">
-                <option :value="3">3-Fold</option>
-                <option :value="5">5-Fold</option>
-                <option :value="10">10-Fold</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="config-row">
-            <div class="config-item">
-              <label class="config-label">Random State</label>
-              <input
-                type="number"
-                v-model="randomState"
-                class="config-input"
-                min="0"
-                max="999"
-              />
-            </div>
-
-            <div class="config-item">
-              <label class="config-label">Metric to Optimize</label>
-              <select v-model="optimizationMetric" class="config-select">
-                <option
-                  v-for="metric in getAvailableMetrics()"
-                  :key="metric.value"
-                  :value="metric.value"
-                >
-                  {{ metric.label }}
-                </option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </section>
+      
+      
 
       <!-- Action Section -->
       <section v-if="selectedAlgorithm" class="action-section">
@@ -867,16 +571,11 @@
               </svg>
               {{
                 isTraining
-                  ? "Initializing Advanced Training..."
-                  : "Start Advanced Training"
+                  ? "Initializing Model Training..."
+                  : "Start Model Training"
               }}
-              <!-- âœ… ADD FEATURE COUNT INDICATOR -->
-              <span
-                v-if="!isTraining && getAdvancedFeaturesCount() > 0"
-                class="feature-count"
-              >
-                +{{ getAdvancedFeaturesCount() }} Advanced Features
-              </span>
+              <!-- ADD FEATURE COUNT INDICATOR -->
+              
             </button>
           </div>
         </div>
@@ -1077,6 +776,21 @@ const cvFolds = ref(5);
 const randomState = ref(42);
 const optimizationMetric = ref("accuracy");
 
+// New Validation Strategy Config
+const validationStrategy = ref("simple_train_test"); // simple_train_test | kfold_cv | grid_search | randomized_search
+const splitRatio = ref(0.8); // From preprocessing
+const stratifiedCV = ref(true);
+
+// GridSearchCV Config
+const gridSearchCVFolds = ref(5);
+const gridDensity = ref("normal"); // coarse | normal | fine
+const showGridPreview = ref(false);
+
+// RandomizedSearchCV Config
+const randomSearchCVFolds = ref(5);
+const randomSearchIterations = ref(20);
+const showDistributionsPreview = ref(false);
+
 // âœ… STANDARDIZED BACKEND CONNECTION CHECK
 const checkBackendConnection = async () => {
   try {
@@ -1113,7 +827,7 @@ const checkBackendConnection = async () => {
 // Methods
 const loadDataFromPreviousSteps = () => {
   try {
-    console.log("Loading data from previous steps...");
+    console.log("🔄 Loading data from previous steps...");
 
     // Load target selection data
     const targetData = localStorage.getItem("selectedTarget");
@@ -1123,28 +837,110 @@ const loadDataFromPreviousSteps = () => {
       const target = JSON.parse(targetData);
       selectedTarget.value = target;
       problemType.value = detectProblemType(target);
-      console.log("Loaded target:", target);
+      console.log("✅ Loaded target:", target);
     }
 
     if (processedData) {
       const data = JSON.parse(processedData);
+      console.log("📊 Raw processedData:", data);
+      
+      // Extract dataset statistics - FIXED to use correct property names
+      // Priority: totalRowsInBackend (actual backend rows) > rowCount (displayed rows) > other fallbacks
+      const rows = data.totalRowsInBackend ||  // ✅ ACTUAL total rows in backend
+                   data.rowCount ||              // Displayed rows (might be sample)
+                   data.finalRows || 
+                   data.rows || 
+                   data.data?.length || 
+                   data.shape?.[0] ||
+                   0;
+      
+      // Priority: columnCount (actual column count) > other fallbacks
+      const features = data.columnCount ||       // ✅ ACTUAL column count
+                       data.finalColumns || 
+                       data.columns?.length || 
+                       data.shape?.[1] ||
+                       data.totalColumns ||
+                       (data.columns ? Object.keys(data.columns).length : 0) ||
+                       0;
+      
       datasetStats.value = {
-        rows: data.finalRows || data.data?.length || 0,
-        features: data.finalColumns || data.columns?.length || 0,
+        rows: rows,
+        features: features
       };
-      preprocessingSteps.value = data.processingSteps || [];
-      console.log("Loaded dataset stats:", datasetStats.value);
+      
+      // Load split ratio from preprocessing steps
+      if (data.splitRatio !== undefined) {
+        splitRatio.value = data.splitRatio;
+      } else if (data.trainTestSplit) {
+        splitRatio.value = data.trainTestSplit.trainRatio || 0.8;
+      }
+      
+      // Load preprocessing steps with better detection
+      let steps = [];
+      
+      // Try to get explicit processing steps
+      if (data.processingSteps && Array.isArray(data.processingSteps)) {
+        steps = data.processingSteps;
+      } else if (data.steps && Array.isArray(data.steps)) {
+        steps = data.steps;
+      } else if (data.appliedSteps && Array.isArray(data.appliedSteps)) {
+        steps = data.appliedSteps;
+      } else if (data.transformations && Array.isArray(data.transformations)) {
+        steps = data.transformations;
+      }
+      // If no explicit steps but preprocessed flag is true, infer steps
+      else if (data.preprocessed === true) {
+        console.log("⚠️ No explicit preprocessing steps found, but preprocessed=true. Inferring steps...");
+        
+        // Infer steps from data properties
+        if (data.splitApplied || data.trainTestSplit || data.splitRatio) {
+          steps.push("Train/Test Split");
+        }
+        if (data.encodingApplied || data.categoricalEncoding) {
+          steps.push("Categorical Encoding");
+        }
+        if (data.scalingApplied || data.featureScaling) {
+          steps.push("Feature Scaling");
+        }
+        if (data.missingValuesHandled) {
+          steps.push("Missing Value Handling");
+        }
+        if (data.outlierHandling) {
+          steps.push("Outlier Handling");
+        }
+        
+        console.log("📝 Inferred preprocessing steps:", steps);
+      }
+      
+      preprocessingSteps.value = steps;
+      
+      console.log("✅ Loaded dataset stats:", {
+        rows: datasetStats.value.rows,
+        features: datasetStats.value.features,
+        splitRatio: splitRatio.value,
+        preprocessingSteps: preprocessingSteps.value,
+        source: {
+          rows: data.totalRowsInBackend ? 'totalRowsInBackend' : 'rowCount',
+          features: data.columnCount ? 'columnCount' : 'fallback'
+        }
+      });
     }
 
     if (!targetData || !processedData) {
-      console.warn("Missing required data, redirecting...");
+      console.warn("⚠️ Missing required data, redirecting...");
       router.push("/target-selection");
       return false;
     }
 
+    // Validate that we have meaningful data
+    if (datasetStats.value.rows === 0 || datasetStats.value.features === 0) {
+      console.warn("⚠️ Invalid dataset stats detected:", datasetStats.value);
+      console.warn("💡 This might indicate a data loading issue from previous steps");
+    }
+
     return true;
   } catch (error) {
-    console.error("Error loading data:", error);
+    console.error("❌ Error loading data:", error);
     router.push("/target-selection");
     return false;
   }
@@ -1172,28 +968,73 @@ const selectAlgorithmWithBackend = (algorithm) => {
 };
 
 const detectProblemType = (target) => {
+  console.log("🔍 Detecting problem type for target:", target);
+  
   let problemType = "binary_classification";
   let confidence = 0.8;
 
-  if (target.type === "numerical" || target.originalType === "numerical") {
+  // Check multiple possible property names for data type
+  const dataType = target.type || 
+                   target.dataType || 
+                   target.dtype || 
+                   target.originalType ||
+                   target.columnType;
+  
+  const uniqueValues = target.uniqueValues || 
+                       target.unique_values || 
+                       target.cardinality ||
+                       0;
+  
+  console.log("📊 Extracted properties:", {
+    dataType,
+    uniqueValues,
+    rawTarget: target
+  });
+
+  // Check if it's numerical/continuous
+  if (dataType === "numerical" || 
+      dataType === "numeric" || 
+      dataType === "continuous" ||
+      dataType === "float" ||
+      dataType === "int" ||
+      dataType === "integer" ||
+      dataType === "number") {
     problemType = "regression";
     confidence = 0.95;
-  } else if (
-    target.type === "categorical" ||
-    target.originalType === "categorical"
-  ) {
-    if (target.uniqueValues === 2) {
+    console.log("✅ Detected as REGRESSION (numerical type)");
+  } 
+  // Check if it's categorical
+  else if (dataType === "categorical" || 
+           dataType === "object" || 
+           dataType === "string") {
+    if (uniqueValues === 2) {
       problemType = "binary_classification";
       confidence = 0.95;
-    } else if (target.uniqueValues > 2 && target.uniqueValues <= 20) {
+      console.log("✅ Detected as BINARY CLASSIFICATION (2 unique values)");
+    } else if (uniqueValues > 2 && uniqueValues <= 20) {
       problemType = "multiclass_classification";
       confidence = 0.9;
-    } else if (target.uniqueValues > 20) {
+      console.log("✅ Detected as MULTICLASS CLASSIFICATION (" + uniqueValues + " unique values)");
+    } else if (uniqueValues > 20) {
       problemType = "regression";
       confidence = 0.6;
+      console.log("⚠️ Detected as REGRESSION (many unique values: " + uniqueValues + ")");
+    }
+  }
+  // Fallback: if no type info, use unique values
+  else if (uniqueValues > 0) {
+    if (uniqueValues === 2) {
+      problemType = "binary_classification";
+      confidence = 0.7;
+      console.log("⚠️ Guessed as BINARY CLASSIFICATION (no type info, 2 unique values)");
+    } else if (uniqueValues > 20) {
+      problemType = "regression";
+      confidence = 0.5;
+      console.log("⚠️ Guessed as REGRESSION (no type info, many unique values)");
     }
   }
 
+  console.log("🎯 Final problem type:", { type: problemType, confidence });
   return { type: problemType, confidence };
 };
 
@@ -1219,51 +1060,80 @@ const initializeRecommendations = () => {
   }
 };
 
+
+
 const calculateAlgorithmScore = (algorithm) => {
-  let score = 0.5;
-
-  // Dataset size considerations
-  if (datasetStats.value.rows < 1000) {
-    if (
-      ["Logistic Regression", "Support Vector Machine"].includes(algorithm.name)
-    )
-      score += 0.2;
-    if (algorithm.name === "XGBoost") score -= 0.1;
-  } else if (datasetStats.value.rows > 10000) {
-    if (algorithm.name === "Random Forest") score += 0.2;
-    if (algorithm.name === "XGBoost") score += 0.3;
+  // 1. Base Compatibility Check
+  if (!algorithm.problemTypes.includes(problemType.value.type)) {
+    return 0; // Not compatible
   }
 
-  // Problem type considerations
+  let score = 0.5; // Base score
+  const rows = datasetStats.value.rows;
+  const features = datasetStats.value.features;
+  const isScaled = preprocessingSteps.value.some(step => 
+    (typeof step === 'string' && step.includes('Scaling')) || 
+    (step.name && step.name.includes('Scaling'))
+  );
+  const isEncoded = preprocessingSteps.value.some(step => 
+    (typeof step === 'string' && step.includes('Encoding')) || 
+    (step.name && step.name.includes('Encoding'))
+  );
+
+  // 2. Dataset Size Heuristics
+  if (rows < 1000) {
+    // Small dataset: Prefer simple, low-variance models
+    if (algorithm.complexity === "Low") score += 0.25;
+    if (["Logistic Regression", "Linear Regression", "Naive Bayes", "K-Nearest Neighbors"].includes(algorithm.name)) score += 0.15;
+    
+    
+  } else if (rows >= 1000 && rows < 50000) {
+    // Medium dataset: Sweet spot for many algorithms
+    if (["Random Forest", "Support Vector Machine", "XGBoost"].includes(algorithm.name)) score += 0.2;
+  } else {
+    // Large dataset: Prefer efficient, scalable models
+    if (["XGBoost", "LightGBM", "Linear Regression", "Logistic Regression"].includes(algorithm.name)) score += 0.25;
+    if (["Support Vector Machine", "K-Nearest Neighbors"].includes(algorithm.name)) score -= 0.3; // Too slow O(n^2) or O(n) inference
+  }
+
+  // 3. Dimensionality (Features)
+  if (features > 100) {
+    // High dimensionality
+    // User Preference: Reward Trees, SVM, Naive Bayes
+    if (["Random Forest", "XGBoost", "Support Vector Machine", "Naive Bayes"].includes(algorithm.name)) score += 0.2;
+    
+    // Penalize algorithms that struggle with high dimensions without feature selection
+    if (algorithm.name === "K-Nearest Neighbors") score -= 0.4; // Curse of dimensionality distance issues
+  } else if (features < 20) {
+    // Low dimensionality
+    if (["Decision Tree", "K-Nearest Neighbors", "Logistic Regression"].includes(algorithm.name)) score += 0.1;
+  }
+
+  // 4. Preprocessing Context
+  if (algorithm.needsScaling && !isScaled) {
+    score -= 0.4; // Critical penalty: Distance/Gradient based algos fail without scaling
+  }
+  
+  if (algorithm.needsScaling && isScaled) {
+    score += 0.1; // Reward for meeting requirement
+  }
+
+  // 5. Algorithm Specific Boosts
+  if (algorithm.name === "XGBoost" || algorithm.name === "Random Forest") {
+    score += 0.1; // Generally strong performers (State of the Art for tabular)
+  }
+
+  // 6. Problem Type Specifics
   if (problemType.value.type === "binary_classification") {
-    if (algorithm.name === "Logistic Regression") score += 0.2;
-    if (algorithm.name === "Support Vector Machine") score += 0.15;
-  } else if (problemType.value.type === "multiclass_classification") {
-    if (["Random Forest", "XGBoost"].includes(algorithm.name)) score += 0.2;
-  } else if (problemType.value.type === "regression") {
-    if (
-      ["Random Forest", "XGBoost", "Linear Regression"].includes(algorithm.name)
-    )
-      score += 0.2;
+    if (algorithm.name === "Logistic Regression") score += 0.1;
   }
 
-  // Feature count considerations
-  if (datasetStats.value.features > 50) {
-    if (algorithm.name === "Random Forest") score += 0.1;
-    if (algorithm.name === "XGBoost") score += 0.15;
-  }
-
-  // Preprocessing considerations
-  if (preprocessingSteps.value.includes("categoricalEncoding")) {
-    if (["Random Forest", "XGBoost"].includes(algorithm.name)) score += 0.1;
-  }
-
+  // Clamp score between 0 and 1
   return Math.min(1.0, Math.max(0.0, score));
 };
 
-// ============================================================================
+
 // 🎯 COMPLETE REFACTORED getAllAvailableAlgorithms() FUNCTION
-// ============================================================================
 
 const getAllAvailableAlgorithms = () => {
   const allAlgorithms = [
@@ -1404,26 +1274,7 @@ const getAllAvailableAlgorithms = () => {
         "Tree-like model of decisions. Highly interpretable but prone to overfitting without constraints.",
       category: "tree",
     },
-    {
-      name: "Neural Network (MLP)",
-      icon: "🧠",
-      complexity: "High",
-      needsScaling: true,
-      speed: 0.6,
-      accuracy: 0.86,
-      strongWith: ["Complex patterns", "Large datasets", "Feature learning"],
-      weakWith: ["Interpretability", "Hyperparameter tuning", "Small datasets"],
-      problemTypes: [
-        "binary_classification",
-        "multiclass_classification",
-        "regression",
-      ],
-      description:
-        "Multi-layer perceptron with backpropagation. Learns complex non-linear patterns but requires careful tuning.",
-      category: "neural",
-    },
-
-    // ========== 🆕 NEW ALGORITHMS ==========
+    
     {
       name: "Support Vector Regression",
       icon: "📊",
@@ -1447,6 +1298,7 @@ const getAllAvailableAlgorithms = () => {
         "Extension of SVM for regression tasks. Uses kernel trick to model non-linear relationships with robust predictions.",
       category: "kernel",
     },
+    
     {
       name: "Naive Bayes",
       icon: "🎯",
@@ -1838,59 +1690,6 @@ const getKeyParameters = (algorithmName) => {
             default: "gini",
             impact: "medium",
             description: "Function to measure split quality.",
-          },
-        ],
-      },
-    ],
-
-    "Neural Network (MLP)": [
-      {
-        name: "Network Architecture",
-        icon: "🧠",
-        params: [
-          {
-            name: "hidden_layer_sizes",
-            label: "Hidden Layer Sizes",
-            type: "text",
-            default: "100,50",
-            impact: "high",
-            description:
-              "Comma-separated layer sizes (e.g., '100,50' for 2 hidden layers).",
-          },
-          {
-            name: "activation",
-            label: "Activation Function",
-            type: "select",
-            options: [
-              { value: "relu", label: "ReLU" },
-              { value: "tanh", label: "Tanh" },
-              { value: "logistic", label: "Sigmoid" },
-            ],
-            default: "relu",
-            impact: "high",
-            description: "Activation function for hidden layers.",
-          },
-          {
-            name: "learning_rate_init",
-            label: "Initial Learning Rate",
-            type: "slider",
-            min: 0.0001,
-            max: 0.1,
-            step: 0.0001,
-            default: 0.001,
-            impact: "high",
-            description: "Initial learning rate for weight updates.",
-          },
-          {
-            name: "max_iter",
-            label: "Maximum Iterations",
-            type: "slider",
-            min: 100,
-            max: 1000,
-            step: 100,
-            default: 200,
-            impact: "medium",
-            description: "Maximum number of iterations.",
           },
         ],
       },
@@ -2372,35 +2171,6 @@ const getAlgorithmEducationalContent = (algo) => {
       ],
     },
 
-    "Neural Network (MLP)": {
-      ...algo,
-      detailedDescription:
-        "Multi-Layer Perceptron (MLP) is a feedforward artificial neural network with multiple layers of neurons. It can learn complex non-linear relationships through backpropagation.",
-      howItWorks:
-        "Consists of input layer, one or more hidden layers, and output layer. Each neuron applies activation function to weighted sum of inputs. Learns through backpropagation: calculates error gradient and updates weights using gradient descent.",
-      whenToUse: [
-        "When you have complex non-linear patterns",
-        "When you have large amounts of data (10K+ samples)",
-        "When feature interactions are important",
-        "When you need automatic feature learning",
-        "When computational resources are available",
-      ],
-      whenNotToUse: [
-        "When interpretability is required (black box)",
-        "When you have small datasets (<1000 samples)",
-        "When you need quick results (requires tuning)",
-        "When you lack expertise in tuning hyperparameters",
-        "When simpler models work well",
-      ],
-      realWorldExamples: [
-        "🗣️ Speech Recognition",
-        "🖼️ Image Classification",
-        "💬 Natural Language Processing",
-        "🎮 Game Playing Agents",
-        "📈 Financial Market Prediction",
-      ],
-    },
-
     "Support Vector Regression": {
       ...algo,
       detailedDescription:
@@ -2571,7 +2341,7 @@ const startTraining = async () => {
   }
 
   try {
-    // GET REAL BACKEND DATASET ID
+    // Get data from previous steps
     const processedData = JSON.parse(
       localStorage.getItem("processedData") || "{}"
     );
@@ -2579,35 +2349,19 @@ const startTraining = async () => {
       localStorage.getItem("selectedTarget") || "{}"
     );
 
-    if (!processedData.backendDatasetId) {
-      throw new Error(
-        "No backend dataset ID found. Please ensure dataset was uploaded to backend."
-      );
-    }
+    // CRITICAL: Prefer the most recent dataset ID from localStorage (saved by advanced-preprocessing)
+    // processedData might be stale if the user uploaded a new dataset but processedData wasn't fully updated
+    const currentBackendDatasetId = localStorage.getItem("backendDatasetId");
+    const currentDatasetId = localStorage.getItem("datasetId");
 
-    // CREATE COMPLETE CONFIGURATION WITH BACKEND DATASET
-    const finalConfig = {
+    // Save basic algorithm selection for model-training page
+    const algorithmSelection = {
       // ALGORITHM INFO
       algorithm: {
         name: selectedAlgorithm.value.name,
         icon: selectedAlgorithm.value.icon,
         complexity: selectedAlgorithm.value.complexity,
-      },
-
-      // HYPERPARAMETERS
-      hyperparameters: { ...hyperparameters },
-
-      // ADVANCED PREPROCESSING (CRITICAL - WAS MISSING)
-      scaling: selectedScaling.value,
-      featureEngineering: { ...featureEngineering },
-
-      // ADVANCED VALIDATION CONFIG (CRITICAL - WAS MISSING)
-      validation: {
-        method: validationMethod.value,
-        testSize: testSize.value,
-        cvFolds: cvFolds.value,
-        randomState: randomState.value,
-        metric: optimizationMetric.value,
+        needsScaling: selectedAlgorithm.value.needsScaling,
       },
 
       // PROBLEM TYPE
@@ -2622,35 +2376,53 @@ const startTraining = async () => {
         type: selectedTargetData.type || selectedTarget.value?.type,
       },
 
-       datasetStats: {
-        rows: processedData.totalRowsInBackend || processedData.rowCount || 0,  
+      // DATASET STATS
+      datasetStats: {
+        rows: processedData.totalRowsInBackend || processedData.rowCount || 0,
         features: processedData.columnCount || 0,
       },
 
-      // CRITICAL: BACKEND DATASET INTEGRATION
-      backendDatasetId: processedData.backendDatasetId,
-      datasetId: processedData.datasetId,
-      backendAvailable: processedData.backendAvailable,
+      // BACKEND DATASET INFO (if available)
+      // Use current localStorage values if available, otherwise fallback to processedData
+      backendDatasetId: currentBackendDatasetId || processedData.backendDatasetId || null,
+      datasetId: currentDatasetId || processedData.datasetId || null,
+      backendAvailable: processedData.backendAvailable || false,
 
       // METADATA
       timestamp: new Date().toISOString(),
-      sessionId: `session_${Date.now()}`,
     };
 
-    localStorage.setItem("mlConfiguration", JSON.stringify(finalConfig));
+    localStorage.setItem("mlConfiguration", JSON.stringify(algorithmSelection));
 
-    console.log(" Advanced ML Configuration with backend integration:", {
-      algorithm: finalConfig.algorithm.name,
-      backendDatasetId: finalConfig.backendDatasetId,
-      datasetRows: finalConfig.datasetStats.rows, 
-      scaling: finalConfig.scaling,
-      featureEngineering: finalConfig.featureEngineering,
-      validationMethod: finalConfig.validation.method,
+    // ALSO save with the key that model-training.vue expects
+    localStorage.setItem("selectedAlgorithm", JSON.stringify(algorithmSelection.algorithm));
+    localStorage.setItem("problemType", JSON.stringify(algorithmSelection.problemType));
+    localStorage.setItem("datasetStats", JSON.stringify(algorithmSelection.datasetStats));
+    if (algorithmSelection.backendDatasetId) {
+      localStorage.setItem("backendDatasetId", algorithmSelection.backendDatasetId);
+    }
+    if (algorithmSelection.datasetId) {
+      localStorage.setItem("datasetId", algorithmSelection.datasetId);
+    }
+
+    console.log("✅ Algorithm selected, navigating to model-training:", {
+      algorithm: algorithmSelection.algorithm.name,
+      problemType: algorithmSelection.problemType.type,
+      datasetRows: algorithmSelection.datasetStats.rows,
+      datasetId: algorithmSelection.datasetId
     });
 
-    router.push("/model-training");
+    // Navigate to model-training page where user will configure hyperparameters and validation
+    // Pass dataset IDs in query to ensure robustness against localStorage issues
+    router.push({
+      path: "/model-training",
+      query: {
+        datasetId: algorithmSelection.datasetId,
+        backendDatasetId: algorithmSelection.backendDatasetId
+      }
+    });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("❌ Error navigating to training:", error);
     alert("Error: " + error.message);
   }
 };
@@ -2682,7 +2454,7 @@ const exportConfiguration = () => {
 };
 
 const goBack = () => {
-  router.push("/target-selection");
+  router.push("/advanced-preprocessing");
 };
 
 // Utility functions
@@ -2719,14 +2491,25 @@ const formatValidationMethod = (method) => {
 };
 
 const formatPreprocessingStep = (step) => {
-  const steps = {
-    columnSelection: "Column Selection",
-    missingValues: "Missing Value Handling",
-    duplicateRemoval: "Duplicate Removal",
-    outlierHandling: "Outlier Handling",
-    categoricalEncoding: "Categorical Encoding",
-  };
-  return steps[step] || step;
+  // Handle object format (from preprocessingTracker.js)
+  if (step && typeof step === 'object' && step.name) {
+    return step.name;
+  }
+  
+  // Handle string format
+  if (typeof step === 'string') {
+    // Map old key-based names to display names
+    const steps = {
+      columnSelection: "Column Selection",
+      missingValues: "Missing Value Handling",
+      duplicateRemoval: "Duplicate Removal",
+      outlierHandling: "Outlier Handling",
+      categoricalEncoding: "Categorical Encoding",
+    };
+    return steps[step] || step;
+  }
+  
+  return 'Unknown Step';
 };
 
 const formatParameterValue = (paramName, value) => {
@@ -2784,12 +2567,109 @@ const getProblemDescription = (type) => {
   return descriptions[type] || "";
 };
 
+// Validation Strategy Helper Functions
+const getTrainRows = () => {
+  return Math.round(datasetStats.value.rows * splitRatio.value);
+};
+
+const getTestRows = () => {
+  return Math.round(datasetStats.value.rows * (1 - splitRatio.value));
+};
+
+const estimateKFoldTime = () => {
+  const baseTime = (datasetStats.value.rows * datasetStats.value.features) / 10000;
+  return (baseTime * cvFolds.value / 60).toFixed(1);
+};
+
+const estimateGridCombinations = () => {
+  const densityMap = {
+    coarse: 3,
+    normal: 4,
+    fine: 6
+  };
+  const valuesPerParam = densityMap[gridDensity.value] || 4;
+  
+  // Estimate based on typical algorithm parameters
+  const numParams = selectedAlgorithm.value ? 4 : 4; // Most algorithms have 4-6 key params
+  return Math.pow(valuesPerParam, numParams);
+};
+
+const estimateGridRuns = () => {
+  return estimateGridCombinations() * gridSearchCVFolds.value;
+};
+
+const estimateGridSearchTime = () => {
+  const baseTime = (datasetStats.value.rows * datasetStats.value.features) / 10000;
+  const totalRuns = estimateGridRuns();
+  return (baseTime * totalRuns / 60).toFixed(0);
+};
+
+const estimateRandomSearchTime = () => {
+  const baseTime = (datasetStats.value.rows * datasetStats.value.features) / 10000;
+  const totalRuns = randomSearchIterations.value * randomSearchCVFolds.value;
+  return (baseTime * totalRuns / 60).toFixed(1);
+};
+
+const formatGridPreview = () => {
+  if (!selectedAlgorithm.value) return "No algorithm selected";
+  
+  const algoName = selectedAlgorithm.value.name;
+  const densityMap = {
+    coarse: { min: 0.5, max: 2, count: 3 },
+    normal: { min: 0.5, max: 2, count: 4 },
+    fine: { min: 0.3, max: 3, count: 6 }
+  };
+  
+  const density = densityMap[gridDensity.value];
+  
+  // Generate example grid based on algorithm
+  if (algoName === "Random Forest") {
+    const nEstimators = Array.from({length: density.count}, (_, i) => 
+      Math.round(50 + (200 * i / (density.count - 1)))
+    );
+    const maxDepth = [5, 10, 15, 20, null].slice(0, density.count);
+    
+    return `n_estimators: [${nEstimators.join(', ')}]\nmax_depth: [${maxDepth.join(', ')}]\nmin_samples_split: [2, 5, 10]\nmin_samples_leaf: [1, 2, 4]`;
+  } else if (algoName === "XGBoost") {
+    return `n_estimators: [50, 100, 200, 300]\nlearning_rate: [0.01, 0.05, 0.1, 0.3]\nmax_depth: [3, 5, 7, 9]\nsubsample: [0.6, 0.8, 1.0]`;
+  } else {
+    return `Auto-generated grid based on\nyour hyperparameter selections\nand dataset characteristics`;
+  }
+};
+
+const formatDistributionsPreview = () => {
+  if (!selectedAlgorithm.value) return "No algorithm selected";
+  
+  const algoName = selectedAlgorithm.value.name;
+  
+  if (algoName === "Random Forest") {
+    return `n_estimators: uniform(50, 500)\nmax_depth: choice([5, 10, 15, 20, None])\nmin_samples_split: uniform(2, 20)\nmin_samples_leaf: uniform(1, 10)`;
+  } else if (algoName === "XGBoost") {
+    return `n_estimators: uniform(50, 500)\nlearning_rate: loguniform(0.01, 1.0)\nmax_depth: choice([3, 5, 7, 9, 11])\nsubsample: uniform(0.5, 1.0)`;
+  } else {
+    return `Auto-generated distributions\nbased on your hyperparameters\nand algorithm characteristics`;
+  }
+};
+
 // Lifecycle
 onMounted(async () => {
+  // Debug: Log what's in localStorage
+  console.log("🔍 Debugging localStorage contents:");
+  console.log("selectedTarget:", localStorage.getItem("selectedTarget"));
+  console.log("processedData:", localStorage.getItem("processedData"));
+  
   if (loadDataFromPreviousSteps()) {
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate loading
     initializeRecommendations();
     isLoading.value = false;
+    
+    // Log final loaded values
+    console.log("📊 Final loaded values:");
+    console.log("- Dataset rows:", datasetStats.value.rows);
+    console.log("- Dataset features:", datasetStats.value.features);
+    console.log("- Split ratio:", splitRatio.value);
+    console.log("- Train rows:", getTrainRows());
+    console.log("- Test rows:", getTestRows());
   }
 
   // ADD THIS: Check backend connection
@@ -3058,8 +2938,14 @@ onMounted(async () => {
 /* Analysis Section */
 .analysis-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 2rem;
+}
+
+@media (max-width: 1400px) {
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .analysis-card {
@@ -3067,23 +2953,298 @@ onMounted(async () => {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(102, 126, 234, 0.2);
   border-radius: 16px;
+  padding: 0;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.analysis-card:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+}
+
+/* Card Header */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 2rem;
+  background: rgba(102, 126, 234, 0.05);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.card-header .card-icon {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.card-header h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  color: #ffffff;
+  flex: 1;
+}
+
+.steps-badge {
+  padding: 0.25rem 0.75rem;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Card Content */
+.card-content {
+  padding: 2rem;
+  text-align: left;
+}
+
+/* Info Sections */
+.info-section {
+  margin-bottom: 1.5rem;
+}
+
+.info-section:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Problem Type Badge */
+.problem-type-badge {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+/* Confidence Meter */
+.confidence-meter {
+  position: relative;
+  height: 8px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.meter-fill.high {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.meter-fill.medium {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.meter-fill.low {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.confidence-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #667eea;
+}
+
+/* Card Divider */
+.card-divider {
+  height: 1px;
+  background: rgba(102, 126, 234, 0.1);
+  margin: 1.5rem 0;
+}
+
+/* Target Details */
+.target-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-label {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.detail-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* Insight Box */
+.insight-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+}
+
+.insight-box svg {
+  flex-shrink: 0;
+  color: #6366f1;
+  margin-top: 0.125rem;
+}
+
+.insight-box p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #b3b3d1;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #667eea;
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Feature Breakdown */
+.feature-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.breakdown-label {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.breakdown-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* Preprocessing Timeline */
+.preprocessing-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.timeline-marker {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.timeline-content {
+  flex: 1;
+  padding-top: 0.25rem;
+}
+
+.timeline-content h4 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* No Preprocessing State */
+.no-preprocessing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 2rem;
   text-align: center;
 }
 
-.card-icon {
-  font-size: 3rem;
+.no-preprocessing svg {
   margin-bottom: 1rem;
+  color: #6b7280;
+}
+
+.no-preprocessing p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9375rem;
+  color: #9ca3af;
+}
+
+.warning-note {
+  font-size: 0.8125rem;
+  color: #f59e0b;
   display: block;
 }
 
-.analysis-card h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 1.5rem 0;
-  color: #ffffff;
-}
-
+/* Legacy styles for compatibility */
 .problem-info {
   text-align: left;
 }
@@ -3152,18 +3313,6 @@ onMounted(async () => {
 .profile-value {
   color: #ffffff;
   font-weight: 500;
-}
-
-.no-preprocessing {
-  text-align: center;
-  padding: 1rem;
-}
-
-.warning-note {
-  font-size: 0.875rem;
-  color: #f59e0b;
-  display: block;
-  margin-top: 0.5rem;
 }
 
 .preprocessing-list {
@@ -3942,8 +4091,14 @@ onMounted(async () => {
 /* Configuration Section */
 .config-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3rem;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+.params-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
 }
 
 .config-panel {
@@ -4594,6 +4749,348 @@ onMounted(async () => {
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+/* Validation Strategy Section */
+.validation-section {
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  padding: 2rem;
+}
+
+.strategy-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.strategy-card {
+  background: rgba(26, 26, 46, 0.8);
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.strategy-card:hover {
+  border-color: rgba(102, 126, 234, 0.5);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+}
+
+.strategy-card.selected {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.15);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+}
+
+.strategy-card .card-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.strategy-card h4 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.strategy-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.strategy-badge.fastest {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.strategy-badge.recommended {
+  background: rgba(99, 102, 241, 0.2);
+  color: #6366f1;
+}
+
+.strategy-badge.thorough {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.strategy-badge.efficient {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+.run-count {
+  font-size: 0.8125rem;
+  color: #9ca3af;
+}
+
+/* Configuration Panel */
+.strategy-config-panel {
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.config-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #10b981;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.config-header svg {
+  flex-shrink: 0;
+}
+
+.config-description {
+  color: #b3b3d1;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.config-estimate {
+  color: #667eea;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.config-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.option-group-inline {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.option-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  min-width: 80px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.radio-option:hover {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.radio-option input[type="radio"] {
+  accent-color: #667eea;
+}
+
+.radio-option input[type="radio"]:checked + span {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #b3b3d1;
+}
+
+.checkbox-inline input[type="checkbox"] {
+  accent-color: #667eea;
+  width: 18px;
+  height: 18px;
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.iterations-slider {
+  flex: 1;
+  height: 6px;
+  background: rgba(102, 126, 234, 0.2);
+  border-radius: 3px;
+  outline: none;
+  appearance: none;
+}
+
+.iterations-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+}
+
+.iterations-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+}
+
+.slider-value {
+  min-width: 40px;
+  padding: 0.5rem;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 0.875rem;
+}
+
+.view-details-btn {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: #667eea;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.view-details-btn:hover {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+}
+
+.grid-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(26, 26, 46, 0.8);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 8px;
+}
+
+.grid-preview pre {
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8125rem;
+  color: #10b981;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* Common Settings */
+.common-settings {
+  display: flex;
+  gap: 2rem;
+  padding: 1.5rem;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  border-radius: 12px;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.setting-item label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.setting-item input[type="number"],
+.setting-item select {
+  flex: 1;
+  padding: 0.75rem;
+  background: rgba(26, 26, 46, 0.8);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.875rem;
+}
+
+.setting-item input[type="number"]:focus,
+.setting-item select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .strategy-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .strategy-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .common-settings {
+    flex-direction: column;
+  }
+  
+  .option-group-inline {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

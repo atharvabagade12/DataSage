@@ -547,7 +547,8 @@ const processFile = async (file) => {
       columns: result.columns || [],
       isLargeDataset: result.is_large_dataset || false,
       backendAvailable: true,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: new Date().toISOString(),
+      processingSteps: [] // Initialize empty steps array
     }
     
     // Store metadata

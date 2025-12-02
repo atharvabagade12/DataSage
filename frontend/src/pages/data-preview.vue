@@ -1099,6 +1099,8 @@ import Input from '~/components/Input.vue'
 import Checkbox from '~/components/Checkbox.vue'
 import Select from '~/components/Select.vue'
 import LoadingSpinner from '~/components/LoadingSpinner.vue'
+import { addPreprocessingStep } from '@/utils/preprocessingTracker';
+
 
 const { showSuccess, showError, showWarning, showInfo } = useToast()
 
@@ -1245,6 +1247,8 @@ const applyColumnChanges = async () => {
         'Columns Removed', 
         `Successfully removed ${removedCount} column${removedCount !== 1 ? 's' : ''}. Dataset now has ${columns.value.length} columns.`
       );
+
+      addPreprocessingStep('Column Selection');
       showColumnModal.value = false;
     } else {
       throw new Error(result.error || 'Preprocessing failed');
@@ -1333,6 +1337,10 @@ const applyMissingStrategies = async () => {
         'Missing Values Handled', 
         `Successfully filled missing values in ${affectedColumns} column${affectedColumns !== 1 ? 's' : ''}. Data quality improved!`
       );
+
+      addPreprocessingStep('Missing Value Handling');
+
+
       showMissingModal.value = false;
       console.log('✅ Missing values strategies applied successfully\n');
     } else {
@@ -1404,7 +1412,11 @@ const applyDuplicateRemoval = async () => {
         'Duplicates Removed', 
         `Removed ${result.rows_removed || 0} duplicate row${result.rows_removed !== 1 ? 's' : ''}. Dataset now has ${result.total_rows.toLocaleString()} rows.`
       );
-      showDuplicateModal.value = false;
+
+      addPreprocessingStep('Duplicate Removal');
+
+
+    showDuplicateModal.value = false;
     } else {
       throw new Error(result.error || 'Preprocessing failed');
     }
@@ -1473,6 +1485,9 @@ const applyOutlierHandling = async () => {
         'Outliers Handled', 
         `Successfully ${outlierStrategy.value === 'cap' ? 'capped' : 'removed'} outliers. Data quality improved!`
       );
+
+      addPreprocessingStep('Outlier Removal');
+
       showOutlierModal.value = false;
     } else {
       throw new Error(result.error || 'Preprocessing failed');
@@ -2363,8 +2378,13 @@ const applyBackendPreprocessing = async () => {
       console.log(`✅ Updated dataset shape in registry: [${result.total_rows}, ${columns.value.length}]`);
     }
 
-  // 2️⃣ Update localStorage with cleaned dataset
+  // 2️⃣ Update localStorage with cleaned dataset (PRESERVE processingSteps!)
   console.log("💾 Updating localStorage...");
+  
+  // Read existing processedData to preserve processingSteps
+  const existingData = localStorage.getItem('processedData');
+  const existingProcessingSteps = existingData ? JSON.parse(existingData).processingSteps || [] : [];
+  
   localStorage.setItem('processedData', JSON.stringify({
     data: cleanedDataset.value,
     fileName: fileName.value,
@@ -2380,11 +2400,11 @@ const applyBackendPreprocessing = async () => {
       rows: result.total_rows,
       columns: columns.value.length
     },
-    shape: [result.total_rows, columns.value.length],
     isPreprocessed: true,
-    preprocessingHistory: preprocessingHistory.value
+    preprocessingHistory: preprocessingHistory.value,
+    processingSteps: existingProcessingSteps // ✅ PRESERVE existing steps
   }));
-  console.log("✅ localStorage updated successfully");
+  console.log("✅ localStorage updated successfully with", existingProcessingSteps.length, "preserved steps");
 
   
 
@@ -2403,6 +2423,23 @@ const applyBackendPreprocessing = async () => {
 
       recalculateMissingColumnsDetailed();
       detectCategoricalColumns();
+
+      // ✅ TRACK PREPROCESSING STEPS
+      console.log("📝 Tracking preprocessing steps...");
+      steps.forEach(step => {
+        if (step.type === 'remove_columns') {
+          addPreprocessingStep('Column Selection');
+        } else if (step.type === 'handle_missing') {
+          addPreprocessingStep('Missing Value Handling');
+        } else if (step.type === 'remove_duplicates') {
+          addPreprocessingStep('Duplicate Removal');
+        } else if (step.type === 'handle_outliers') {
+          addPreprocessingStep('Outlier Removal');
+        } else if (step.type === 'encode_categorical') {
+          addPreprocessingStep('Categorical Encoding');
+        }
+      });
+      console.log("✅ Preprocessing steps tracked");
 
       // Clear active tools AFTER everything is updated
       activeTools.value = [];
@@ -4213,7 +4250,10 @@ const proceedToTargetSelection = async () => {
     // Update mlStore state using a more descriptive action (if available)
     mlStore.setCurrentDataset(targetDatasetId, dataToPass, fileName.value, columns.value);
 
-    // Updated localStorage with clear keys
+    // Updated localStorage with clear keys (PRESERVE processingSteps!)
+    const existingData = localStorage.getItem('processedData');
+    const existingProcessingSteps = existingData ? JSON.parse(existingData).processingSteps || [] : [];
+
     localStorage.setItem(
       "processedData",
       JSON.stringify({
@@ -4226,6 +4266,7 @@ const proceedToTargetSelection = async () => {
         rowCount: dataToPass.length,
         columnCount: dataToPass.length > 0 ? Object.keys(dataToPass[0]).length : 0,
         totalRowsInBackend: totalRowsInBackend.value, // Pass total rows info
+        processingSteps: existingProcessingSteps // ✅ PRESERVE existing steps
       })
     );
 

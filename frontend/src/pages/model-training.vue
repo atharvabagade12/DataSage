@@ -9,7 +9,7 @@
               d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
             />
           </svg>
-          Back
+          Back to Algorithm Selection
         </button>
         <div class="breadcrumb">
           <span>DataSage</span>
@@ -33,7 +33,7 @@
     <!-- Hero Section -->
     <div class="hero-section">
       <div class="hero-content">
-        <div class="hero-icon">🚀</div>
+        
         <h1>Model Training</h1>
         <p>Training your {{ problemType }} model with advanced features</p>
 
@@ -51,6 +51,7 @@
       </div>
     </div>
 
+    
     <div class="preprocessing-summary" v-if="preprocessingInfo">
       <div
         class="section-header"
@@ -88,8 +89,278 @@
       </div>
     </div>
 
-    <!-- Main Container -->
-    <div class="main-container">
+    <!-- ===== Configuration Section (Always Visible) ===== -->
+    <div class="configuration-container">
+      <section class="configuration-section">
+        <div class="section-header">
+          <h2>🎛️ Configure {{ modelConfig?.algorithm?.name || 'Model' }}</h2>
+          <p class="section-description">
+            Set hyperparameters and validation strategy before training
+          </p>
+          <div v-if="trainingPhase === 'training'" class="training-active-badge">
+            🔄 Training in Progress - Configuration Locked
+          </div>
+        </div>
+
+        <div class="config-grid">
+          <!-- Hyperparameters Panel - Placeholder for Phase 2 -->
+          <div class="config-panel">
+            <div class="panel-header">
+              <h3>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+                </svg>
+                Hyperparameters
+              </h3>
+            </div>
+            <div class="hyperparameters-container">
+              <div
+                v-for="paramGroup in getKeyParameters(modelConfig?.algorithm?.name)"
+                :key="paramGroup.name"
+                class="param-group"
+              >
+                <div class="param-group-header">
+                  <span class="group-icon">{{ paramGroup.icon }}</span>
+                  <h4>{{ paramGroup.name }}</h4>
+                </div>
+
+                <div class="params-list">
+                  <div
+                    v-for="param in paramGroup.params"
+                    :key="param.name"
+                    class="param-item"
+                  >
+                    <div class="param-header">
+                      <label class="param-label">{{ param.label }}</label>
+                      <span class="param-impact" :class="param.impact">
+                        {{ param.impact }} impact
+                      </span>
+                    </div>
+
+                    <!-- Slider Parameter -->
+                    <div v-if="param.type === 'slider'" class="param-control">
+                      <div class="slider-container">
+                        <input
+                          type="range"
+                          v-model.number="hyperparameters[param.name]"
+                          :min="param.min"
+                          :max="param.max"
+                          :step="param.step"
+                          :disabled="trainingPhase === 'training'"
+                          class="param-slider"
+                        />
+                        <div class="slider-value">
+                          {{ formatParameterValue(param.name, hyperparameters[param.name]) }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Select Parameter -->
+                    <div v-else-if="param.type === 'select'" class="param-control">
+                      <select
+                        v-model="hyperparameters[param.name]"
+                        class="param-select"
+                      >
+                        <option
+                          v-for="option in param.options"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </select>
+                    </div>
+
+                    <!-- Checkbox Parameter -->
+                    <div v-else-if="param.type === 'checkbox'" class="param-control">
+                      <label class="checkbox-container">
+                        <input
+                          type="checkbox"
+                          v-model="hyperparameters[param.name]"
+                          class="param-checkbox"
+                        />
+                        <span class="checkbox-label">{{ param.label }}</span>
+                      </label>
+                    </div>
+
+                    <p class="param-description">{{ param.description }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Validation Strategy Panel - Placeholder for Phase 3 -->
+          <div class="config-panel">
+            <div class="panel-header">
+              <h3>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/>
+                </svg>
+                Validation Strategy
+              </h3>
+            </div>
+            <div class="validation-strategies">
+              <!-- Simple Validation (No CV) -->
+              <div 
+                class="strategy-card"
+                :class="{ active: validationStrategy === 'simple', disabled: trainingPhase === 'training' }"
+                @click="trainingPhase !== 'training' && (validationStrategy = 'simple')"
+              >
+                <div class="strategy-header">
+                  <div class="strategy-icon">✓</div>
+                  <h4>Simple Validation</h4>
+                  <div class="strategy-badge recommended">Recommended</div>
+                </div>
+                <p class="strategy-description">
+                  Use the train/test split from preprocessing. Fast and straightforward.
+                </p>
+              </div>
+
+              <!-- K-Fold Cross-Validation -->
+              <div 
+                class="strategy-card"
+                :class="{ active: validationStrategy === 'kfold_cv', disabled: trainingPhase === 'training' }"
+                @click="trainingPhase !== 'training' && (validationStrategy = 'kfold_cv')"
+              >
+                <div class="strategy-header">
+                  <div class="strategy-icon">🔄</div>
+                  <h4>K-Fold Cross-Validation</h4>
+                  <div class="strategy-badge">More Robust</div>
+                </div>
+                <p class="strategy-description">
+                  Split training data into K folds for more reliable evaluation.
+                </p>
+                
+                <!-- K-Fold Configuration -->
+                <div v-if="validationStrategy === 'kfold_cv'" class="strategy-config">
+                  <div class="config-item">
+                    <label>Number of Folds: {{ cvFolds }}</label>
+                    <input
+                      type="range"
+                      v-model.number="cvFolds"
+                      min="2"
+                      max="10"
+                      step="1"
+                      class="config-slider"
+                    />
+                    <p class="config-hint">{{ cvFolds }} training iterations on training set</p>
+                  </div>
+                  
+                  <div class="config-item">
+                    <label class="checkbox-container">
+                      <input type="checkbox" v-model="stratifiedCV" class="param-checkbox" />
+                      <span class="checkbox-label">Stratified K-Fold</span>
+                    </label>
+                    <p class="config-hint">Maintains class distribution in each fold</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Grid Search CV (Advanced) -->
+              <div 
+                class="strategy-card"
+                :class="{ active: validationStrategy === 'grid_search', disabled: trainingPhase === 'training' }"
+                @click="trainingPhase !== 'training' && (validationStrategy = 'grid_search')"
+              >
+                <div class="strategy-header">
+                  <div class="strategy-icon">🔍</div>
+                  <h4>Grid Search CV</h4>
+                  <div class="strategy-badge advanced">Advanced</div>
+                </div>
+                <p class="strategy-description">
+                  Exhaustively search best hyperparameters using cross-validation.
+                </p>
+                
+                <!-- Grid Search Configuration -->
+                <div v-if="validationStrategy === 'grid_search'" class="strategy-config">
+                  <div class="config-item">
+                    <label>CV Folds: {{ gridSearchCVFolds }}</label>
+                    <input
+                      type="range"
+                      v-model.number="gridSearchCVFolds"
+                      min="2"
+                      max="10"
+                      step="1"
+                      class="config-slider"
+                    />
+                  </div>
+                  
+                  <div class="config-item">
+                    <label>Grid Density</label>
+                    <select v-model="gridDensity" class="param-select">
+                      <option value="coarse">Coarse (Faster)</option>
+                      <option value="normal">Normal</option>
+                      <option value="fine">Fine (Slower)</option>
+                    </select>
+                  </div>
+                  
+                  <div class="warning-box">
+                    ⚠️ Grid Search can be time-consuming for large parameter spaces
+                  </div>
+                </div>
+              </div>
+
+              <!-- Randomized Search CV (Advanced) -->
+              <div 
+                class="strategy-card"
+                :class="{ active: validationStrategy === 'randomized_search', disabled: trainingPhase === 'training' }"
+                @click="trainingPhase !== 'training' && (validationStrategy = 'randomized_search')"
+              >
+                <div class="strategy-header">
+                  <div class="strategy-icon">🎲</div>
+                  <h4>Randomized Search CV</h4>
+                  <div class="strategy-badge advanced">Advanced</div>
+                </div>
+                <p class="strategy-description">
+                  Randomly sample hyperparameters. Faster than Grid Search.
+                </p>
+                
+                <!-- Randomized Search Configuration -->
+                <div v-if="validationStrategy === 'randomized_search'" class="strategy-config">
+                  <div class="config-item">
+                    <label>Iterations: {{ randomSearchIterations }}</label>
+                    <input
+                      type="range"
+                      v-model.number="randomSearchIterations"
+                      min="10"
+                      max="100"
+                      step="10"
+                      class="config-slider"
+                    />
+                  </div>
+                  
+                  <div class="config-item">
+                    <label>CV Folds: {{ randomSearchCVFolds }}</label>
+                    <input
+                      type="range"
+                      v-model.number="randomSearchCVFolds"
+                      min="2"
+                      max="10"
+                      step="1"
+                      class="config-slider"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Start Training Button -->
+        <div class="config-actions" v-if="trainingPhase === 'configuration'">
+          <button @click="proceedToTraining" class="start-training-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8,5.14V19.14L19,12.14L8,5.14Z"/>
+            </svg>
+            Start Training
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Main Container (Training & Results) - Shows Below Configuration -->
+    <div v-if="trainingPhase === 'training'" id="training-section" class="main-container">
       <!-- Training Progress Section -->
       <section class="progress-section">
         <div class="section-header">
@@ -190,61 +461,6 @@
             </div>
           </div>
 
-          <!-- Training Metrics Grid (3x2) -->
-          <div class="training-metrics-grid">
-            <!-- Row 1 -->
-            <div class="metric-card">
-              <div class="metric-icon">⏱️</div>
-              <div class="metric-content">
-                <div class="metric-label">Time Elapsed</div>
-                <div class="metric-value">{{ formatTime(elapsedTime) }}</div>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <div class="metric-icon">📁</div>
-              <div class="metric-content">
-                <div class="metric-label">Dataset Size</div>
-                <div class="metric-value">{{ formatDatasetSize() }}</div>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <div class="metric-icon">🎯</div>
-              <div class="metric-content">
-                <div class="metric-label">Algorithm</div>
-                <div class="metric-value">{{ getAlgorithmName() }}</div>
-              </div>
-            </div>
-
-            <!-- Row 2 -->
-            <div class="metric-card">
-              <div class="metric-icon">🔄</div>
-              <div class="metric-content">
-                <div class="metric-label">Current Step</div>
-                <div class="metric-value">{{ currentProcessingStep }}</div>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <div class="metric-icon">✅</div>
-              <div class="metric-content">
-                <div class="metric-label">Validation Method</div>
-                <div class="metric-value">
-                  {{ getValidationMethodDisplay() }}
-                </div>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <div class="metric-icon">🎲</div>
-              <div class="metric-content">
-                <div class="metric-label">Random State</div>
-                <div class="metric-value">42</div>
-              </div>
-            </div>
-          </div>
-
           <!-- Training Stages Progress Bar -->
           <div class="training-stages-bar">
             <div
@@ -274,121 +490,58 @@
 
           <div class="metrics-grid">
             <!-- Main Metric -->
-            <div
-              class="metric-card primary"
-              :key="`main-${currentMetrics.test_accuracy}-${currentMetrics.test_r2}`"
-            >
+            <div class="metric-card primary">
               <div class="metric-icon">🎯</div>
               <div class="metric-content">
                 <div class="metric-value">{{ formatMainMetric() }}</div>
                 <div class="metric-label">{{ getMainMetricLabel() }}</div>
-                <div
-                  class="metric-change"
-                  :class="getChangeClass(metricChanges.main)"
-                >
+                <div class="metric-change" :class="getChangeClass(metricChanges.main)">
                   {{ formatChange(metricChanges.main) }}
                 </div>
               </div>
             </div>
 
             <!-- Secondary Metric -->
-            <div
-              class="metric-card success"
-              :key="`secondary-${currentMetrics.test_f1}-${currentMetrics.test_mse}`"
-            >
+            <div class="metric-card success">
               <div class="metric-icon">📈</div>
               <div class="metric-content">
                 <div class="metric-value">{{ formatSecondaryMetric() }}</div>
                 <div class="metric-label">{{ getSecondaryMetricLabel() }}</div>
-                <div
-                  class="metric-change"
-                  :class="
-                    getChangeClass(
-                      metricChanges.secondary,
-                      problemType === 'regression'
-                    )
-                  "
-                >
+                <div class="metric-change" :class="getChangeClass(metricChanges.secondary, problemType === 'regression')">
                   {{ formatChange(metricChanges.secondary) }}
                 </div>
               </div>
             </div>
-
-            <!-- Classification Metrics -->
-            <template v-if="problemType.includes('classification')">
-              <div class="metric-card info">
-                <div class="metric-icon">🔍</div>
-                <div class="metric-content">
-                  <div class="metric-value">
-                    {{ formatMetric(currentMetrics.test_precision * 100) }}%
-                  </div>
-                  <div class="metric-label">Precision</div>
-                </div>
-              </div>
-
-              <div class="metric-card warning">
-                <div class="metric-icon">🎪</div>
-                <div class="metric-content">
-                  <div class="metric-value">
-                    {{ formatMetric(currentMetrics.test_recall * 100) }}%
-                  </div>
-                  <div class="metric-label">Recall</div>
-                </div>
-              </div>
-            </template>
-
-            <!-- Regression Metrics -->
-            <template v-if="!problemType.includes('classification')">
-              <div class="metric-card info">
-                <div class="metric-icon">📉</div>
-                <div class="metric-content">
-                  <div class="metric-value">
-                    {{ formatMetric(currentMetrics.test_mae) }}
-                  </div>
-                  <div class="metric-label">MAE</div>
-                </div>
-              </div>
-
-              <div class="metric-card warning">
-                <div class="metric-icon">🎲</div>
-                <div class="metric-content">
-                  <div class="metric-value">
-                    {{ formatMetric(Math.sqrt(currentMetrics.test_mse || 0)) }}
-                  </div>
-                  <div class="metric-label">RMSE</div>
-                </div>
-              </div>
-            </template>
           </div>
 
-          <!-- Cross-Validation Results -->
-          <div
-            class="cv-results"
-            v-if="
-              hasAdvancedValidation() &&
-              currentMetrics.cv_scores &&
-              currentMetrics.cv_scores.length > 0
-            "
-          >
-            <h4>Cross-Validation Results</h4>
-            <div class="cv-summary">
-              <span class="cv-metric"
-                >Mean: {{ formatMetric(currentMetrics.cv_mean * 100) }}%</span
-              >
-              <span class="cv-metric"
-                >Std: ±{{ formatMetric(currentMetrics.cv_std * 100) }}%</span
-              >
-              <span class="cv-metric"
-                >Folds: {{ currentMetrics.cv_scores.length }}</span
-              >
+          <!-- Cross-Validation Results (NEW) -->
+          <div v-if="currentMetrics.validation_method === 'kfold_cv'" class="cv-results-section">
+            <h3>Cross-Validation Results</h3>
+            <div class="cv-metrics-grid">
+              <div class="metric-card highlight">
+                <div class="metric-icon">🎯</div>
+                <div class="metric-content">
+                  <div class="metric-label">Mean CV Score</div>
+                  <div class="metric-value">{{ (currentMetrics.cv_mean * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon">📊</div>
+                <div class="metric-content">
+                  <div class="metric-label">Standard Deviation</div>
+                  <div class="metric-value">± {{ (currentMetrics.cv_std * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
             </div>
-            <div class="cv-fold-scores">
-              <div
-                v-for="(score, index) in currentMetrics.cv_scores"
-                :key="index"
-                class="cv-fold"
-              >
-                Fold {{ index + 1 }}: {{ formatMetric(score * 100) }}%
+            
+            <div class="fold-scores-list">
+              <h4>Individual Fold Scores</h4>
+              <div class="folds-grid">
+                <div v-for="(score, idx) in currentMetrics.cv_scores" :key="idx" class="fold-item">
+                  <span class="fold-label">Fold {{ idx + 1 }}</span>
+                  <span class="fold-value">{{ (score * 100).toFixed(2) }}%</span>
+                  <div class="fold-bar" :style="{ width: (score * 100) + '%' }"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -399,890 +552,155 @@
           <div class="section-header">
             <h2>Training Visualization</h2>
           </div>
-
           <div class="chart-container">
-            <canvas
-              ref="chartContainer"
-              v-if="isTraining || isCompleted"
-            ></canvas>
+            <canvas ref="chartContainer" v-if="isTraining || isCompleted"></canvas>
             <div class="chart-placeholder" v-else>
-              <svg
-                class="chart-icon"
-                width="80"
-                height="80"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-              >
-                <path d="M3 3v18h18" stroke-width="2" />
-                <path d="M7 16l4-4 3 3 5-5" stroke-width="2" />
-              </svg>
               <p>Training curves will appear during training</p>
             </div>
           </div>
         </section>
       </div>
 
-      <!-- Training Logs Section -->
+      <!-- Logs Section -->
       <section class="logs-section">
         <div class="section-header">
           <h2>Training Logs</h2>
           <div class="log-controls">
             <button @click="clearLogs" class="clear-btn">Clear</button>
-            <button @click="exportLogs" class="export-btn">Export</button>
           </div>
         </div>
-
         <div class="logs-container" ref="logsContainer">
-          <div v-if="trainingLogs.length === 0" class="log-empty">
-            No logs yet. Start training to see progress updates.
-          </div>
-          <div
-            v-for="(log, index) in trainingLogs"
-            :key="index"
-            class="log-entry"
-            :class="log.type"
-          >
+          <div v-for="(log, index) in trainingLogs" :key="index" class="log-entry" :class="log.type">
             <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
         </div>
       </section>
-
-      <!-- Completion Section -->
-      <section class="action-section" v-if="isCompleted">
-        <div class="action-content">
-          <div class="completion-message">
-            <div class="completion-icon">🎉</div>
-            <h3>Training Completed Successfully!</h3>
-            <p>
-              Your {{ problemType }} model is ready for evaluation and
-              deployment.
-            </p>
-
-            <div class="training-summary-complete">
-              <div class="summary-row">
-                <span class="summary-label">Algorithm:</span>
-                <span class="summary-value">{{
-                  modelConfig?.algorithm?.name
-                }}</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Final Score:</span>
-                <span class="summary-value">{{ formatMainMetric() }}</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Validation:</span>
-                <span class="summary-value">{{
-                  getValidationMethodDisplay()
-                }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="action-buttons">
-            <button @click="retrain" class="action-btn secondary">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"
-                />
-              </svg>
-              Train Again
-            </button>
-            <button @click="viewResults" class="action-btn primary">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M3,3V21H21V3M5,5H19V19H5M7.5,18A4.5,4.5 0 0,1 12,13.5A4.5,4.5 0 0,1 16.5,18"
-                />
-              </svg>
-              View Results
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- Loading Overlay -->
-    <div v-if="isInitializing" class="loading-overlay">
-      <div class="loading-content">
-        <div class="loading-spinner"></div>
-        <h3>Initializing Training Environment</h3>
-        <p>{{ initializationMessage }}</p>
-        <div class="loading-progress">
-          <div class="progress-bar">
-            <div
-              class="progress-fill"
-              :style="{ width: initializationProgress + '%' }"
-            ></div>
-          </div>
-          <span class="progress-text">{{ initializationProgress }}%</span>
-        </div>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-
-
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { Chart, registerables } from "chart.js";
 import { useMLDataFlowStore } from '~/stores/mlDataFlow';
+import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch';
 Chart.register(...registerables);
 
 const router = useRouter();
+const route = useRoute();
+const { authenticatedGet } = useAuthenticatedFetch();
 
-// Core State
+// State
 const isInitializing = ref(true);
 const initializationProgress = ref(0);
 const initializationMessage = ref("Loading configuration...");
 const backendConnected = ref(null);
-const currentStageTitle = ref('Ready to Start Training')
-const currentStageMessage = ref('Click Start Training to begin')
-const currentProcessingStep = ref('Initializing...')
+const currentStageTitle = ref('Ready to Start Training');
+const currentStageMessage = ref('Click Start Training to begin');
+const currentProcessingStep = ref('Initializing...');
 const mlDataFlow = useMLDataFlowStore();
+const trainingPhase = ref('configuration');
 
+// Config
+const hyperparameters = reactive({});
+const selectedScaling = ref('standard');
+const featureEngineering = reactive({ polynomial: false, pca: false, featureSelection: true });
+const validationStrategy = ref('simple');
+const splitRatio = ref(0.8);
+const stratifiedCV = ref(true);
+const cvFolds = ref(5);
+const gridSearchCVFolds = ref(5);
+const gridDensity = ref('normal');
+const randomSearchCVFolds = ref(5);
+const randomSearchIterations = ref(20);
+
+// Training State
 const isTraining = ref(false);
 const isPaused = ref(false);
 const isCompleted = ref(false);
 const preprocessingInfo = ref(null);
 const showPreprocessing = ref(false);
-
-// Training Progress
 const trainingProgress = ref(0);
 const currentEpoch = ref(0);
 const totalEpochs = ref(100);
 const currentStage = ref(0);
 const elapsedTime = ref(0);
-const estimatedTimeRemaining = ref(0);
 let websocket = null;
 let timeInterval = null;
-
-// Configuration
 const modelConfig = ref(null);
 const datasetStats = ref({ rows: 0, features: 0 });
 const datasetId = ref(null);
 const problemType = ref("classification");
-
-// UI Controls
 const selectedChart = ref("accuracy");
-const selectedMetricView = ref("training");
-
-// Metrics
-const currentMetrics = reactive({
-  train_accuracy: 0,
-  test_accuracy: 0,
-  train_f1: 0,
-  test_f1: 0,
-  train_precision: 0,
-  test_precision: 0,
-  train_recall: 0,
-  test_recall: 0,
-  train_r2: 0,
-  test_r2: 0,
-  train_mse: 0,
-  test_mse: 0,
-  train_mae: 0,
-  test_mae: 0,
-  cv_mean: 0,
-  cv_std: 0,
-  cv_scores: [],
-  samplesPerSec: 0,
-});
-
-const metricChanges = reactive({
-  main: 0,
-  secondary: 0,
-  precision: 0,
-  recall: 0,
-  mae: 0,
-  rmse: 0,
-});
-
-// Training history for charts
-const trainingHistory = ref({
-  epochs: [],
-  train_scores: [],
-  test_scores: [],
-});
-
+const trainingLogs = ref([]);
+const logsContainer = ref(null);
 const chartContainer = ref(null);
 let trainingChart = null;
 
-const trainingLogs = ref([]);
-const logsContainer = ref(null);
-
-// Computed Properties
-const circumference = computed(() => 2 * Math.PI * 52);
-const progressOffset = computed(
-  () =>
-    circumference.value - (trainingProgress.value / 100) * circumference.value
-);
-
-// Feature Detection
-const hasFeatureScaling = () => {
-  return modelConfig.value?.scaling && modelConfig.value.scaling !== "none";
-};
-
-const hasFeatureEngineering = () => {
-  const fe = modelConfig.value?.featureEngineering || {};
-  return fe.polynomial || fe.pca || fe.featureSelection;
-};
-
-const hasAdvancedValidation = () => {
-  const method = modelConfig.value?.validation?.method;
-  return method === "cross_validation" || method === "stratified";
-};
-
-const getScalingDisplay = () => {
-  const scaling = modelConfig.value?.scaling || "none";
-  const displays = {
-    none: "No Scaling",
-    standard: "Standard Scaling",
-    minmax: "MinMax Scaling",
-    robust: "Robust Scaling",
-  };
-  return displays[scaling] || "Unknown";
-};
-
-const getEngineeringDisplay = () => {
-  const fe = modelConfig.value?.featureEngineering || {};
-  const features = [];
-  if (fe.polynomial) features.push("Polynomial");
-  if (fe.pca) features.push("PCA");
-  if (fe.featureSelection) features.push("Selection");
-  return features.length > 0 ? features.join(" + ") : "None";
-};
-
-const getValidationMethodDisplay = () => {
-  const method = modelConfig.value?.validation?.method || "train_test_split";
-  const displays = {
-    train_test_split: "Train/Test Split",
-    cross_validation: `${modelConfig.value?.validation?.cvFolds || 5}-Fold CV`,
-    stratified: `Stratified ${
-      modelConfig.value?.validation?.cvFolds || 5
-    }-Fold`,
-  };
-  return displays[method] || "Unknown";
-};
-
-const getCurrentStageIcon = () => {
-  if (trainingProgress.value === 0) return '⏳'
-  if (trainingProgress.value === 100) return '✅'
-  if (currentStageTitle.value.includes('Preprocessing')) return '🔄'
-  if (currentStageTitle.value.includes('Training')) return '🎯'
-  if (currentStageTitle.value.includes('Validation')) return '📊'
-  if (currentStageTitle.value.includes('Finalizing')) return '🎉'
-  return '⏳'
-}
-
-// Get stage status class for styling
-const getStageStatusClass = (stageIndex) => {
-  const stage = trainingStages.value[stageIndex]
-  if (!stage) return 'pending'
-  
-  if (stage.status === 'completed') return 'completed'
-  if (stage.status === 'active') return 'active'
-  return 'pending'
-}
-
-// Get stage icon based on status
-const getStageIconByStatus = (stageIndex) => {
-  const stage = trainingStages.value[stageIndex]
-  if (!stage) return '○'
-  
-  if (stage.status === 'completed') return '✓'
-  if (stage.status === 'active') return '⏳'
-  return '○'
-}
-
-// Format dataset size
-const formatDatasetSize = () => {
-  
-  if (datasetStats.value && datasetStats.value.rows > 0) {
-    return datasetStats.value.rows.toLocaleString() + ' samples'
-  }
-  
-  
-  try {
-    
-    if (mlDataFlow.dataset && mlDataFlow.dataset.length > 0) {
-      return mlDataFlow.dataset.length.toLocaleString() + ' samples'
-    }
-  } catch (error) {
-    console.warn('Could not access mlDataFlow store:', error)
-  }
-  
-  return 'N/A'
-}
-
-// Get algorithm name
-const getAlgorithmName = () => {
-  // Option 1: Use from already loaded modelConfig (BEST)
-  if (modelConfig.value && modelConfig.value.algorithm && modelConfig.value.algorithm.name) {
-    return modelConfig.value.algorithm.name
-  }
-  
-  // Option 2: Try to get from mlDataFlow store
-  try {
-    // Access store state directly
-    if (mlDataFlow.selectedAlgorithm) {
-      return mlDataFlow.selectedAlgorithm
-    }
-  } catch (error) {
-    console.warn('Could not access mlDataFlow store:', error)
-  }
-  
-  return 'Random Forest'
-}
-
-
-// Helper Functions
-const formatNumber = (num) => {
-  if (typeof num !== "number") return "0";
-  return new Intl.NumberFormat().format(num);
-};
-
-const formatMetric = (value) => {
-  if (typeof value !== "number" || isNaN(value)) return "0.0";
-
-  // For very large numbers (MSE, MAE)
-  if (value > 100) {
-    return value.toFixed(2);
-  }
-
-  // For R² scores (typically -1 to 1, can be negative)
-  if (value >= -1 && value <= 1) {
-    return value.toFixed(3);
-  }
-
-  // For other decimals
-  return value.toFixed(3);
-};
-
-const formatMainMetric = () => {
-  console.log(
-    "🔍 formatMainMetric called - problemType:",
-    problemType.value,
-    "test_accuracy:",
-    currentMetrics.test_accuracy,
-    "test_r2:",
-    currentMetrics.test_r2
-  );
-
-  // Check if it's any classification type
-  const isClassification = problemType.value.includes("classification");
-
-  if (isClassification) {
-    const accuracy = currentMetrics.test_accuracy || 0;
-    console.log("📊 Classification - raw accuracy:", accuracy);
-    // If accuracy is 0-1 range, convert to percentage
-    if (accuracy > 0 && accuracy <= 1) {
-      return (accuracy * 100).toFixed(1) + "%";
-    }
-    // If already in percentage range
-    return accuracy.toFixed(1) + "%";
-  } else {
-    const r2 = currentMetrics.test_r2 || 0;
-    console.log("📊 Regression - raw r2:", r2);
-    return r2.toFixed(3);
-  }
-};
-
-const getMainMetricLabel = () => {
-  const isClassification = problemType.value.includes("classification");
-  return isClassification ? "Test Accuracy" : "R² Score";
-};
-
-const formatSecondaryMetric = () => {
-  console.log(
-    "🔍 formatSecondaryMetric called - problemType:",
-    problemType.value,
-    "test_f1:",
-    currentMetrics.test_f1,
-    "test_mse:",
-    currentMetrics.test_mse
-  );
-
-  const isClassification = problemType.value.includes("classification");
-
-  if (isClassification) {
-    const f1 = currentMetrics.test_f1 || 0;
-    console.log("📊 Classification - raw f1:", f1);
-    if (f1 > 0 && f1 <= 1) {
-      return (f1 * 100).toFixed(1) + "%";
-    }
-    return f1.toFixed(1) + "%";
-  } else {
-    const mse = currentMetrics.test_mse || 0;
-    console.log("📊 Regression - raw mse:", mse);
-    return mse.toFixed(2);
-  }
-};
-
-const getSecondaryMetricLabel = () => {
-  const isClassification = problemType.value.includes("classification");
-  return isClassification ? "F1-Score" : "MSE";
-};
-
-const formatChange = (change) => {
-  if (!change || typeof change !== "number" || isNaN(change)) return "0.0%";
-  const sign = change > 0 ? "+" : "";
-  return `${sign}${change.toFixed(2)}%`;
-};
-
-const getChangeClass = (change, isLoss = false) => {
-  if (!change || isNaN(change)) return "neutral";
-  if (isLoss) {
-    return change > 0 ? "negative" : "positive";
-  } else {
-    return change > 0 ? "positive" : "negative";
-  }
-};
-
-const formatTime = (seconds) => {
-  if (typeof seconds !== "number" || isNaN(seconds)) return "0s";
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (minutes > 0) {
-    return `${minutes}m ${secs}s`;
-  } else {
-    return `${secs}s`;
-  }
-};
-
-const formatLogTime = (timestamp) => {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString();
-};
-
-const getTrainingPhase = () => {
-  if (!isTraining.value && !isCompleted.value) return "Ready to Start Training";
-  if (isPaused.value) return "Training Paused";
-  if (isCompleted.value) return "Training Complete";
-
-  switch (currentStage.value) {
-    case 1:
-      return "Preprocessing Data";
-    case 2:
-      return "Training Model";
-    case 3:
-      return "Running Validation";
-    case 4:
-      return "Finalizing Model";
-    default:
-      return "Training in Progress";
-  }
-};
-
-const getStageProgress = (stage) => {
-  if (currentStage.value > stage) return 100;
-  if (currentStage.value < stage) return 0;
-
-  const progress = trainingProgress.value / 100;
-  switch (stage) {
-    case 1:
-      return Math.min(100, Math.max(0, ((progress * 10) / 0.1) * 100));
-    case 2:
-      return Math.min(100, Math.max(0, ((progress - 0.1) / 0.7) * 100));
-    case 3:
-      return Math.min(100, Math.max(0, ((progress - 0.8) / 0.15) * 100));
-    case 4:
-      return Math.min(100, Math.max(0, ((progress - 0.95) / 0.05) * 100));
-    default:
-      return 0;
-  }
-};
-
-// Backend Functions
-const checkBackendConnection = async () => {
-  try {
-    const response = await fetch("http://localhost:8000/api/health");
-    if (response.ok) {
-      backendConnected.value = true;
-      console.log("Backend connected");
-      return true;
-    }
-  } catch (error) {
-    console.error("Backend connection failed:", error);
-    backendConnected.value = false;
-    return false;
-  }
-};
-
-const loadConfiguration = async () => {
-  try {
-    console.log("Loading configuration...");
-
-    const mlConfig = localStorage.getItem("mlConfiguration");
-    if (!mlConfig) {
-      console.error("No ML configuration found");
-      router.push("/algorithm-select");
-      return;
-    }
-
-    modelConfig.value = JSON.parse(mlConfig);
-    console.log("Loaded config:", modelConfig.value);
-
-    // Extract configuration
-    if (modelConfig.value.problemType) {
-      problemType.value =
-        modelConfig.value.problemType.type || "classification";
-      selectedChart.value =
-        problemType.value === "classification" ? "accuracy" : "r2";
-    }
-
-    if (modelConfig.value.datasetStats) {
-      datasetStats.value = {
-        rows: modelConfig.value.datasetStats.rows || 0,
-        features: modelConfig.value.datasetStats.features || 0,
-      };
-      console.log('✅ Dataset stats loaded:', datasetStats.value);
-    }
-
-    if (modelConfig.value.backendDatasetId) {
-      datasetId.value = modelConfig.value.backendDatasetId;
-      console.log('✅ Backend dataset ID:', datasetId.value);
-    }
-
-    // Set epochs
-    if (modelConfig.value.algorithm?.name) {
-      switch (modelConfig.value.algorithm.name) {
-        case "Random Forest":
-        case "XGBoost":
-          totalEpochs.value =
-            modelConfig.value.hyperparameters?.n_estimators || 100;
-          break;
-        case "Neural Network (MLP)":
-          totalEpochs.value = 200;
-          break;
-        default:
-          totalEpochs.value = 50;
-      }
-    }
-  } catch (error) {
-    console.error("Failed to load configuration:", error);
-    addLog("error", `Failed to load configuration: ${error.message}`);
-  }
-};
-
-// Training Functions
-const startTraining = async () => {
-  try {
-    if (!modelConfig.value || !datasetId.value) {
-      throw new Error("Configuration not loaded properly");
-    }
-
-    // Verify dataset
-    const response = await fetch(
-      `http://localhost:8000/api/datasets/${datasetId.value}`
-    );
-    if (!response.ok) {
-      throw new Error(`Dataset ${datasetId.value} not found`);
-    }
-
-    const datasetInfo = await response.json();
-    const targetColumn = modelConfig.value.target?.name;
-
-    if (!datasetInfo.columns.includes(targetColumn)) {
-      throw new Error(`Target column '${targetColumn}' not found`);
-    }
-
-    // Initialize training state
-    isTraining.value = true;
-    isCompleted.value = false;
-    trainingProgress.value = 0;
-    currentEpoch.value = 0;
-    currentStage.value = 1;
-    elapsedTime.value = 0;
-
-    // Clear metrics and chart data
-    Object.keys(currentMetrics).forEach((key) => {
-      if (Array.isArray(currentMetrics[key])) {
-        currentMetrics[key] = [];
-      } else {
-        currentMetrics[key] = 0;
-      }
-    });
-    Object.keys(metricChanges).forEach((key) => (metricChanges[key] = 0));
-
-    // Initialize chart
-    nextTick(() => {
-      destroyChart();
-      initializeChart();
-    });
-
-    // Start timing
-    const startTime = Date.now();
-    timeInterval = setInterval(() => {
-      elapsedTime.value = Math.floor((Date.now() - startTime) / 1000);
-      updateTimeEstimate();
-    }, 1000);
-
-    // Connect to WebSocket
-    websocket = new WebSocket("ws://localhost:8000/ws/train-model");
-
-    websocket.onopen = () => {
-      const trainingConfig = {
-        dataset_id: datasetId.value,
-        target_column: targetColumn,
-        algorithm: modelConfig.value.algorithm?.name || "Random Forest",
-        hyperparameters: modelConfig.value.hyperparameters || {},
-        test_size: modelConfig.value.validation?.testSize || 0.2,
-        scaling: modelConfig.value.scaling || "none",
-        featureEngineering: modelConfig.value.featureEngineering || {},
-        validation_method:
-          modelConfig.value.validation?.method || "train_test_split",
-        cv_folds: modelConfig.value.validation?.cvFolds || 5,
-      };
-
-      console.log("Sending training config:", trainingConfig);
-      websocket.send(JSON.stringify(trainingConfig));
-
-      addLog("success", "Connected to ML Backend");
-      addLog("info", `Dataset: ${trainingConfig.dataset_id}`);
-      addLog("info", `Algorithm: ${trainingConfig.algorithm}`);
-      addLog("info", `Target: ${trainingConfig.target_column}`);
-    };
-
-   websocket.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  
-  if (data.status === 'debug') {
-    console.log('🔍 BACKEND DATASET SIZE:', data.dataset_size);  // Check this!
-  }
-  
-  handleTrainingUpdate(data);
-};
-
-    websocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      addLog("error", "Connection error to training server");
-      isTraining.value = false;
-    };
-
-    websocket.onclose = () => {
-      console.log("WebSocket connection closed");
-      if (isTraining.value) {
-        addLog("warning", "Connection closed unexpectedly");
-        isTraining.value = false;
-      }
-    };
-  } catch (error) {
-    console.error("Training failed:", error);
-    addLog("error", `Error: ${error.message}`);
-    isTraining.value = false;
-  }
-};
-
-const handleTrainingUpdate = (data) => {
-  console.log("Training update received:", data);
-
-  switch (data.status) {
-    case "started":
-      addLog("info", "Training initialized");
-      currentStage.value = 1;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Initializing Training'
-      currentStageMessage.value = 'Setting up training environment'
-      currentProcessingStep.value = 'Initializing...'
-      break;
-
-    case "analyzing":
-      addLog("info", data.message);
-      currentStage.value = 1;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Analyzing Dataset'
-      currentStageMessage.value = data.message || 'Detecting problem type'
-      currentProcessingStep.value = 'Analyzing data...'
-
-      if (data.message && data.message.includes("classification")) {
-        problemType.value = "classification";
-        selectedChart.value = "accuracy";
-      } else if (data.message && data.message.includes("regression")) {
-        problemType.value = "regression";
-        selectedChart.value = "r2";
-      }
-      break;
-
-    case "preprocessing":
-      preprocessingInfo.value = {
-        scaling: data.scaling,
-        originalFeatures: data.feature_engineering.original_features,
-        finalFeatures: data.feature_engineering.final_features,
-      };
-      addLog("info", `✓ Scaling applied: ${data.scaling.method}`);
-      addLog(
-        "info",
-        `✓ Features: ${data.feature_engineering.original_features} → ${data.feature_engineering.final_features}`
-      );
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Preprocessing Data'
-      currentStageMessage.value = data.message || 'Applying transformations'
-      currentProcessingStep.value = 'Scaling & transforming...'
-      currentStage.value = 1
-      break;
-
-    case "feature_engineering":
-      addLog("info", data.message);
-      currentStage.value = 1;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Feature Engineering'
-      currentStageMessage.value = data.message || 'Creating new features'
-      currentProcessingStep.value = 'Engineering features...'
-      break;
-
-    case "splitting":
-    case "model_init":
-      addLog("info", data.message);
-      currentStage.value = 2;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Initializing Model'
-      currentStageMessage.value = data.message || 'Preparing model for training'
-      currentProcessingStep.value = 'Setting up model...'
-      break;
-
-    case "validation":
-      addLog("info", data.message);
-      currentStage.value = 3;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Validating Model'
-      currentStageMessage.value = 'Computing performance metrics'
-      currentProcessingStep.value = 'Evaluating performance...'
-      break;
-
-    case "training":
-      currentEpoch.value = data.epoch || 0;
-      totalEpochs.value = data.total_epochs || data.totalepochs || 100;
-      trainingProgress.value = (currentEpoch.value / totalEpochs.value) * 100;
-      currentStage.value = 2;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Training Model'
-      currentStageMessage.value = data.message || 'Model is learning from data'
-      currentProcessingStep.value = `Fitting model... (${currentEpoch.value}/${totalEpochs.value})`
-
-      if (data.metrics) {
-        console.log("📊 Updating metrics from training:", data.metrics);
-        updateMetrics(data.metrics);
-      }
-
-      addLog("info", data.message);
-      break;
-
-    case "completed":
-      isTraining.value = false;
-      isCompleted.value = true;
-      trainingProgress.value = 100;
-      currentStage.value = 4;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Training Complete!'
-      currentStageMessage.value = '✅ Model trained successfully'
-      currentProcessingStep.value = 'Done'
-
-      if (timeInterval) {
-        clearInterval(timeInterval);
-        timeInterval = null;
-      }
-
-      if (data.final_metrics || data.finalmetrics) {
-        const finalMetrics = data.final_metrics || data.finalmetrics;
-        console.log("Final metrics received:", finalMetrics);
-        updateMetrics(finalMetrics);
-      }
-
-      if (data.model_id || data.modelid) {
-        const modelId = data.model_id || data.modelid;
-        localStorage.setItem("trainedModelId", modelId);
-        localStorage.setItem(
-          "modelResults",
-          JSON.stringify({
-            modelId,
-            finalMetrics: data.final_metrics || data.finalmetrics,
-            problemType: problemType.value,
-            algorithm: modelConfig.value?.algorithm?.name,
-            completedAt: new Date().toISOString(),
-          })
-        );
-      }
-
-      addLog("success", data.message);
-      break;
-
-    case "failed":
-      isTraining.value = false;
-      // ✅ ADD THESE LINES
-      currentStageTitle.value = 'Training Failed'
-      currentStageMessage.value = data.message || 'An error occurred'
-      currentProcessingStep.value = 'Error'
-      
-      if (timeInterval) {
-        clearInterval(timeInterval);
-        timeInterval = null;
-      }
-      addLog("error", data.message);
-      break;
-  }
-};
+const currentMetrics = reactive({
+  train_accuracy: 0, test_accuracy: 0, train_f1: 0, test_f1: 0,
+  train_precision: 0, test_precision: 0, train_recall: 0, test_recall: 0,
+  train_r2: 0, test_r2: 0, train_mse: 0, test_mse: 0,
+  train_mae: 0, test_mae: 0,
+  cv_mean: 0, cv_std: 0, cv_scores: [],
+  validation_method: 'simple'
+});
+
+// Training History for comparison
+const trainingHistory = ref([]);
+const showHistory = ref(false);
+
+const metricChanges = reactive({ main: 0, secondary: 0 });
+
+const trainingStages = ref([
+  { name: 'Preprocessing', status: 'pending' },
+  { name: 'Training', status: 'pending' },
+  { name: 'Validation', status: 'pending' },
+  { name: 'Finalizing', status: 'pending' }
+]);
+
+// Computed
+const testSize = computed({ get: () => 1 - splitRatio.value, set: (val) => { splitRatio.value = 1 - val; } });
+
+// Functions
+const formatNumber = (num) => new Intl.NumberFormat().format(num);
+const formatMetric = (val) => (typeof val === 'number' ? val.toFixed(3) : '0.0');
+const formatMainMetric = () => problemType.value.includes('classification') ? (currentMetrics.test_accuracy * 100).toFixed(1) + '%' : currentMetrics.test_r2.toFixed(3);
+const getMainMetricLabel = () => problemType.value.includes('classification') ? 'Test Accuracy' : 'R² Score';
+const formatSecondaryMetric = () => problemType.value.includes('classification') ? (currentMetrics.test_f1 * 100).toFixed(1) + '%' : currentMetrics.test_mse.toFixed(2);
+const getSecondaryMetricLabel = () => problemType.value.includes('classification') ? 'F1-Score' : 'MSE';
+const formatChange = (val) => `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
+const getChangeClass = (val, isLoss) => isLoss ? (val > 0 ? 'negative' : 'positive') : (val > 0 ? 'positive' : 'negative');
+const formatTime = (s) => `${Math.floor(s / 60)}m ${s % 60}s`;
+const formatLogTime = (ts) => new Date(ts).toLocaleTimeString();
+const getCurrentStageIcon = () => '🔄';
+const getStageStatusClass = (i) => trainingStages.value[i]?.status || 'pending';
+const getStageIconByStatus = (i) => trainingStages.value[i]?.status === 'completed' ? '✓' : '○';
+const getValidationMethodDisplay = () => validationStrategy.value;
 
 
 const updateMetrics = (metrics) => {
-  if (!metrics) {
-    console.warn("⚠️ No metrics provided to updateMetrics");
-    return;
-  }
-
-  console.log("🔄 Updating metrics with:", metrics);
-
-  // Store previous main metric for change calculation
-  const prevMain =
-    problemType.value === "classification"
-      ? currentMetrics.test_accuracy
-      : currentMetrics.test_r2;
-
-  const metricProblemType =
-    metrics.problem_type || metrics.problemtype || problemType.value;
-
-  console.log("📊 Problem Type:", metricProblemType);
-
+  if (!metrics) return;
+  const metricProblemType = metrics.problem_type || problemType.value;
+  
   if (metricProblemType === "classification") {
-    currentMetrics.train_accuracy =
-      metrics.train_accuracy || metrics.trainaccuracy || 0;
-    currentMetrics.test_accuracy =
-      metrics.test_accuracy || metrics.testaccuracy || 0;
-    currentMetrics.train_f1 = metrics.train_f1 || metrics.trainf1 || 0;
-    currentMetrics.test_f1 = metrics.test_f1 || metrics.testf1 || 0;
-    currentMetrics.train_precision =
-      metrics.train_precision || metrics.trainprecision || 0;
-    currentMetrics.test_precision =
-      metrics.test_precision || metrics.testprecision || 0;
-    currentMetrics.train_recall =
-      metrics.train_recall || metrics.trainrecall || 0;
-    currentMetrics.test_recall = metrics.test_recall || metrics.testrecall || 0;
+    currentMetrics.train_accuracy = metrics.train_accuracy || 0;
+    currentMetrics.test_accuracy = metrics.test_accuracy || 0;
+    currentMetrics.train_f1 = metrics.train_f1 || 0;
+    currentMetrics.test_f1 = metrics.test_f1 || 0;
+    currentMetrics.train_precision = metrics.train_precision || 0;
+    currentMetrics.test_precision = metrics.test_precision || 0;
+    currentMetrics.train_recall = metrics.train_recall || 0;
+    currentMetrics.test_recall = metrics.test_recall || 0;
 
     const newMain = currentMetrics.test_accuracy;
-    metricChanges.main = (newMain - prevMain) * 100;
-    metricChanges.secondary =
-      (currentMetrics.test_f1 - (metricChanges.f1Score || 0)) * 100;
-    metricChanges.f1Score = currentMetrics.test_f1;
-
-    console.log("✅ Classification metrics updated:", {
-      test_accuracy: currentMetrics.test_accuracy,
-      test_f1: currentMetrics.test_f1,
-    });
+    metricChanges.main = (newMain - (metricChanges.prevMain || 0)) * 100;
+    metricChanges.prevMain = newMain;
+    
   } else if (metricProblemType === "regression") {
     currentMetrics.train_r2 = metrics.train_r2 || metrics.trainr2 || 0;
-    currentMetrics.test_r2 = metrics.test_r2 || metrics.testr2 || 0;
     currentMetrics.train_mse = metrics.train_mse || metrics.trainmse || 0;
     currentMetrics.test_mse = metrics.test_mse || metrics.testmse || 0;
     currentMetrics.train_mae = metrics.train_mae || metrics.trainmae || 0;
@@ -1332,6 +750,511 @@ const updateMetrics = (metrics) => {
   });
 };
 
+// ===== NEW: Configuration Phase Functions =====
+
+
+// ===== NEW: Hyperparameter Configuration Functions =====
+const getKeyParameters = (algorithmName) => {
+  if (!algorithmName) return [];
+  
+  const parameterSets = {
+    "Random Forest": [
+      {
+        name: "Tree Configuration",
+        icon: "🌲",
+        params: [
+          {
+            name: "n_estimators",
+            label: "Number of Trees",
+            type: "slider",
+            min: 10,
+            max: 500,
+            step: 10,
+            default: 100,
+            impact: "high",
+            description: "More trees generally improve performance but increase training time.",
+          },
+          {
+            name: "max_depth",
+            label: "Maximum Tree Depth",
+            type: "slider",
+            min: 1,
+            max: 30,
+            step: 1,
+            default: 10,
+            impact: "high",
+            description: "Controls tree complexity. Deeper trees can capture more patterns but may overfit.",
+          },
+          {
+            name: "min_samples_split",
+            label: "Min Samples to Split",
+            type: "slider",
+            min: 2,
+            max: 20,
+            step: 1,
+            default: 2,
+            impact: "medium",
+            description: "Minimum samples required to split an internal node.",
+          },
+          {
+            name: "min_samples_leaf",
+            label: "Min Samples per Leaf",
+            type: "slider",
+            min: 1,
+            max: 10,
+            step: 1,
+            default: 1,
+            impact: "medium",
+            description: "Minimum samples required at leaf node.",
+          },
+        ],
+      },
+    ],
+
+    "XGBoost": [
+      {
+        name: "Boosting Configuration",
+        icon: "🚀",
+        params: [
+          {
+            name: "n_estimators",
+            label: "Number of Estimators",
+            type: "slider",
+            min: 50,
+            max: 1000,
+            step: 50,
+            default: 100,
+            impact: "high",
+            description: "Number of boosting rounds.",
+          },
+          {
+            name: "learning_rate",
+            label: "Learning Rate",
+            type: "slider",
+            min: 0.01,
+            max: 0.3,
+            step: 0.01,
+            default: 0.1,
+            impact: "high",
+            description: "Step size shrinkage used in updates.",
+          },
+          {
+            name: "max_depth",
+            label: "Maximum Tree Depth",
+            type: "slider",
+            min: 3,
+            max: 15,
+            step: 1,
+            default: 6,
+            impact: "high",
+            description: "Maximum depth of trees.",
+          },
+          {
+            name: "subsample",
+            label: "Subsample Ratio",
+            type: "slider",
+            min: 0.5,
+            max: 1.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "medium",
+            description: "Subsample ratio of training instances.",
+          },
+        ],
+      },
+    ],
+
+    "Logistic Regression": [
+      {
+        name: "Regularization",
+        icon: "📈",
+        params: [
+          {
+            name: "C",
+            label: "Regularization Strength (Inverse)",
+            type: "slider",
+            min: 0.001,
+            max: 100,
+            step: 0.001,
+            default: 1.0,
+            impact: "high",
+            description: "Inverse of regularization strength. Smaller values = stronger regularization.",
+          },
+          {
+            name: "penalty",
+            label: "Penalty Type",
+            type: "select",
+            options: [
+              { value: "l2", label: "L2 (Ridge)" },
+              { value: "l1", label: "L1 (Lasso)" },
+              { value: "elasticnet", label: "Elastic Net" },
+            ],
+            default: "l2",
+            impact: "medium",
+            description: "Type of penalty to apply.",
+          },
+          {
+            name: "max_iter",
+            label: "Maximum Iterations",
+            type: "slider",
+            min: 100,
+            max: 1000,
+            step: 100,
+            default: 100,
+            impact: "low",
+            description: "Maximum iterations for convergence.",
+          },
+        ],
+      },
+    ],
+
+    "Linear Regression": [
+      {
+        name: "Basic Configuration",
+        icon: "📉",
+        params: [
+          {
+            name: "fit_intercept",
+            label: "Fit Intercept",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Whether to calculate the intercept.",
+          },
+        ],
+      },
+    ],
+
+    "Support Vector Machine": [
+      {
+        name: "SVM Configuration",
+        icon: "⚡",
+        params: [
+          {
+            name: "C",
+            label: "Regularization Parameter",
+            type: "slider",
+            min: 0.1,
+            max: 100,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description: "Regularization parameter. Higher values mean less regularization.",
+          },
+          {
+            name: "kernel",
+            label: "Kernel Type",
+            type: "select",
+            options: [
+              { value: "rbf", label: "RBF (Gaussian)" },
+              { value: "linear", label: "Linear" },
+              { value: "poly", label: "Polynomial" },
+              { value: "sigmoid", label: "Sigmoid" },
+            ],
+            default: "rbf",
+            impact: "high",
+            description: "Kernel function to use.",
+          },
+          {
+            name: "gamma",
+            label: "Gamma (Kernel Coefficient)",
+            type: "select",
+            options: [
+              { value: "scale", label: "Scale (1 / (n_features * X.var()))" },
+              { value: "auto", label: "Auto (1 / n_features)" },
+            ],
+            default: "scale",
+            impact: "medium",
+            description: "Kernel coefficient for RBF, poly, and sigmoid.",
+          },
+        ],
+      },
+    ],
+
+    "K-Nearest Neighbors": [
+      {
+        name: "KNN Configuration",
+        icon: "🎲",
+        params: [
+          {
+            name: "n_neighbors",
+            label: "Number of Neighbors",
+            type: "slider",
+            min: 1,
+            max: 50,
+            step: 1,
+            default: 5,
+            impact: "high",
+            description: "Number of neighbors to consider.",
+          },
+          {
+            name: "weights",
+            label: "Weight Function",
+            type: "select",
+            options: [
+              { value: "uniform", label: "Uniform" },
+              { value: "distance", label: "Distance" },
+            ],
+            default: "uniform",
+            impact: "medium",
+            description: "Weight function used in prediction.",
+          },
+          {
+            name: "metric",
+            label: "Distance Metric",
+            type: "select",
+            options: [
+              { value: "euclidean", label: "Euclidean" },
+              { value: "manhattan", label: "Manhattan" },
+              { value: "minkowski", label: "Minkowski" },
+            ],
+            default: "euclidean",
+            impact: "medium",
+            description: "Distance metric for finding neighbors.",
+          },
+        ],
+      },
+    ],
+
+    "Decision Tree": [
+      {
+        name: "Tree Configuration",
+        icon: "🌳",
+        params: [
+          {
+            name: "max_depth",
+            label: "Maximum Depth",
+            type: "slider",
+            min: 1,
+            max: 30,
+            step: 1,
+            default: 10,
+            impact: "high",
+            description: "Maximum depth of the tree.",
+          },
+          {
+            name: "min_samples_split",
+            label: "Min Samples to Split",
+            type: "slider",
+            min: 2,
+            max: 20,
+            step: 1,
+            default: 2,
+            impact: "high",
+            description: "Minimum samples required to split.",
+          },
+          {
+            name: "criterion",
+            label: "Split Criterion",
+            type: "select",
+            options: [
+              { value: "gini", label: "Gini Impurity" },
+              { value: "entropy", label: "Information Gain" },
+            ],
+            default: "gini",
+            impact: "medium",
+            description: "Function to measure split quality.",
+          },
+        ],
+      },
+    ],
+
+    "Support Vector Regression": [
+      {
+        name: "SVR Configuration",
+        icon: "📊",
+        params: [
+          {
+            name: "kernel",
+            label: "Kernel Type",
+            type: "select",
+            options: [
+              { value: "rbf", label: "RBF (Radial Basis Function)" },
+              { value: "linear", label: "Linear" },
+              { value: "poly", label: "Polynomial" },
+              { value: "sigmoid", label: "Sigmoid" },
+            ],
+            default: "rbf",
+            impact: "high",
+            description: "Kernel type for non-linear transformation.",
+          },
+          {
+            name: "C",
+            label: "Regularization Parameter",
+            type: "slider",
+            min: 0.001,
+            max: 100,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description: "Trade-off between margin and training errors.",
+          },
+          {
+            name: "epsilon",
+            label: "Epsilon (ε-tube width)",
+            type: "slider",
+            min: 0.001,
+            max: 1.0,
+            step: 0.01,
+            default: 0.1,
+            impact: "medium",
+            description: "Width of insensitive zone. No penalty for errors within this range.",
+          },
+          {
+            name: "gamma",
+            label: "Gamma (Kernel Coefficient)",
+            type: "select",
+            options: [
+              { value: "scale", label: "Scale (1 / (n_features * X.var()))" },
+              { value: "auto", label: "Auto (1 / n_features)" },
+            ],
+            default: "scale",
+            impact: "medium",
+            description: "Kernel coefficient for RBF, poly, and sigmoid.",
+          },
+        ],
+      },
+    ],
+
+    "Naive Bayes": [
+      {
+        name: "Naive Bayes Configuration",
+        icon: "🎯",
+        params: [
+          {
+            name: "variant",
+            label: "Naive Bayes Variant",
+            type: "select",
+            options: [
+              { value: "gaussian", label: "Gaussian (Continuous features)" },
+              { value: "multinomial", label: "Multinomial (Count data)" },
+              { value: "bernoulli", label: "Bernoulli (Binary features)" },
+            ],
+            default: "gaussian",
+            impact: "high",
+            description: "Variant based on feature distribution.",
+          },
+          {
+            name: "fit_prior",
+            label: "Learn Class Priors",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Learn class prior probabilities from data.",
+          },
+        ],
+      },
+    ],
+
+    "Ridge Regression": [
+      {
+        name: "Ridge Configuration",
+        icon: "📐",
+        params: [
+          {
+            name: "alpha",
+            label: "Regularization Strength (α)",
+            type: "slider",
+            min: 0.001,
+            max: 100.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description: "Higher values = more regularization (smaller coefficients).",
+          },
+          {
+            name: "solver",
+            label: "Optimization Solver",
+            type: "select",
+            options: [
+              { value: "auto", label: "Auto (chooses best)" },
+              { value: "svd", label: "SVD (Singular Value Decomposition)" },
+              { value: "cholesky", label: "Cholesky (Fast)" },
+              { value: "lsqr", label: "LSQR (Sparse data)" },
+              { value: "saga", label: "SAGA (Large datasets)" },
+            ],
+            default: "auto",
+            impact: "medium",
+            description: "Algorithm for optimization.",
+          },
+          {
+            name: "fit_intercept",
+            label: "Fit Intercept",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Calculate intercept (recommended).",
+          },
+        ],
+      },
+    ],
+
+    "Lasso Regression": [
+      {
+        name: "Lasso Configuration",
+        icon: "🎯",
+        params: [
+          {
+            name: "alpha",
+            label: "Regularization Strength (α)",
+            type: "slider",
+            min: 0.001,
+            max: 100.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "high",
+            description: "Higher values = more feature elimination (stronger L1 penalty).",
+          },
+          {
+            name: "selection",
+            label: "Feature Selection Method",
+            type: "select",
+            options: [
+              { value: "cyclic", label: "Cyclic (Default)" },
+              { value: "random", label: "Random (Faster convergence)" },
+            ],
+            default: "cyclic",
+            impact: "medium",
+            description: "Method for coordinate descent updates.",
+          },
+          {
+            name: "fit_intercept",
+            label: "Fit Intercept",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Calculate intercept.",
+          },
+        ],
+      },
+    ],
+  };
+
+  return parameterSets[algorithmName] || [];
+};
+
+const formatParameterValue = (paramName, value) => {
+  if (paramName === "learning_rate" || paramName === "C") {
+    return parseFloat(value).toFixed(3);
+  }
+  return value;
+};
+
+const initializeHyperparameters = () => {
+  if (!modelConfig.value?.algorithm?.name) return;
+  
+  const params = getKeyParameters(modelConfig.value.algorithm.name);
+  params.forEach((group) => {
+    group.params.forEach((param) => {
+      if (!hyperparameters[param.name]) {
+        hyperparameters[param.name] = param.default;
+      }
+    });
+  });
+  
+  console.log('✅ Hyperparameters initialized:', hyperparameters);
+};
+
 // Control Functions
 const pauseTraining = () => {
   isPaused.value = true;
@@ -1356,37 +1279,298 @@ const stopTraining = () => {
     clearInterval(timeInterval);
     timeInterval = null;
   }
-
-  addLog("warning", "Training stopped by user");
+  router.push("/algorithm-select");
 };
 
-const retrain = () => {
+const retrainModel = () => {
+  // Save current training results to history
+  if (isCompleted.value) {
+    trainingHistory.value.push({
+      timestamp: Date.now(),
+      algorithm: modelConfig.value.algorithm.name,
+      hyperparameters: { ...hyperparameters },
+      validationStrategy: validationStrategy.value,
+      metrics: { ...currentMetrics },
+      trainingTime: elapsedTime.value
+    });
+  }
+
+  // Reset training state but keep configuration
+  isTraining.value = false;
+  isPaused.value = false;
+  isCompleted.value = false;
   trainingProgress.value = 0;
   currentEpoch.value = 0;
-  currentStage.value = 0;
-  elapsedTime.value = 0;
-  estimatedTimeRemaining.value = 0;
-  isCompleted.value = false;
-
-  Object.keys(currentMetrics).forEach((key) => {
-    if (Array.isArray(currentMetrics[key])) {
-      currentMetrics[key] = [];
-    } else {
-      currentMetrics[key] = 0;
-    }
+  trainingPhase.value = 'configuration';
+  
+  // Reset metrics
+  Object.keys(currentMetrics).forEach(key => {
+    if (Array.isArray(currentMetrics[key])) currentMetrics[key] = [];
+    else currentMetrics[key] = 0;
   });
-  Object.keys(metricChanges).forEach((key) => (metricChanges[key] = 0));
 
+  // Clear chart
+  destroyChart();
+  
+  // Close websocket if open
+  if (websocket) {
+    websocket.close();
+    websocket = null;
+  }
+
+  if (timeInterval) {
+    clearInterval(timeInterval);
+    timeInterval = null;
+  }
+
+  addLog("info", "Ready to retrain with new configuration");
+};
+
+const loadConfiguration = async () => {
+  try {
+    console.log("Loading configuration from localStorage...");
+
+    // Load all configuration items
+    const storedAlgorithm = localStorage.getItem("selectedAlgorithm");
+    const storedProblemType = localStorage.getItem("problemType");
+    const storedDatasetStats = localStorage.getItem("datasetStats");
+    const storedBackendDatasetId = localStorage.getItem("backendDatasetId");
+    const storedDatasetId = localStorage.getItem("datasetId");
+    const storedPreprocessing = localStorage.getItem("preprocessingState");
+    const storedTarget = localStorage.getItem("selectedTarget");
+
+    if (!storedAlgorithm) {
+      console.warn("No algorithm found in localStorage");
+      
+      
+      // Set default for testing if missing
+      modelConfig.value = {
+        algorithm: { name: "Random Forest", type: "ensemble" }
+      };
+    } else {
+      const algorithm = JSON.parse(storedAlgorithm);
+      modelConfig.value = {
+        algorithm: algorithm
+      };
+    }
+
+    // Load other details
+    if (storedProblemType) {
+      const pt = JSON.parse(storedProblemType);
+      problemType.value = pt.type || "classification";
+      modelConfig.value.problemType = pt;
+    }
+
+    if (storedDatasetStats) {
+      datasetStats.value = JSON.parse(storedDatasetStats);
+      modelConfig.value.datasetStats = datasetStats.value;
+    }
+
+    // CRITICAL: Check URL query parameters first (most robust)
+    const queryDatasetId = route.query.datasetId;
+    const queryBackendDatasetId = route.query.backendDatasetId;
+
+    if (queryDatasetId && queryDatasetId !== "null" && queryDatasetId !== "undefined") {
+      datasetId.value = queryDatasetId;
+    } else if (queryBackendDatasetId && queryBackendDatasetId !== "null" && queryBackendDatasetId !== "undefined") {
+      datasetId.value = queryBackendDatasetId;
+    }
+    
+    if (datasetId.value) {
+      modelConfig.value.backendDatasetId = datasetId.value;
+      console.log("✅ Using dataset ID from URL query:", datasetId.value);
+    }
+    // If not in URL, check preprocessing state
+    else if (storedPreprocessing) {
+      const prep = JSON.parse(storedPreprocessing);
+      if (prep.scaling) selectedScaling.value = prep.scaling;
+      
+      // Use processed dataset ID if available (this is the split/encoded/scaled dataset)
+      if (prep.processedDatasetId) {
+        datasetId.value = prep.processedDatasetId;
+        modelConfig.value.backendDatasetId = prep.processedDatasetId;
+        console.log("✅ Using processed dataset ID from localStorage:", prep.processedDatasetId);
+      }
+    }
+
+    // Fallback to stored dataset IDs if not found in URL or preprocessing state
+    if (!datasetId.value) {
+      if (storedBackendDatasetId) {
+        datasetId.value = storedBackendDatasetId;
+        modelConfig.value.backendDatasetId = storedBackendDatasetId;
+        console.log("falling back to backend dataset ID:", storedBackendDatasetId);
+      } else if (storedDatasetId) {
+        datasetId.value = storedDatasetId;
+        modelConfig.value.backendDatasetId = storedDatasetId;
+        console.log("falling back to dataset ID:", storedDatasetId);
+      }
+    }
+
+    // Load target column information
+    if (storedTarget) {
+      const target = JSON.parse(storedTarget);
+      modelConfig.value.target = target;
+      console.log("✅ Target column loaded:", target.name);
+    }
+
+    console.log("✅ Configuration loaded:", modelConfig.value);
+    
+    // Initialize hyperparameters after loading config
+    initializeHyperparameters();
+
+  } catch (error) {
+    console.error("Failed to load configuration:", error);
+    addLog("error", `Failed to load configuration: ${error.message}`);
+  }
+};
+
+
+const proceedToTraining = async () => {
+  console.log('🚀 Proceeding to training...');
+  console.log('Model Config:', modelConfig.value);
+  console.log('Hyperparameters:', hyperparameters);
+  
+  trainingPhase.value = 'training';
+  
+  // Initialize chart before starting training
+  nextTick(() => {
+    initializeChart();
+  });
+
+  isTraining.value = true;
+  isPaused.value = false;
+  isCompleted.value = false;
+  trainingProgress.value = 0;
+  currentEpoch.value = 0;
   trainingLogs.value = [];
-  addLog("info", "Ready for retraining");
+
+  // Reset metrics
+  Object.keys(currentMetrics).forEach(key => {
+    if (Array.isArray(currentMetrics[key])) currentMetrics[key] = [];
+    else currentMetrics[key] = 0;
+  });
+
+  // Verify dataset existence on backend first
+  try {
+    if (!datasetId.value || datasetId.value === "null" || datasetId.value === "undefined") {
+      throw new Error("Invalid Dataset ID: " + datasetId.value);
+    }
+    const verifyResponse = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}`);
+    if (!verifyResponse.ok) {
+      throw new Error("Dataset verification failed");
+    }
+    addLog("info", "Dataset verified on backend");
+  } catch (error) {
+    console.error("Dataset verification error:", error);
+    addLog("error", "Dataset not found on backend. Please re-upload.");
+    isTraining.value = false;
+    trainingPhase.value = 'configuration';
+    return;
+  }
+
+  // Prepare Configuration Payload
+  const configPayload = {
+    dataset_id: datasetId.value,
+    algorithm_name: modelConfig.value.algorithm.name,
+    target_column: modelConfig.value.target?.name || null,
+    hyperparameters: { ...hyperparameters },
+    problem_type: problemType.value,
+    validation_method: validationStrategy.value,
+    validation_params: {
+      test_size: testSize.value,
+      cv_folds: cvFolds.value,
+      stratified: stratifiedCV.value,
+      grid_search_folds: gridSearchCVFolds.value,
+      grid_density: gridDensity.value,
+      random_search_folds: randomSearchCVFolds.value,
+      random_search_iter: randomSearchIterations.value
+    },
+    scaling: selectedScaling.value,
+    feature_engineering: { ...featureEngineering }
+  };
+
+  addLog("info", `Starting training with ${modelConfig.value.algorithm.name}...`);
+  console.log("🚀 Sending training config:", configPayload);
+
+  // Initialize WebSocket
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${wsProtocol}//localhost:8000/ws/train-model`;
+
+  websocket = new WebSocket(wsUrl);
+
+  websocket.onopen = () => {
+    addLog("success", "Connected to training server");
+    websocket.send(JSON.stringify(configPayload));
+    
+    // Start timer
+    const startTime = Date.now();
+    timeInterval = setInterval(() => {
+      elapsedTime.value = Math.floor((Date.now() - startTime) / 1000);
+    }, 1000);
+  };
+
+  websocket.onmessage = (event) => {
+    handleTrainingUpdate(JSON.parse(event.data));
+  };
+
+  websocket.onerror = (error) => {
+    console.error("WebSocket error:", error);
+    addLog("error", "Connection error occurred");
+    isTraining.value = false;
+    trainingPhase.value = 'configuration';
+  };
+
+  websocket.onclose = () => {
+    addLog("info", "Training connection closed");
+    if (timeInterval) clearInterval(timeInterval);
+    if (isTraining.value && !isCompleted.value) {
+      isTraining.value = false;
+      addLog("warning", "Training interrupted");
+    }
+  };
 };
 
-const viewResults = () => {
-  router.push("/results");
-};
+const startTraining = proceedToTraining;
 
-const goBack = () => {
-  router.push("/algorithm-select");
+const handleTrainingUpdate = (data) => {
+  console.log('Training update:', data);
+  
+  if (data.status === 'error' || data.status === 'failed') {
+    addLog('error', data.message);
+    isTraining.value = false;
+    trainingPhase.value = 'configuration';
+    return;
+  }
+
+  if (data.status === 'training_complete') {
+    isTraining.value = false;
+    isCompleted.value = true;
+    trainingProgress.value = 100;
+    addLog('success', 'Training completed successfully!');
+    
+    if (data.metrics) {
+      updateMetrics(data.metrics);
+    }
+    return;
+  }
+
+  if (data.progress) {
+    trainingProgress.value = data.progress;
+  }
+  
+  if (data.epoch) {
+    currentEpoch.value = data.epoch;
+    if (data.total_epochs) totalEpochs.value = data.total_epochs;
+  }
+
+  if (data.message) {
+    currentStageMessage.value = data.message;
+    addLog('info', data.message);
+  }
+
+  if (data.metrics) {
+    updateMetrics(data.metrics);
+  }
 };
 
 // Chart Functions
@@ -1582,13 +1766,20 @@ const initializeTrainingEnvironment = async () => {
   isInitializing.value = false;
 };
 
+const goBack = () => {
+  router.push("/algorithm-select");
+};
+
 // Lifecycle
 onMounted(async () => {
   console.log("Initializing Model Training...");
 
-  await checkBackendConnection();
-  await loadConfiguration();
+  //await checkBackendConnection();
+  await loadConfiguration();  
   await initializeTrainingEnvironment();
+  
+  // Initialize hyperparameters with defaults
+  initializeHyperparameters();
 });
 
 onUnmounted(() => {
@@ -1600,6 +1791,8 @@ onUnmounted(() => {
   }
   destroyChart();
 });
+
+
 </script>
 
 <style scoped>
@@ -2793,9 +2986,557 @@ onUnmounted(() => {
   .completion-icon {
     font-size: 3rem;
   }
-
   .completion-message h3 {
     font-size: 1.5rem;
   }
 }
+
+/* ===== NEW: Configuration Section Styles ===== */
+.configuration-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.configuration-section {
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  padding: 2rem;
+  backdrop-filter: blur(20px);
+}
+
+.configuration-section .section-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.configuration-section .section-header h2 {
+  font-size: 2rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+
+.section-description {
+  color: #b3b3d1;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.training-active-badge {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(102, 126, 234, 0.15);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  color: #667eea;
+  font-weight: 600;
+  text-align: center;
+  font-size: 0.9375rem;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.config-panel {
+  background: rgba(15, 15, 35, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.config-panel:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.panel-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.panel-header svg {
+  color: #667eea;
+}
+
+.hyperparameters-placeholder,
+.validation-placeholder {
+  padding: 3rem 2rem;
+  text-align: center;
+  background: rgba(102, 126, 234, 0.05);
+  border: 2px dashed rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  color: #b3b3d1;
+  font-size: 1rem;
+}
+
+.config-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.start-training-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 3rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+}
+
+.start-training-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}
+
+.start-training-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 1200px) {
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Hyperparameter Controls Styles */
+.hyperparameters-container {
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.param-group {
+  margin-bottom: 1.5rem;
+}
+
+.param-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.group-icon {
+  font-size: 1.5rem;
+}
+
+.param-group-header h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.params-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.param-item {
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s ease;
+}
+
+.param-item:hover {
+  background: rgba(102, 126, 234, 0.08);
+  border-color: rgba(102, 126, 234, 0.25);
+}
+
+.param-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.param-label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.param-impact {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.param-impact.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.param-impact.medium {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.param-impact.low {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.param-control {
+  margin-bottom: 0.5rem;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.param-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(102, 126, 234, 0.2);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.param-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.slider-value {
+  min-width: 60px;
+  text-align: right;
+  font-weight: 600;
+  color: #667eea;
+  font-size: 0.9375rem;
+}
+
+.param-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 15, 35, 0.8);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.param-select:hover {
+  border-color: rgba(102, 126, 234, 0.5);
+}
+
+.param-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.param-description {
+  font-size: 0.8125rem;
+  color: #b3b3d1;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.hyperparameters-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hyperparameters-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.hyperparameters-container::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 3px;
+}
+
+.hyperparameters-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.param-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(102, 126, 234, 0.4);
+  border-radius: 4px;
+  background: rgba(15, 15, 35, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.param-checkbox:checked {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: #667eea;
+}
+
+.param-checkbox:checked::after {
+  content: '✓';
+  display: block;
+  text-align: center;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 16px;
+}
+
+.param-checkbox:hover {
+  border-color: #667eea;
+}
+
+.checkbox-label {
+  font-size: 0.9375rem;
+  color: #ffffff;
+  user-select: none;
+}
+
+/* Validation Strategy Styles */
+.validation-strategies {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.strategy-card {
+  background: rgba(15, 15, 35, 0.6);
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.strategy-card:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateX(4px);
+}
+
+.strategy-card.active {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+}
+
+.strategy-card.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.strategy-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.strategy-icon {
+  font-size: 1.5rem;
+}
+
+.strategy-header h4 {
+  flex: 1;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.strategy-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: rgba(102, 126, 234, 0.2);
+  color: #667eea;
+}
+
+.strategy-badge.recommended {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.strategy-badge.advanced {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.strategy-description {
+  color: #b3b3d1;
+  font-size: 0.875rem;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.strategy-config {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(102, 126, 234, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.config-item label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.config-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(102, 126, 234, 0.2);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.config-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.config-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.config-hint {
+  font-size: 0.8125rem;
+  color: #b3b3d1;
+  margin: 0;
+}
+
+.split-preview {
+  margin-top: 0.75rem;
+}
+
+.split-bar {
+  display: flex;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.train-portion {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: width 0.3s ease;
+}
+
+.test-portion {
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: width 0.3s ease;
+}
+
+.warning-box {
+  padding: 0.75rem 1rem;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  color: #fbbf24;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
 </style>
+
