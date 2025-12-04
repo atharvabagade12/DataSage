@@ -100,6 +100,8 @@
           <div v-if="trainingPhase === 'training'" class="training-active-badge">
             🔄 Training in Progress - Configuration Locked
           </div>
+          
+          
         </div>
 
         <div class="config-grid">
@@ -112,6 +114,17 @@
                 </svg>
                 Hyperparameters
               </h3>
+              <button 
+                @click="resetHyperparametersToDefault" 
+                class="reset-params-btn"
+                :disabled="trainingPhase === 'training'"
+                title="Reset all hyperparameters to default values"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,4C14.1,4 16.1,4.8 17.6,6.3C20.7,9.4 20.7,14.5 17.6,17.6C15.8,19.5 13.3,20.2 10.9,19.9L11.4,17.9C13.1,18.1 14.9,17.5 16.2,16.2C18.5,13.9 18.5,10.1 16.2,7.7C15.1,6.6 13.5,6 12,6V10.6L7,5.6L12,0.6V4M6.3,17.6C3.7,15 3.3,11 5.1,7.9L6.6,9.4C5.5,11.6 5.9,14.4 7.8,16.2C8.3,16.7 8.9,17.1 9.6,17.4L9,19.4C8,19 7.1,18.4 6.3,17.6Z"/>
+                </svg>
+                Reset to Default
+              </button>
             </div>
             <div class="hyperparameters-container">
               <div
@@ -489,29 +502,209 @@
           </div>
 
           <div class="metrics-grid">
-            <!-- Main Metric -->
-            <div class="metric-card primary">
-              <div class="metric-icon">🎯</div>
-              <div class="metric-content">
-                <div class="metric-value">{{ formatMainMetric() }}</div>
-                <div class="metric-label">{{ getMainMetricLabel() }}</div>
-                <div class="metric-change" :class="getChangeClass(metricChanges.main)">
-                  {{ formatChange(metricChanges.main) }}
+            <!-- ===== CLASSIFICATION METRICS ===== -->
+            <template v-if="problemType.includes('classification')">
+              <!-- Accuracy Card -->
+              <div class="metric-card primary animated">
+                <div class="metric-header">
+                  <div class="metric-icon">🎯</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ (currentMetrics.test_accuracy * 100).toFixed(1) }}%</div>
+                  <div class="metric-label">Accuracy</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ (currentMetrics.train_accuracy * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ (currentMetrics.test_accuracy * 100).toFixed(1) }}%</span>
+                    </div>
+                  </div>
+                  
                 </div>
               </div>
-            </div>
 
-            <!-- Secondary Metric -->
-            <div class="metric-card success">
-              <div class="metric-icon">📈</div>
-              <div class="metric-content">
-                <div class="metric-value">{{ formatSecondaryMetric() }}</div>
-                <div class="metric-label">{{ getSecondaryMetricLabel() }}</div>
-                <div class="metric-change" :class="getChangeClass(metricChanges.secondary, problemType === 'regression')">
-                  {{ formatChange(metricChanges.secondary) }}
+              <!-- F1-Score Card -->
+              <div class="metric-card success animated">
+                <div class="metric-header">
+                  <div class="metric-icon">📊</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ (currentMetrics.test_f1 * 100).toFixed(1) }}%</div>
+                  <div class="metric-label">F1-Score</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ (currentMetrics.train_f1 * 100).toFixed(1) }}%</span>
+                      
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ (currentMetrics.test_f1 * 100).toFixed(1) }}%</span>
+                      
+                    </div>
+                  </div>
+                  
                 </div>
               </div>
-            </div>
+
+              <!-- Precision Card -->
+              <div class="metric-card info animated">
+                <div class="metric-header">
+                  <div class="metric-icon">🎲</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ (currentMetrics.test_precision * 100).toFixed(1) }}%</div>
+                  <div class="metric-label">Precision</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ (currentMetrics.train_precision * 100).toFixed(1) }}%</span>
+                      
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ (currentMetrics.test_precision * 100).toFixed(1) }}%</span>
+                      
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- Recall Card -->
+              <div class="metric-card warning animated">
+                <div class="metric-header">
+                  <div class="metric-icon">🔍</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ (currentMetrics.test_recall * 100).toFixed(1) }}%</div>
+                  <div class="metric-label">Recall</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ (currentMetrics.train_recall * 100).toFixed(1) }}%</span>
+                      
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ (currentMetrics.test_recall * 100).toFixed(1) }}%</span>
+                      
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </template>
+
+            <!-- ===== REGRESSION METRICS ===== -->
+            <template v-else>
+              <!-- R² Score Card -->
+              <div class="metric-card primary animated">
+                <div class="metric-header">
+                  <div class="metric-icon">🎯</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ currentMetrics.test_r2.toFixed(2) }}</div>
+                  <div class="metric-label">R² Score</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ currentMetrics.train_r2.toFixed(2) }}</span>
+                      
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ currentMetrics.test_r2.toFixed(2) }}</span>
+                      
+                    </div>
+                  </div>
+                  
+                </div>
+              </div>
+
+              <!-- MSE Card -->
+              <div class="metric-card primary animated">
+                <div class="metric-header">
+                  <div class="metric-icon">📉</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ formatNumber(currentMetrics.test_mse.toFixed(0)) }}</div>
+                  <div class="metric-label">MSE</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ formatNumber(currentMetrics.train_mse.toFixed(0)) }}</span>
+                      
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ formatNumber(currentMetrics.test_mse.toFixed(0)) }}</span>
+                      
+                    </div>
+                  </div>
+                  
+                </div>
+              </div>
+
+              <!-- MAE Card -->
+              <div class="metric-card info animated">
+                <div class="metric-header">
+                  <div class="metric-icon">📊</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ formatNumber(currentMetrics.test_mae.toFixed(0)) }}</div>
+                  <div class="metric-label">MAE</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ formatNumber(currentMetrics.train_mae.toFixed(0)) }}</span>
+                     
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ formatNumber(currentMetrics.test_mae.toFixed(0)) }}</span>
+                      
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- RMSE Card -->
+              <div class="metric-card warning animated">
+                <div class="metric-header">
+                  <div class="metric-icon">📐</div>
+                  <span v-if="isTraining" class="live-indicator"></span>
+                </div>
+                <div class="metric-content">
+                  <div class="metric-value">{{ formatNumber(calculateRMSE().toFixed(0)) }}</div>
+                  <div class="metric-label">RMSE</div>
+                  <div class="metric-split">
+                    <div class="split-item">
+                      <span class="split-label">Train</span>
+                      <span class="split-value">{{ formatNumber(Math.sqrt(currentMetrics.train_mse).toFixed(0)) }}</span>
+                      
+                    </div>
+                    <div class="split-item">
+                      <span class="split-label">Test</span>
+                      <span class="split-value">{{ formatNumber(calculateRMSE().toFixed(0)) }}</span>
+                      
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- Cross-Validation Results (NEW) -->
@@ -559,6 +752,22 @@
             </div>
           </div>
         </section>
+      </div>
+
+      <!-- Tweak Parameters Button (Visible after completion) -->
+      <div v-if="isCompleted" class="tweak-params-section">
+        <button @click="unlockConfiguration" class="tweak-params-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+          </svg>
+          <div class="btn-content">
+            <span class="btn-title">🎛️ Tweak Parameters</span>
+            <span class="btn-subtitle">Adjust hyperparameters and retrain with different settings</span>
+          </div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
+            <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Logs Section -->
@@ -680,9 +889,42 @@ const getStageStatusClass = (i) => trainingStages.value[i]?.status || 'pending';
 const getStageIconByStatus = (i) => trainingStages.value[i]?.status === 'completed' ? '✓' : '○';
 const getValidationMethodDisplay = () => validationStrategy.value;
 
+// ===== NEW HELPER FUNCTIONS FOR ENHANCED METRICS =====
+
+
+
+
+const calculateRMSE = () => {
+  return Math.sqrt(currentMetrics.test_mse || 0);
+};
+
+// Format metric values for display
+const formatMetricValue = (value, decimals = 2) => {
+  if (typeof value !== 'number' || isNaN(value)) return '0.00';
+  
+  // For very large numbers (MSE), use compact notation
+  if (Math.abs(value) >= 1000000) {
+    return (value / 1000000).toFixed(2) + 'M';
+  } else if (Math.abs(value) >= 1000) {
+    return new Intl.NumberFormat('en-US', { 
+      minimumFractionDigits: decimals, 
+      maximumFractionDigits: decimals 
+    }).format(value);
+  }
+  
+  return value.toFixed(decimals);
+};
+
+
 
 const updateMetrics = (metrics) => {
-  if (!metrics) return;
+  if (!metrics) {
+    console.warn("⚠️ updateMetrics called with null/undefined metrics");
+    return;
+  }
+  
+  console.log("📊 updateMetrics called with:", metrics);
+  
   const metricProblemType = metrics.problem_type || problemType.value;
   
   if (metricProblemType === "classification") {
@@ -695,22 +937,36 @@ const updateMetrics = (metrics) => {
     currentMetrics.train_recall = metrics.train_recall || 0;
     currentMetrics.test_recall = metrics.test_recall || 0;
 
+    console.log("✅ Classification metrics assigned:", {
+      train_accuracy: currentMetrics.train_accuracy,
+      test_accuracy: currentMetrics.test_accuracy,
+      train_f1: currentMetrics.train_f1,
+      test_f1: currentMetrics.test_f1,
+      train_precision: currentMetrics.train_precision,
+      test_precision: currentMetrics.test_precision,
+      train_recall: currentMetrics.train_recall,
+      test_recall: currentMetrics.test_recall,
+    });
+
     const newMain = currentMetrics.test_accuracy;
     metricChanges.main = (newMain - (metricChanges.prevMain || 0)) * 100;
     metricChanges.prevMain = newMain;
     
   } else if (metricProblemType === "regression") {
     currentMetrics.train_r2 = metrics.train_r2 || metrics.trainr2 || 0;
+    currentMetrics.test_r2 = metrics.test_r2 || metrics.testr2 || 0;
     currentMetrics.train_mse = metrics.train_mse || metrics.trainmse || 0;
     currentMetrics.test_mse = metrics.test_mse || metrics.testmse || 0;
     currentMetrics.train_mae = metrics.train_mae || metrics.trainmae || 0;
     currentMetrics.test_mae = metrics.test_mae || metrics.testmae || 0;
 
     const newMain = currentMetrics.test_r2;
+    const prevMain = metricChanges.prevMain || 0;
     const prevSecondary = metricChanges.mseValue || currentMetrics.test_mse;
 
     metricChanges.main = (newMain - prevMain) * 100;
     metricChanges.secondary = currentMetrics.test_mse - prevSecondary;
+    metricChanges.prevMain = newMain;
     metricChanges.mseValue = currentMetrics.test_mse;
 
     console.log("✅ Regression metrics updated:", {
@@ -1127,7 +1383,7 @@ const getKeyParameters = (algorithmName) => {
             type: "select",
             options: [
               { value: "gaussian", label: "Gaussian (Continuous features)" },
-              { value: "multinomial", label: "Multinomial (Count data)" },
+              
               { value: "bernoulli", label: "Bernoulli (Binary features)" },
             ],
             default: "gaussian",
@@ -1255,6 +1511,25 @@ const initializeHyperparameters = () => {
   console.log('✅ Hyperparameters initialized:', hyperparameters);
 };
 
+const resetHyperparametersToDefault = () => {
+  if (!modelConfig.value?.algorithm?.name) {
+    console.warn('⚠️ Cannot reset: No algorithm selected');
+    return;
+  }
+  
+  console.log('🔄 Resetting hyperparameters to default values...');
+  
+  const params = getKeyParameters(modelConfig.value.algorithm.name);
+  params.forEach((group) => {
+    group.params.forEach((param) => {
+      hyperparameters[param.name] = param.default;
+    });
+  });
+  
+  addLog('info', `Hyperparameters reset to default values for ${modelConfig.value.algorithm.name}`);
+  console.log('✅ Hyperparameters reset to defaults:', hyperparameters);
+};
+
 // Control Functions
 const pauseTraining = () => {
   isPaused.value = true;
@@ -1280,6 +1555,32 @@ const stopTraining = () => {
     timeInterval = null;
   }
   router.push("/algorithm-select");
+};
+
+const unlockConfiguration = () => {
+  // Return to configuration phase
+  trainingPhase.value = 'configuration';
+  
+  // Reset all metrics to zero
+  Object.keys(currentMetrics).forEach(key => {
+    if (Array.isArray(currentMetrics[key])) {
+      currentMetrics[key] = [];
+    } else {
+      currentMetrics[key] = 0;
+    }
+  });
+  
+  // Reset training state
+  isCompleted.value = false;
+  trainingProgress.value = 0;
+  currentEpoch.value = 0;
+  
+  addLog("info", "Configuration unlocked. Metrics reset. Ready to retrain.");
+  
+  // Scroll to configuration section
+  nextTick(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 };
 
 const retrainModel = () => {
@@ -1324,6 +1625,304 @@ const retrainModel = () => {
   }
 
   addLog("info", "Ready to retrain with new configuration");
+};
+
+// ===== TRAINING FUNCTIONS =====
+
+const proceedToTraining = async () => {
+  console.log('🚀 Proceeding to training phase...');
+  
+  // Validate configuration
+  if (!modelConfig.value?.algorithm) {
+    addLog('error', 'No algorithm selected');
+    return;
+  }
+  
+  if (!datasetId.value) {
+    addLog('error', 'No dataset ID found');
+    return;
+  }
+  
+  // Transition to training phase
+  trainingPhase.value = 'training';
+  
+  // Scroll to training section
+  await nextTick();
+  const trainingSection = document.getElementById('training-section');
+  if (trainingSection) {
+    trainingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  
+  addLog('info', 'Configuration locked. Ready to start training.');
+  
+  // Auto-start training after a brief delay
+  setTimeout(() => {
+    startTraining();
+  }, 500);
+};
+
+const startTraining = async () => {
+  if (isTraining.value) {
+    console.warn('Training already in progress');
+    return;
+  }
+
+  console.log('🎯 Starting training...');
+  isTraining.value = true;
+  isCompleted.value = false;
+  trainingProgress.value = 0;
+  currentEpoch.value = 0;
+  elapsedTime.value = 0;
+
+  // Reset training stages
+  trainingStages.value.forEach(stage => {
+    stage.status = 'pending';
+  });
+
+  addLog('info', `Starting ${modelConfig.value.algorithm.name} training...`);
+
+  // Start elapsed time counter
+  timeInterval = setInterval(() => {
+    elapsedTime.value++;
+  }, 1000);
+
+  try {
+    // Prepare training configuration
+    const targetColumn = localStorage.getItem('selectedTarget');
+    
+    const trainingConfig = {
+      dataset_id: datasetId.value,
+      target_column: targetColumn,
+      algorithm_name: modelConfig.value.algorithm.name,
+      test_size: 1 - splitRatio.value,
+      validation_method: validationStrategy.value,
+      cv_folds: validationStrategy.value === 'kfold_cv' ? cvFolds.value : undefined,
+      hyperparameters: { ...hyperparameters }
+    };
+
+    console.log('📤 Training config:', trainingConfig);
+
+    // Connect to WebSocket
+    const wsUrl = `ws://localhost:8000/ws/train-model`;
+    console.log('🔌 Connecting to:', wsUrl);
+
+    websocket = new WebSocket(wsUrl);
+
+    websocket.onopen = () => {
+      console.log('✅ WebSocket connected');
+      addLog('success', 'Connected to training server');
+      
+      // Send training configuration
+      websocket.send(JSON.stringify(trainingConfig));
+      console.log('📤 Sent training configuration');
+    };
+
+    websocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('📥 Received:', data);
+
+        handleTrainingMessage(data);
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    websocket.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+      addLog('error', 'Connection error occurred');
+      isTraining.value = false;
+      
+      if (timeInterval) {
+        clearInterval(timeInterval);
+        timeInterval = null;
+      }
+    };
+
+    websocket.onclose = () => {
+      console.log('🔌 WebSocket closed');
+      
+      if (!isCompleted.value && isTraining.value) {
+        addLog('warning', 'Connection closed unexpectedly');
+        isTraining.value = false;
+      }
+      
+      if (timeInterval) {
+        clearInterval(timeInterval);
+        timeInterval = null;
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ Training error:', error);
+    addLog('error', `Training failed: ${error.message}`);
+    isTraining.value = false;
+    
+    if (timeInterval) {
+      clearInterval(timeInterval);
+      timeInterval = null;
+    }
+  }
+};
+
+const handleTrainingMessage = (data) => {
+  const status = data.status;
+  const message = data.message;
+
+  // Update stage status based on message
+  if (status === 'started' || status === 'data_loaded') {
+    trainingStages.value[0].status = 'active';
+    trainingProgress.value = 10;
+  } else if (status === 'preprocessing' || status === 'model_init' || status === 'model_ready') {
+    trainingStages.value[0].status = 'active';
+    trainingProgress.value = 25;
+  } else if (status === 'training') {
+    trainingStages.value[0].status = 'completed';
+    trainingStages.value[1].status = 'active';
+    trainingProgress.value = 50;
+    currentStageTitle.value = 'Training Model';
+    currentStageMessage.value = message || 'Training in progress...';
+  } else if (status === 'training_complete') {
+    trainingStages.value[1].status = 'completed';
+    trainingProgress.value = 75;
+  } else if (status === 'evaluating') {
+    trainingStages.value[2].status = 'active';
+    trainingProgress.value = 85;
+    currentStageTitle.value = 'Evaluating Performance';
+    currentStageMessage.value = 'Calculating metrics...';
+  } else if (status === 'saving') {
+    trainingStages.value[2].status = 'completed';
+    trainingStages.value[3].status = 'active';
+    trainingProgress.value = 95;
+  } else if (status === 'completed') {
+    console.log('🎉 Training completed! Full data received:', data);
+    console.log('🔍 Checking final_metrics:', data.final_metrics);
+    
+    trainingStages.value[3].status = 'completed';
+    trainingProgress.value = 100;
+    isTraining.value = false;
+    isCompleted.value = true;
+    currentStageTitle.value = 'Training Complete!';
+    currentStageMessage.value = 'Model trained successfully';
+
+    // Update metrics with final results
+    if (data.final_metrics) {
+      console.log('📊 Final metrics received:', data.final_metrics);
+      updateMetrics(data.final_metrics);
+    } else {
+      console.error('❌ No final_metrics in completion data!');
+    }
+
+    
+  } else if (status === 'failed') {
+    trainingStages.value.forEach(stage => {
+      if (stage.status === 'active') stage.status = 'failed';
+    });
+    isTraining.value = false;
+    addLog('error', message || 'Training failed');
+  }
+
+  // Add log message
+  if (message) {
+    const logType = status === 'failed' ? 'error' : 
+                    status === 'completed' ? 'success' : 
+                    status.includes('warning') ? 'warning' : 'info';
+    addLog(logType, message);
+  }
+};
+
+// ===== HELPER FUNCTIONS =====
+
+const addLog = (type, message) => {
+  trainingLogs.value.push({
+    type,
+    message,
+    timestamp: Date.now()
+  });
+  
+  // Auto-scroll logs to bottom
+  nextTick(() => {
+    if (logsContainer.value) {
+      logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+    }
+  });
+};
+
+const clearLogs = () => {
+  trainingLogs.value = [];
+};
+
+const updateChart = (epoch, trainScore, testScore) => {
+  if (!chartContainer.value) return;
+  
+  // Initialize chart if not exists
+  if (!trainingChart) {
+    const ctx = chartContainer.value.getContext('2d');
+    trainingChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Train R²',
+            data: [],
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            tension: 0.4
+          },
+          {
+            label: 'Test R²',
+            data: [],
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: '#ffffff' }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#b3b3d1' },
+            grid: { color: 'rgba(102, 126, 234, 0.1)' }
+          },
+          y: {
+            ticks: { color: '#b3b3d1' },
+            grid: { color: 'rgba(102, 126, 234, 0.1)' }
+          }
+        }
+      }
+    });
+  }
+  
+  // Update chart data
+  trainingChart.data.labels.push(epoch);
+  trainingChart.data.datasets[0].data.push(trainScore);
+  trainingChart.data.datasets[1].data.push(testScore);
+  trainingChart.update();
+};
+
+
+
+const goBack = () => {
+  // Clean up before leaving
+  if (websocket) {
+    websocket.close();
+    websocket = null;
+  }
+  
+  if (timeInterval) {
+    clearInterval(timeInterval);
+    timeInterval = null;
+  }
+  
+  router.push('/algorithm-select');
 };
 
 const loadConfiguration = async () => {
@@ -1425,298 +2024,6 @@ const loadConfiguration = async () => {
 };
 
 
-const proceedToTraining = async () => {
-  console.log('🚀 Proceeding to training...');
-  console.log('Model Config:', modelConfig.value);
-  console.log('Hyperparameters:', hyperparameters);
-  
-  trainingPhase.value = 'training';
-  
-  // Initialize chart before starting training
-  nextTick(() => {
-    initializeChart();
-  });
-
-  isTraining.value = true;
-  isPaused.value = false;
-  isCompleted.value = false;
-  trainingProgress.value = 0;
-  currentEpoch.value = 0;
-  trainingLogs.value = [];
-
-  // Reset metrics
-  Object.keys(currentMetrics).forEach(key => {
-    if (Array.isArray(currentMetrics[key])) currentMetrics[key] = [];
-    else currentMetrics[key] = 0;
-  });
-
-  // Verify dataset existence on backend first
-  try {
-    if (!datasetId.value || datasetId.value === "null" || datasetId.value === "undefined") {
-      throw new Error("Invalid Dataset ID: " + datasetId.value);
-    }
-    const verifyResponse = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}`);
-    if (!verifyResponse.ok) {
-      throw new Error("Dataset verification failed");
-    }
-    addLog("info", "Dataset verified on backend");
-  } catch (error) {
-    console.error("Dataset verification error:", error);
-    addLog("error", "Dataset not found on backend. Please re-upload.");
-    isTraining.value = false;
-    trainingPhase.value = 'configuration';
-    return;
-  }
-
-  // Prepare Configuration Payload
-  const configPayload = {
-    dataset_id: datasetId.value,
-    algorithm_name: modelConfig.value.algorithm.name,
-    target_column: modelConfig.value.target?.name || null,
-    hyperparameters: { ...hyperparameters },
-    problem_type: problemType.value,
-    validation_method: validationStrategy.value,
-    validation_params: {
-      test_size: testSize.value,
-      cv_folds: cvFolds.value,
-      stratified: stratifiedCV.value,
-      grid_search_folds: gridSearchCVFolds.value,
-      grid_density: gridDensity.value,
-      random_search_folds: randomSearchCVFolds.value,
-      random_search_iter: randomSearchIterations.value
-    },
-    scaling: selectedScaling.value,
-    feature_engineering: { ...featureEngineering }
-  };
-
-  addLog("info", `Starting training with ${modelConfig.value.algorithm.name}...`);
-  console.log("🚀 Sending training config:", configPayload);
-
-  // Initialize WebSocket
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//localhost:8000/ws/train-model`;
-
-  websocket = new WebSocket(wsUrl);
-
-  websocket.onopen = () => {
-    addLog("success", "Connected to training server");
-    websocket.send(JSON.stringify(configPayload));
-    
-    // Start timer
-    const startTime = Date.now();
-    timeInterval = setInterval(() => {
-      elapsedTime.value = Math.floor((Date.now() - startTime) / 1000);
-    }, 1000);
-  };
-
-  websocket.onmessage = (event) => {
-    handleTrainingUpdate(JSON.parse(event.data));
-  };
-
-  websocket.onerror = (error) => {
-    console.error("WebSocket error:", error);
-    addLog("error", "Connection error occurred");
-    isTraining.value = false;
-    trainingPhase.value = 'configuration';
-  };
-
-  websocket.onclose = () => {
-    addLog("info", "Training connection closed");
-    if (timeInterval) clearInterval(timeInterval);
-    if (isTraining.value && !isCompleted.value) {
-      isTraining.value = false;
-      addLog("warning", "Training interrupted");
-    }
-  };
-};
-
-const startTraining = proceedToTraining;
-
-const handleTrainingUpdate = (data) => {
-  console.log('Training update:', data);
-  
-  if (data.status === 'error' || data.status === 'failed') {
-    addLog('error', data.message);
-    isTraining.value = false;
-    trainingPhase.value = 'configuration';
-    return;
-  }
-
-  if (data.status === 'training_complete') {
-    isTraining.value = false;
-    isCompleted.value = true;
-    trainingProgress.value = 100;
-    addLog('success', 'Training completed successfully!');
-    
-    if (data.metrics) {
-      updateMetrics(data.metrics);
-    }
-    return;
-  }
-
-  if (data.progress) {
-    trainingProgress.value = data.progress;
-  }
-  
-  if (data.epoch) {
-    currentEpoch.value = data.epoch;
-    if (data.total_epochs) totalEpochs.value = data.total_epochs;
-  }
-
-  if (data.message) {
-    currentStageMessage.value = data.message;
-    addLog('info', data.message);
-  }
-
-  if (data.metrics) {
-    updateMetrics(data.metrics);
-  }
-};
-
-// Chart Functions
-const initializeChart = () => {
-  if (!chartContainer.value) {
-    trainingChart = null;
-    return;
-  }
-
-  const ctx = chartContainer.value.getContext("2d");
-  const isClassification = problemType.value.includes("classification");
-
-  trainingChart = new Chart(ctx, {
-    // ✅ FIXED - use Chart, not window.Chart
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: isClassification ? "Train Accuracy" : "Train R²",
-          data: [],
-          borderColor: "rgb(102, 126, 234)",
-          backgroundColor: "rgba(102, 126, 234, 0.1)",
-          tension: 0.4,
-          fill: true,
-        },
-        {
-          label: isClassification ? "Test Accuracy" : "Test R²",
-          data: [],
-          borderColor: "rgb(16, 185, 129)",
-          backgroundColor: "rgba(16, 185, 129, 0.1)",
-          tension: 0.4,
-          fill: true,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          labels: {
-            color: "#b3b3d1",
-            font: { size: 12 },
-          },
-        },
-        tooltip: {
-          mode: "index",
-          intersect: false,
-        },
-      },
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: "Epoch",
-            color: "#b3b3d1",
-          },
-          ticks: { color: "#b3b3d1" },
-          grid: { color: "rgba(102, 126, 234, 0.1)" },
-        },
-        y: {
-          title: {
-            display: true,
-            text: isClassification ? "Accuracy" : "R² Score",
-            color: "#b3b3d1",
-          },
-          ticks: { color: "#b3b3d1" },
-          grid: { color: "rgba(102, 126, 234, 0.1)" },
-          min: 0,
-          max: isClassification ? 1 : 1,
-        },
-      },
-      animation: {
-        duration: 300,
-      },
-    },
-  });
-};
-
-const updateChart = (epoch, trainScore, testScore) => {
-  if (!trainingChart) return;
-
-  trainingChart.data.labels.push(epoch);
-  trainingChart.data.datasets[0].data.push(trainScore);
-  trainingChart.data.datasets[1].data.push(testScore);
-
-  // Keep only last 50 points for performance
-  if (trainingChart.data.labels.length > 50) {
-    trainingChart.data.labels.shift();
-    trainingChart.data.datasets[0].data.shift();
-    trainingChart.data.datasets[1].data.shift();
-  }
-
-  trainingChart.update("none"); // Update without animation for smoothness
-};
-
-const destroyChart = () => {
-  if (trainingChart) {
-    trainingChart.destroy();
-    trainingChart = null;
-  }
-};
-const updateTimeEstimate = () => {
-  if (currentEpoch.value > 0 && totalEpochs.value > 0) {
-    const timePerEpoch = elapsedTime.value / currentEpoch.value;
-    const remainingEpochs = totalEpochs.value - currentEpoch.value;
-    estimatedTimeRemaining.value = Math.max(
-      0,
-      Math.floor(remainingEpochs * timePerEpoch)
-    );
-  }
-};
-
-const addLog = (type, message) => {
-  trainingLogs.value.push({
-    type,
-    message,
-    timestamp: Date.now(),
-  });
-
-  nextTick(() => {
-    if (logsContainer.value) {
-      logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
-    }
-  });
-
-  if (trainingLogs.value.length > 100) {
-    trainingLogs.value = trainingLogs.value.slice(-100);
-  }
-};
-
-nextTick(() => {
-  if (logsContainer.value) {
-    logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
-  }
-});
-
-if (trainingLogs.value.length > 100) {
-  trainingLogs.value = trainingLogs.value.slice(-100);
-}
-
-const clearLogs = () => {
-  trainingLogs.value = [];
-  addLog("info", "Logs cleared");
-};
 
 const exportLogs = () => {
   const logData = trainingLogs.value
@@ -1766,9 +2073,7 @@ const initializeTrainingEnvironment = async () => {
   isInitializing.value = false;
 };
 
-const goBack = () => {
-  router.push("/algorithm-select");
-};
+
 
 // Lifecycle
 onMounted(async () => {
@@ -2022,6 +2327,16 @@ onUnmounted(() => {
   color: white;
 }
 
+.control-btn.modify {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.control-btn.modify:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
 /* Progress Dashboard */
 .progress-dashboard {
   background: rgba(26, 26, 46, 0.6);
@@ -2243,34 +2558,41 @@ onUnmounted(() => {
 }
 
 .metric-icon {
-  font-size: 2rem;
-  width: 60px;
-  height: 60px;
+  font-size: 1.75rem;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(102, 126, 234, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 
 .metric-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .metric-value {
   font-size: 1.75rem;
   font-weight: 700;
   color: #ffffff;
-  line-height: 1;
+  line-height: 1.1;
   margin-bottom: 0.25rem;
+  text-align: left;
 }
 
 .metric-label {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: #b3b3d1;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  text-align: left;
 }
 
 .metric-change {
@@ -2288,6 +2610,177 @@ onUnmounted(() => {
 
 .metric-change.neutral {
   color: #b3b3d1;
+}
+
+/* ===== ENHANCED METRIC CARD STYLES ===== */
+
+/* Animated metric cards with glassmorphism */
+.metric-card.animated {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(26, 26, 46, 0.6));
+  backdrop-filter: blur(20px);
+  border: 2px solid transparent;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 1.1rem;
+  min-height: 210px;
+  max-height: 240px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.metric-card.animated::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 12px;
+  padding: 2px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: borderGlow 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes borderGlow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.live-indicator {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+  }
+  50% { 
+    opacity: 0.5; 
+    transform: scale(1.3);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
+  }
+}
+
+/* Train/Test split bars */
+.metric-split {
+  display: flex;
+  flex-direction: row;
+  gap: 0.6rem;
+  margin: 0.6rem 0 0.5rem 0;
+  padding: 0.6rem 0.7rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.split-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.split-label {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  margin-bottom: 0.1rem;
+}
+
+.split-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+
+
+/* Metric trend indicators */
+.metric-trend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-top: auto;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+.metric-trend.improving {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.metric-trend.improving::before {
+  content: '↑';
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.metric-trend.degrading {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.metric-trend.degrading::before {
+  content: '↓';
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.metric-trend.stable {
+  color: #b3b3d1;
+  background: rgba(179, 179, 209, 0.05);
+}
+
+.metric-trend.stable::before {
+  content: '→';
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+/* Responsive grid adjustments */
+@media (max-width: 1400px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .metrics-charts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Cross-Validation Results */
@@ -3499,13 +3992,6 @@ onUnmounted(() => {
   margin-top: 0.75rem;
 }
 
-.split-bar {
-  display: flex;
-  height: 40px;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
 
 .train-portion {
   background: linear-gradient(135deg, #667eea, #764ba2);
@@ -3538,5 +4024,155 @@ onUnmounted(() => {
   font-size: 0.875rem;
   line-height: 1.5;
 }
+
+/* Algorithm Warning Banner */
+.algorithm-warning-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  margin-top: 1rem;
+  animation: slideDown 0.3s ease;
+}
+
+.algorithm-warning-banner svg {
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.algorithm-warning-banner .warning-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #fbbf24;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.algorithm-warning-banner .warning-content strong {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.algorithm-warning-banner .warning-content span {
+  color: #fcd34d;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tweak Parameters Section */
+.tweak-params-section {
+  margin: 2rem 0;
+  padding: 0 2rem;
+}
+
+.tweak-params-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.tweak-params-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.tweak-params-btn:hover::before {
+  left: 100%;
+}
+.tweak-params-btn .btn-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.tweak-params-btn .btn-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tweak-params-btn .btn-subtitle {
+  font-size: 0.875rem;
+  color: #b3b3d1;
+  font-weight: 400;
+}
+
+.tweak-params-btn .arrow-icon {
+  color: #667eea;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.tweak-params-btn:hover .arrow-icon {
+  transform: translateX(5px);
+}
+
+/* Reset Hyperparameters Button */
+.reset-params-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-params-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+}
+
+.reset-params-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reset-params-btn svg {
+  flex-shrink: 0;
+}
+
 </style>
 

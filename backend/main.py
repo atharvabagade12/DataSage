@@ -1,7 +1,4 @@
-"""
-DataSage ML Backend - Clean Production Version
-Fixed: Redundant endpoints, proper dataset updates, single storage
-"""
+
 
 from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -1852,6 +1849,26 @@ async def train_model_websocket(websocket: WebSocket):
                 'timestamp': datetime.now().timestamp()
             }))
             
+            # ===== VALIDATE DATA FOR MULTINOMIALNB =====
+            if algorithm_name == 'MultinomialNB' or model_class_name == 'MultinomialNB':
+                # Check for negative values
+                has_negative = False
+                if hasattr(X_train, 'min'):
+                    has_negative = (X_train.min() < 0)
+                else:
+                    has_negative = (np.min(X_train) < 0)
+                
+                if has_negative:
+                    await websocket.send_text(json.dumps({
+                        'status': 'failed',
+                        'message': (
+                            '❌ MultinomialNB requires non-negative features, but your data contains negative values. '
+                            'Solutions: (1) Use GaussianNB instead, or (2) Apply Min-Max scaling in preprocessing step.'
+                        ),
+                        'timestamp': datetime.now().timestamp()
+                    }))
+                    return
+            
         except Exception as e:
             await websocket.send_text(json.dumps({
                 'status': 'failed',
@@ -1909,18 +1926,26 @@ async def train_model_websocket(websocket: WebSocket):
                 # Add detailed metrics
                 if problem_type == 'classification':
                     final_metrics.update({
+                        'train_accuracy': float(cv_results['train_accuracy'].mean()),
                         'test_accuracy': final_metrics['cv_mean'], # Use CV mean as main accuracy
+                        'train_f1': float(cv_results['train_f1_weighted'].mean()),
                         'test_f1': float(cv_results['test_f1_weighted'].mean()),
+                        'train_precision': float(cv_results['train_precision_weighted'].mean()),
                         'test_precision': float(cv_results['test_precision_weighted'].mean()),
+                        'train_recall': float(cv_results['train_recall_weighted'].mean()),
                         'test_recall': float(cv_results['test_recall_weighted'].mean()),
                         'n_classes': int(len(np.unique(y_full)))
                     })
                     main_metric = f"CV Accuracy: {final_metrics['cv_mean']*100:.2f}% (±{final_metrics['cv_std']*100:.2f}%)"
                 else:
                     final_metrics.update({
+                        'train_r2': float(cv_results['train_r2'].mean()),
                         'test_r2': final_metrics['cv_mean'],
+                        'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
                         'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
+                        'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
                         'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
+                        'train_rmse': float(np.sqrt(-cv_results['train_neg_mean_squared_error'].mean())),
                         'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
                     })
                     main_metric = f"CV R²: {final_metrics['cv_mean']:.4f} (±{final_metrics['cv_std']:.4f})"

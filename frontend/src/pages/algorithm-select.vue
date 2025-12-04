@@ -991,7 +991,29 @@ const detectProblemType = (target) => {
     rawTarget: target
   });
 
-  // Check if it's numerical/continuous
+  // ============================================================================
+  // PRIORITY 1: Check uniqueValues first (most reliable indicator)
+  // ============================================================================
+  
+  if (uniqueValues === 2) {
+    // Binary classification - regardless of dataType
+    problemType = "binary_classification";
+    confidence = 0.95;
+    console.log("✅ Detected as BINARY CLASSIFICATION (2 unique values, regardless of dataType)");
+    return { type: problemType, confidence };
+  } 
+  else if (uniqueValues > 2 && uniqueValues <= 20) {
+    // Multiclass classification
+    problemType = "multiclass_classification";
+    confidence = 0.9;
+    console.log("✅ Detected as MULTICLASS CLASSIFICATION (" + uniqueValues + " unique values)");
+    return { type: problemType, confidence };
+  }
+
+  // ============================================================================
+  // PRIORITY 2: Check dataType for continuous/numerical data
+  // ============================================================================
+  
   if (dataType === "numerical" || 
       dataType === "numeric" || 
       dataType === "continuous" ||
@@ -1001,39 +1023,46 @@ const detectProblemType = (target) => {
       dataType === "number") {
     problemType = "regression";
     confidence = 0.95;
-    console.log("✅ Detected as REGRESSION (numerical type)");
-  } 
-  // Check if it's categorical
-  else if (dataType === "categorical" || 
-           dataType === "object" || 
-           dataType === "string") {
-    if (uniqueValues === 2) {
-      problemType = "binary_classification";
-      confidence = 0.95;
-      console.log("✅ Detected as BINARY CLASSIFICATION (2 unique values)");
-    } else if (uniqueValues > 2 && uniqueValues <= 20) {
-      problemType = "multiclass_classification";
-      confidence = 0.9;
-      console.log("✅ Detected as MULTICLASS CLASSIFICATION (" + uniqueValues + " unique values)");
-    } else if (uniqueValues > 20) {
-      problemType = "regression";
-      confidence = 0.6;
-      console.log("⚠️ Detected as REGRESSION (many unique values: " + uniqueValues + ")");
-    }
-  }
-  // Fallback: if no type info, use unique values
-  else if (uniqueValues > 0) {
-    if (uniqueValues === 2) {
-      problemType = "binary_classification";
-      confidence = 0.7;
-      console.log("⚠️ Guessed as BINARY CLASSIFICATION (no type info, 2 unique values)");
-    } else if (uniqueValues > 20) {
-      problemType = "regression";
-      confidence = 0.5;
-      console.log("⚠️ Guessed as REGRESSION (no type info, many unique values)");
-    }
+    console.log("✅ Detected as REGRESSION (numerical type with many unique values)");
+    return { type: problemType, confidence };
   }
 
+  // ============================================================================
+  // PRIORITY 3: Check for high cardinality (likely regression)
+  // ============================================================================
+  
+  if (uniqueValues > 20) {
+    problemType = "regression";
+    confidence = 0.7;
+    console.log("⚠️ Detected as REGRESSION (high cardinality: " + uniqueValues + " unique values)");
+    return { type: problemType, confidence };
+  }
+
+  // ============================================================================
+  // PRIORITY 4: Categorical/String types (fallback)
+  // ============================================================================
+  
+  if (dataType === "categorical" || 
+      dataType === "object" || 
+      dataType === "string") {
+    // If we got here, uniqueValues is either 0, 1, or between 3-20
+    if (uniqueValues === 1) {
+      problemType = "binary_classification"; // Fallback, though this is unusual
+      confidence = 0.3;
+      console.log("⚠️ Unusual case: only 1 unique value, defaulting to binary classification");
+    } else {
+      problemType = "multiclass_classification";
+      confidence = 0.7;
+      console.log("✅ Detected as MULTICLASS CLASSIFICATION (categorical type)");
+    }
+    return { type: problemType, confidence };
+  }
+
+  // ============================================================================
+  // FALLBACK: Default to binary classification
+  // ============================================================================
+  
+  console.log("⚠️ No clear indicators, defaulting to BINARY CLASSIFICATION");
   console.log("🎯 Final problem type:", { type: problemType, confidence });
   return { type: problemType, confidence };
 };
@@ -1764,7 +1793,7 @@ const getKeyParameters = (algorithmName) => {
             type: "select",
             options: [
               { value: "gaussian", label: "Gaussian (Continuous features)" },
-              { value: "multinomial", label: "Multinomial (Count data)" },
+             
               { value: "bernoulli", label: "Bernoulli (Binary features)" },
             ],
             default: "gaussian",
