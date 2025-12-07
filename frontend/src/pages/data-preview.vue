@@ -2011,6 +2011,18 @@ const fetchCompleteStatisticsFromBackend = async () => {
       }));
     }
 
+    // Update columns with backend statistics (unique counts)
+    if (stats.column_stats && Array.isArray(stats.column_stats)) {
+      stats.column_stats.forEach(backendCol => {
+        const frontendCol = columns.value.find(c => c.name === backendCol.name);
+        if (frontendCol) {
+          frontendCol.unique = backendCol.unique;
+          frontendCol.missing = backendCol.missing;
+        }
+      });
+      console.log("   ✅ Columns updated with backend statistics (unique counts)");
+    }
+
     console.log("✅ Complete statistics fetched from backend");
     console.log(`   Total Rows: ${completeDatasetStats.value.totalRows}`);
     console.log(`   Missing Columns: ${missingColumnsDetailed.value.length}`);
@@ -4217,7 +4229,7 @@ const getHealthLevel = (score) => {
 };
 
 const goBack = () => {
-  // ✅ NEW: Save preprocessing history to session if needed
+  // Save preprocessing history to session if needed
   if (cleanedDatasetId.value) {
     console.log("💾 Saved preprocessing state:");
     console.log(`   Original: ${originalDatasetId.value}`);

@@ -794,7 +794,7 @@ const showDistributionsPreview = ref(false);
 // âœ… STANDARDIZED BACKEND CONNECTION CHECK
 const checkBackendConnection = async () => {
   try {
-    console.log("ðŸ”Œ Checking backend connection...");
+    console.log(" Checking backend connection...");
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
@@ -812,13 +812,13 @@ const checkBackendConnection = async () => {
     if (response.ok) {
       const data = await response.json();
       backendConnected.value = true;
-      console.log("âœ… Backend connected:", data.message);
+      console.log("Backend connected:", data.message);
       return true;
     } else {
       throw new Error(`Backend returned ${response.status}`);
     }
   } catch (error) {
-    console.error("âŒ Backend connection failed:", error.message);
+    console.error("Backend connection failed:", error.message);
     backendConnected.value = false;
     return false;
   }

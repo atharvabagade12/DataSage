@@ -27,7 +27,8 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
 
 # ===== PREPROCESSING IMPORTS =====
 from sklearn.model_selection import (
-    train_test_split, cross_val_score, cross_validate, StratifiedKFold, KFold
+    train_test_split, cross_val_score, cross_validate, StratifiedKFold, KFold,
+    GridSearchCV, RandomizedSearchCV
 )
 from sklearn.preprocessing import (
     StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler, LabelEncoder,
@@ -75,14 +76,15 @@ app = FastAPI(
     description="Production-ready ML backend with proper dataset management"
 )
 
-# ===== CORS CONFIGURATION =====
+#  CORS CONFIGURATION 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
-        "http://localhost:3002"
+        "http://localhost:3002",
+        ## production URL
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -176,10 +178,7 @@ def get_algorithm_for_problem_type(algorithm_name: str, problem_type: str):
             'classification': KNeighborsClassifier,
             'regression': KNeighborsRegressor
         },
-        'Neural Network (MLP)': {
-            'classification': MLPClassifier,
-            'regression': MLPRegressor
-        },
+
         'Linear Regression': {
             'classification': LogisticRegression,
             'regression': LinearRegression
@@ -274,58 +273,115 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
         return model_class()
 
 
-def apply_feature_scaling(X_train: np.ndarray, X_test: np.ndarray, scaling_method: str, model_id: str):
-    """Apply feature scaling and store scaler"""
-    scaler = None
-    
-    if scaling_method == 'standard':
-        scaler = StandardScaler()
-    elif scaling_method == 'minmax':
-        scaler = MinMaxScaler()
-    elif scaling_method == 'robust':
-        scaler = RobustScaler()
-    else:
-        return X_train, X_test, None
-    
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    scalers[model_id] = scaler
-    
-    return X_train_scaled, X_test_scaled, scaler
 
-def apply_feature_engineering(X_train: np.ndarray, X_test: np.ndarray, 
-                            feature_engineering: Dict[str, bool], y_train: np.ndarray, 
-                            problem_type: str, model_id: str):
-    """Apply feature engineering techniques"""
-    transformers = {}
+
+
+
+def get_param_grid_for_algorithm(algorithm_name: str, problem_type: str, grid_density: str = 'normal'):
+    """
+    Generate parameter grid for GridSearchCV or RandomizedSearchCV
     
-    if feature_engineering.get('polynomial', False):
-        poly = PolynomialFeatures(degree=2, include_bias=False, interaction_only=True)
-        X_train = poly.fit_transform(X_train)
-        X_test = poly.transform(X_test)
-        transformers['polynomial'] = poly
+    Args:
+        algorithm_name: Name of the algorithm
+        problem_type: 'classification' or 'regression'
+        grid_density: 'coarse', 'normal', or 'fine' - controls number of parameter values
     
-    if feature_engineering.get('pca', False):
-        pca = PCA(n_components=0.95)
-        X_train = pca.fit_transform(X_train)
-        X_test = pca.transform(X_test)
-        transformers['pca'] = pca
+    Returns:
+        dict: Parameter grid for the algorithm
+    """
+    from scipy.stats import uniform, randint
     
-    if feature_engineering.get('featureSelection', False):
-        score_func = f_classif if problem_type == 'classification' else f_regression
-        k = min(20, X_train.shape[1])
-        selector = SelectKBest(score_func=score_func, k=k)
-        X_train = selector.fit_transform(X_train, y_train)
-        X_test = selector.transform(X_test)
-        transformers['feature_selector'] = selector
+    # Define grids based on density
+    if grid_density == 'coarse':
+        n_estimators_range = [50, 100, 200]
+        max_depth_range = [5, 10, 20]
+        learning_rate_range = [0.01, 0.1, 0.3]
+        C_range = [0.1, 1.0, 10.0]
+        n_neighbors_range = [3, 5, 10]
+    elif grid_density == 'fine':
+        n_estimators_range = [50, 100, 150, 200, 300, 500]
+        max_depth_range = [3, 5, 7, 10, 15, 20, 30]
+        learning_rate_range = [0.001, 0.01, 0.05, 0.1, 0.2, 0.3]
+        C_range = [0.01, 0.1, 1.0, 10.0, 100.0]
+        n_neighbors_range = [3, 5, 7, 10, 15, 20]
+    else:  # normal
+        n_estimators_range = [50, 100, 200, 300]
+        max_depth_range = [5, 10, 15, 20]
+        learning_rate_range = [0.01, 0.05, 0.1, 0.2]
+        C_range = [0.1, 1.0, 10.0, 50.0]
+        n_neighbors_range = [3, 5, 7, 10, 15]
     
-    if transformers:
-        scalers[f"{model_id}_transformers"] = transformers
+    param_grids = {
+        "Random Forest": {
+            'n_estimators': n_estimators_range,
+            'max_depth': max_depth_range + [None],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'max_features': ['sqrt', 'log2', None]
+        },
+        
+        "XGBoost": {
+            'n_estimators': n_estimators_range,
+            'max_depth': [3, 5, 7, 10],
+            'learning_rate': learning_rate_range,
+            'subsample': [0.6, 0.8, 1.0],
+            'colsample_bytree': [0.6, 0.8, 1.0]
+        },
+        
+        "Logistic Regression": {
+            'C': C_range,
+            'penalty': ['l1', 'l2'],
+            'solver': ['liblinear', 'saga'],
+            'max_iter': [100, 200, 500]
+        },
+        
+        "Support Vector Machine": {
+            'C': C_range,
+            'kernel': ['linear', 'rbf', 'poly'],
+            'gamma': ['scale', 'auto']
+        },
+        
+        "Support Vector Regression": {
+            'C': C_range,
+            'kernel': ['linear', 'rbf', 'poly'],
+            'gamma': ['scale', 'auto'],
+            'epsilon': [0.01, 0.1, 0.5]
+        },
+        
+        "K-Nearest Neighbors": {
+            'n_neighbors': n_neighbors_range,
+            'weights': ['uniform', 'distance'],
+            'metric': ['euclidean', 'manhattan', 'minkowski']
+        },
+        
+        "Decision Tree": {
+            'max_depth': max_depth_range + [None],
+            'min_samples_split': [2, 5, 10, 20],
+            'min_samples_leaf': [1, 2, 4, 8],
+            'criterion': ['gini', 'entropy'] if problem_type == 'classification' else ['squared_error', 'friedman_mse']
+        },
+        
+        "Ridge Regression": {
+            'alpha': [0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
+            'solver': ['auto', 'svd', 'cholesky', 'lsqr']
+        },
+        
+        "Lasso Regression": {
+            'alpha': [0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
+            'selection': ['cyclic', 'random']
+        },
+        
+        "Naive Bayes": {
+            'var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6] if problem_type == 'classification' else []
+        }
+    }
     
-    return X_train, X_test, transformers
+    # Return the grid for the specified algorithm
+    return param_grids.get(algorithm_name, {})
+
 
 # ===== API ENDPOINTS =====
+
 
 @app.get("/api/health")
 async def health_check():
@@ -763,19 +819,71 @@ async def get_dataset_statistics(
         print(f"   Is processed: {dataset.is_processed}")
         print(f"   Calculating statistics on COMPLETE dataset: {len(df)} rows")
 
-        # 3. Calculate Missing Values
+        # 3. Calculate Missing Values and Column Stats
         missing_values = {}
         missing_info = []
+        column_stats = []
         
         for col in df.columns:
             missing_count = int(df[col].isnull().sum())
+            unique_count = int(df[col].nunique())
+            
+            # Detect column type
+            col_type = "categorical"
+            if pd.api.types.is_numeric_dtype(df[col]):
+                col_type = "numerical"
+            
+            # Base stats
+            stat_entry = {
+                "name": str(col),
+                "type": col_type,
+                "unique": unique_count,
+                "missing": missing_count,
+                "top_values": [],
+                "distribution": None
+            }
+
+            try:
+                if col_type == "numerical":
+                    # Calculate histogram and box plot stats for numerical columns
+                    clean_series = df[col].dropna()
+                    if not clean_series.empty:
+                        # Histogram
+                        counts, bin_edges = np.histogram(clean_series, bins='auto')
+                        # Box plot
+                        quantiles = clean_series.quantile([0, 0.25, 0.5, 0.75, 1]).tolist()
+                        
+                        stat_entry["distribution"] = {
+                            "type": "numerical",
+                            "histogram": {
+                                "counts": counts.tolist(),
+                                "bin_edges": bin_edges.tolist()
+                            },
+                            "box_plot": {
+                                "min": quantiles[0],
+                                "q1": quantiles[1],
+                                "median": quantiles[2],
+                                "q3": quantiles[3],
+                                "max": quantiles[4]
+                            }
+                        }
+                else:
+                    # Calculate value counts for categorical columns
+                    top_vals_series = df[col].value_counts().head(15) # Top 15 for charts
+                    top_vals = top_vals_series.index.tolist()
+                    stat_entry["top_values"] = [str(v) for v in top_vals] # Keep for preview
+                    
+                    stat_entry["distribution"] = {
+                        "type": "categorical",
+                        "value_counts": {str(k): int(v) for k, v in top_vals_series.items()}
+                    }
+            except Exception as e:
+                print(f"Error calculating distribution for {col}: {e}")
+
+            column_stats.append(stat_entry)
+
             if missing_count > 0:
                 missing_values[str(col)] = missing_count
-                
-                # Detect column type
-                col_type = "categorical"
-                if pd.api.types.is_numeric_dtype(df[col]):
-                    col_type = "numerical"
                 
                 missing_info.append({
                     "name": str(col),
@@ -813,6 +921,7 @@ async def get_dataset_statistics(
             "total_columns": len(df.columns),
             "missing_values": missing_values,
             "missing_info": missing_info,
+            "column_stats": column_stats,
             "duplicates": duplicates,
             "outliers": outliers,
             "status": "success"
@@ -1550,11 +1659,6 @@ async def apply_scaling(request: ScalingRequest):
 
 
 
-
-
-
-
-
 @app.post("/api/detect-problem-type")
 async def detect_problem_type_endpoint(request: Dict[str, Any]):
     """Detect if the target is classification or regression for a given dataset_id and target_column"""
@@ -1607,6 +1711,8 @@ async def detect_problem_type_endpoint(request: Dict[str, Any]):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Detection error: {str(e)}")
+
+        
 
 @app.get("/api/datasets")
 async def get_datasets(
@@ -1968,6 +2074,298 @@ async def train_model_websocket(websocket: WebSocket):
                 await websocket.send_text(json.dumps({
                     'status': 'failed',
                     'message': f'❌ Cross-validation failed: {str(e)}',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                return
+
+        elif validation_method == 'grid_search':
+            # --- GRID SEARCH CV ---
+            grid_density = config.get('grid_density', 'normal')
+            grid_cv_folds = config.get('grid_search_cv_folds', 5)
+            
+            await websocket.send_text(json.dumps({
+                'status': 'training',
+                'message': f'🔍 Starting Grid Search CV with {grid_cv_folds} folds...',
+                'timestamp': datetime.now().timestamp()
+            }))
+            
+            try:
+                # Get parameter grid
+                param_grid = get_param_grid_for_algorithm(algorithm_name, problem_type, grid_density)
+                
+                if not param_grid:
+                    await websocket.send_text(json.dumps({
+                        'status': 'failed',
+                        'message': f'❌ No parameter grid defined for {algorithm_name}',
+                        'timestamp': datetime.now().timestamp()
+                    }))
+                    return
+                
+                # Combine data for grid search
+                if hasattr(X_train, 'values'):
+                    X_full = np.concatenate((X_train.values, X_test.values), axis=0)
+                    y_full = np.concatenate((y_train.values, y_test.values), axis=0)
+                else:
+                    X_full = np.concatenate((X_train, X_test), axis=0)
+                    y_full = np.concatenate((y_train, y_test), axis=0)
+                
+                # Setup CV
+                if problem_type == 'classification':
+                    cv = StratifiedKFold(n_splits=grid_cv_folds, shuffle=True, random_state=42)
+                    scoring = 'accuracy'
+                else:
+                    cv = KFold(n_splits=grid_cv_folds, shuffle=True, random_state=42)
+                    scoring = 'r2'
+                
+                # Initialize base model
+                base_model = initialize_algorithm_with_params(algorithm_name, problem_type, {})
+                
+                # Run Grid Search
+                grid_search = GridSearchCV(
+                    base_model,
+                    param_grid,
+                    cv=cv,
+                    scoring=scoring,
+                    n_jobs=-1,
+                    verbose=1,
+                    return_train_score=True
+                )
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training',
+                    'message': f'⚙️ Searching {len(param_grid)} hyperparameters...',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+                grid_search.fit(X_full, y_full)
+                
+                # Get best model
+                model = grid_search.best_estimator_
+                best_params = grid_search.best_params_
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training',
+                    'message': f'✅ Best params found: {best_params}',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+                # Calculate final metrics using best model
+                if problem_type == 'classification':
+                    cv_results = cross_validate(
+                        model, X_full, y_full,
+                        cv=cv,
+                        scoring=['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted'],
+                        return_train_score=True,
+                        n_jobs=-1
+                    )
+                    
+                    final_metrics = {
+                        'validation_method': 'grid_search',
+                        'n_folds': grid_cv_folds,
+                        'problem_type': problem_type,
+                        'best_params': best_params,
+                        'best_score': float(grid_search.best_score_),
+                        'cv_mean': float(cv_results['test_accuracy'].mean()),
+                        'cv_std': float(cv_results['test_accuracy'].std()),
+                        'cv_scores': [float(s) for s in cv_results['test_accuracy']],
+                        'train_accuracy': float(cv_results['train_accuracy'].mean()),
+                        'test_accuracy': float(cv_results['test_accuracy'].mean()),
+                        'train_f1': float(cv_results['train_f1_weighted'].mean()),
+                        'test_f1': float(cv_results['test_f1_weighted'].mean()),
+                        'train_precision': float(cv_results['train_precision_weighted'].mean()),
+                        'test_precision': float(cv_results['test_precision_weighted'].mean()),
+                        'train_recall': float(cv_results['train_recall_weighted'].mean()),
+                        'test_recall': float(cv_results['test_recall_weighted'].mean()),
+                        'n_classes': int(len(np.unique(y_full)))
+                    }
+                    main_metric = f"Grid Search Best Accuracy: {grid_search.best_score_*100:.2f}%"
+                else:
+                    cv_results = cross_validate(
+                        model, X_full, y_full,
+                        cv=cv,
+                        scoring=['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error'],
+                        return_train_score=True,
+                        n_jobs=-1
+                    )
+                    
+                    final_metrics = {
+                        'validation_method': 'grid_search',
+                        'n_folds': grid_cv_folds,
+                        'problem_type': problem_type,
+                        'best_params': best_params,
+                        'best_score': float(grid_search.best_score_),
+                        'cv_mean': float(cv_results['test_r2'].mean()),
+                        'cv_std': float(cv_results['test_r2'].std()),
+                        'cv_scores': [float(s) for s in cv_results['test_r2']],
+                        'train_r2': float(cv_results['train_r2'].mean()),
+                        'test_r2': float(cv_results['test_r2'].mean()),
+                        'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
+                        'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
+                        'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
+                        'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
+                        'train_rmse': float(np.sqrt(-cv_results['train_neg_mean_squared_error'].mean())),
+                        'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
+                    }
+                    main_metric = f"Grid Search Best R²: {grid_search.best_score_:.4f}"
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training_complete',
+                    'message': f'✅ Grid Search completed',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+            except Exception as e:
+                await websocket.send_text(json.dumps({
+                    'status': 'failed',
+                    'message': f'❌ Grid Search failed: {str(e)}',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                return
+
+        elif validation_method == 'randomized_search':
+            # --- RANDOMIZED SEARCH CV ---
+            n_iter = config.get('random_search_iterations', 20)
+            random_cv_folds = config.get('random_search_cv_folds', 5)
+            
+            await websocket.send_text(json.dumps({
+                'status': 'training',
+                'message': f'🎲 Starting Randomized Search CV with {n_iter} iterations...',
+                'timestamp': datetime.now().timestamp()
+            }))
+            
+            try:
+                # Get parameter grid (same as grid search but will sample randomly)
+                param_grid = get_param_grid_for_algorithm(algorithm_name, problem_type, 'fine')
+                
+                if not param_grid:
+                    await websocket.send_text(json.dumps({
+                        'status': 'failed',
+                        'message': f'❌ No parameter grid defined for {algorithm_name}',
+                        'timestamp': datetime.now().timestamp()
+                    }))
+                    return
+                
+                # Combine data for randomized search
+                if hasattr(X_train, 'values'):
+                    X_full = np.concatenate((X_train.values, X_test.values), axis=0)
+                    y_full = np.concatenate((y_train.values, y_test.values), axis=0)
+                else:
+                    X_full = np.concatenate((X_train, X_test), axis=0)
+                    y_full = np.concatenate((y_train, y_test), axis=0)
+                
+                # Setup CV
+                if problem_type == 'classification':
+                    cv = StratifiedKFold(n_splits=random_cv_folds, shuffle=True, random_state=42)
+                    scoring = 'accuracy'
+                else:
+                    cv = KFold(n_splits=random_cv_folds, shuffle=True, random_state=42)
+                    scoring = 'r2'
+                
+                # Initialize base model
+                base_model = initialize_algorithm_with_params(algorithm_name, problem_type, {})
+                
+                # Run Randomized Search
+                random_search = RandomizedSearchCV(
+                    base_model,
+                    param_grid,
+                    n_iter=n_iter,
+                    cv=cv,
+                    scoring=scoring,
+                    n_jobs=-1,
+                    verbose=1,
+                    random_state=42,
+                    return_train_score=True
+                )
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training',
+                    'message': f'⚙️ Testing {n_iter} random parameter combinations...',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+                random_search.fit(X_full, y_full)
+                
+                # Get best model
+                model = random_search.best_estimator_
+                best_params = random_search.best_params_
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training',
+                    'message': f'✅ Best params found: {best_params}',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+                # Calculate final metrics using best model
+                if problem_type == 'classification':
+                    cv_results = cross_validate(
+                        model, X_full, y_full,
+                        cv=cv,
+                        scoring=['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted'],
+                        return_train_score=True,
+                        n_jobs=-1
+                    )
+                    
+                    final_metrics = {
+                        'validation_method': 'randomized_search',
+                        'n_folds': random_cv_folds,
+                        'n_iterations': n_iter,
+                        'problem_type': problem_type,
+                        'best_params': best_params,
+                        'best_score': float(random_search.best_score_),
+                        'cv_mean': float(cv_results['test_accuracy'].mean()),
+                        'cv_std': float(cv_results['test_accuracy'].std()),
+                        'cv_scores': [float(s) for s in cv_results['test_accuracy']],
+                        'train_accuracy': float(cv_results['train_accuracy'].mean()),
+                        'test_accuracy': float(cv_results['test_accuracy'].mean()),
+                        'train_f1': float(cv_results['train_f1_weighted'].mean()),
+                        'test_f1': float(cv_results['test_f1_weighted'].mean()),
+                        'train_precision': float(cv_results['train_precision_weighted'].mean()),
+                        'test_precision': float(cv_results['test_precision_weighted'].mean()),
+                        'train_recall': float(cv_results['train_recall_weighted'].mean()),
+                        'test_recall': float(cv_results['test_recall_weighted'].mean()),
+                        'n_classes': int(len(np.unique(y_full)))
+                    }
+                    main_metric = f"Randomized Search Best Accuracy: {random_search.best_score_*100:.2f}%"
+                else:
+                    cv_results = cross_validate(
+                        model, X_full, y_full,
+                        cv=cv,
+                        scoring=['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error'],
+                        return_train_score=True,
+                        n_jobs=-1
+                    )
+                    
+                    final_metrics = {
+                        'validation_method': 'randomized_search',
+                        'n_folds': random_cv_folds,
+                        'n_iterations': n_iter,
+                        'problem_type': problem_type,
+                        'best_params': best_params,
+                        'best_score': float(random_search.best_score_),
+                        'cv_mean': float(cv_results['test_r2'].mean()),
+                        'cv_std': float(cv_results['test_r2'].std()),
+                        'cv_scores': [float(s) for s in cv_results['test_r2']],
+                        'train_r2': float(cv_results['train_r2'].mean()),
+                        'test_r2': float(cv_results['test_r2'].mean()),
+                        'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
+                        'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
+                        'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
+                        'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
+                        'train_rmse': float(np.sqrt(-cv_results['train_neg_mean_squared_error'].mean())),
+                        'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
+                    }
+                    main_metric = f"Randomized Search Best R²: {random_search.best_score_:.4f}"
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'training_complete',
+                    'message': f'✅ Randomized Search completed',
+                    'timestamp': datetime.now().timestamp()
+                }))
+                
+            except Exception as e:
+                await websocket.send_text(json.dumps({
+                    'status': 'failed',
+                    'message': f'❌ Randomized Search failed: {str(e)}',
                     'timestamp': datetime.now().timestamp()
                 }))
                 return

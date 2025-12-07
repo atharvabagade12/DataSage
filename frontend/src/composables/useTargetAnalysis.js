@@ -403,7 +403,10 @@ export function useTargetAnalysis() {
 
       const missingCount = dataset.length - cleanData.length;
       const missingPercent = (missingCount / dataset.length) * 100;
-      const uniqueValues = new Set(cleanData).size;
+      
+      // Use backend stats if available, otherwise calculate from sample
+      const sampleUnique = new Set(cleanData).size;
+      const uniqueValues = column.unique || sampleUnique;
 
       let currentType = column.type || "categorical";
       let originalType = column.originalType || column.type || "categorical";
@@ -424,7 +427,7 @@ export function useTargetAnalysis() {
         missingValues: missingCount,
         totalRows: dataset.length,
         uniqueValues,
-        sampleValues: cleanData.slice(0, 10),
+        sampleValues: column.hasBackendPreview ? column.backendPreview : cleanData.slice(0, 10),
         outliers: 0,
         statistics: null,
         encoding: column.encoding || "none",

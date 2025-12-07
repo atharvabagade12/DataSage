@@ -97,7 +97,7 @@
           <p class="section-description">
             Set hyperparameters and validation strategy before training
           </p>
-          <div v-if="trainingPhase === 'training'" class="training-active-badge">
+          <div v-if="isTraining" class="training-active-badge">
             🔄 Training in Progress - Configuration Locked
           </div>
           
@@ -117,7 +117,7 @@
               <button 
                 @click="resetHyperparametersToDefault" 
                 class="reset-params-btn"
-                :disabled="trainingPhase === 'training'"
+                :disabled="isTraining"
                 title="Reset all hyperparameters to default values"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -159,7 +159,7 @@
                           :min="param.min"
                           :max="param.max"
                           :step="param.step"
-                          :disabled="trainingPhase === 'training'"
+                          :disabled="isTraining"
                           class="param-slider"
                         />
                         <div class="slider-value">
@@ -217,8 +217,8 @@
               <!-- Simple Validation (No CV) -->
               <div 
                 class="strategy-card"
-                :class="{ active: validationStrategy === 'simple', disabled: trainingPhase === 'training' }"
-                @click="trainingPhase !== 'training' && (validationStrategy = 'simple')"
+                :class="{ active: validationStrategy === 'simple', disabled: isTraining }"
+                @click="!isTraining && (validationStrategy = 'simple')"
               >
                 <div class="strategy-header">
                   <div class="strategy-icon">✓</div>
@@ -233,8 +233,8 @@
               <!-- K-Fold Cross-Validation -->
               <div 
                 class="strategy-card"
-                :class="{ active: validationStrategy === 'kfold_cv', disabled: trainingPhase === 'training' }"
-                @click="trainingPhase !== 'training' && (validationStrategy = 'kfold_cv')"
+                :class="{ active: validationStrategy === 'kfold_cv', disabled: isTraining }"
+                @click="!isTraining && (validationStrategy = 'kfold_cv')"
               >
                 <div class="strategy-header">
                   <div class="strategy-icon">🔄</div>
@@ -270,55 +270,11 @@
                 </div>
               </div>
 
-              <!-- Grid Search CV (Advanced) -->
-              <div 
-                class="strategy-card"
-                :class="{ active: validationStrategy === 'grid_search', disabled: trainingPhase === 'training' }"
-                @click="trainingPhase !== 'training' && (validationStrategy = 'grid_search')"
-              >
-                <div class="strategy-header">
-                  <div class="strategy-icon">🔍</div>
-                  <h4>Grid Search CV</h4>
-                  <div class="strategy-badge advanced">Advanced</div>
-                </div>
-                <p class="strategy-description">
-                  Exhaustively search best hyperparameters using cross-validation.
-                </p>
-                
-                <!-- Grid Search Configuration -->
-                <div v-if="validationStrategy === 'grid_search'" class="strategy-config">
-                  <div class="config-item">
-                    <label>CV Folds: {{ gridSearchCVFolds }}</label>
-                    <input
-                      type="range"
-                      v-model.number="gridSearchCVFolds"
-                      min="2"
-                      max="10"
-                      step="1"
-                      class="config-slider"
-                    />
-                  </div>
-                  
-                  <div class="config-item">
-                    <label>Grid Density</label>
-                    <select v-model="gridDensity" class="param-select">
-                      <option value="coarse">Coarse (Faster)</option>
-                      <option value="normal">Normal</option>
-                      <option value="fine">Fine (Slower)</option>
-                    </select>
-                  </div>
-                  
-                  <div class="warning-box">
-                    ⚠️ Grid Search can be time-consuming for large parameter spaces
-                  </div>
-                </div>
-              </div>
-
               <!-- Randomized Search CV (Advanced) -->
               <div 
                 class="strategy-card"
-                :class="{ active: validationStrategy === 'randomized_search', disabled: trainingPhase === 'training' }"
-                @click="trainingPhase !== 'training' && (validationStrategy = 'randomized_search')"
+                :class="{ active: validationStrategy === 'randomized_search', disabled: isTraining }"
+                @click="!isTraining && (validationStrategy = 'randomized_search')"
               >
                 <div class="strategy-header">
                   <div class="strategy-icon">🎲</div>
@@ -356,17 +312,63 @@
                   </div>
                 </div>
               </div>
+
+              <!-- Grid Search CV (Advanced) -->
+              <div 
+                class="strategy-card"
+                :class="{ active: validationStrategy === 'grid_search', disabled: isTraining }"
+                @click="!isTraining && (validationStrategy = 'grid_search')"
+              >
+                <div class="strategy-header">
+                  <div class="strategy-icon">🔍</div>
+                  <h4>Grid Search CV</h4>
+                  <div class="strategy-badge expert">Expert</div>
+                </div>
+                <p class="strategy-description">
+                  Exhaustively search best hyperparameters using cross-validation.
+                </p>
+                
+                <!-- Grid Search Configuration -->
+                <div v-if="validationStrategy === 'grid_search'" class="strategy-config">
+                  <div class="config-item">
+                    <label>CV Folds: {{ gridSearchCVFolds }}</label>
+                    <input
+                      type="range"
+                      v-model.number="gridSearchCVFolds"
+                      min="2"
+                      max="10"
+                      step="1"
+                      class="config-slider"
+                    />
+                  </div>
+                  
+                  <div class="config-item">
+                    <label>Grid Density</label>
+                    <select v-model="gridDensity" class="param-select">
+                      <option value="coarse">Coarse (Faster)</option>
+                      <option value="normal">Normal</option>
+                      <option value="fine">Fine (Slower)</option>
+                    </select>
+                  </div>
+                  
+                  <div class="warning-box">
+                    ⚠️ Grid Search can be time-consuming for large parameter spaces
+                  </div>
+                </div>
+              </div>
+
+              
             </div>
           </div>
         </div>
 
         <!-- Start Training Button -->
-        <div class="config-actions" v-if="trainingPhase === 'configuration'">
+        <div class="config-actions" v-if="trainingPhase === 'configuration' || isCompleted">
           <button @click="proceedToTraining" class="start-training-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8,5.14V19.14L19,12.14L8,5.14Z"/>
             </svg>
-            Start Training
+            {{ isCompleted ? 'Retrain Model' : 'Start Training' }}
           </button>
         </div>
       </section>
@@ -474,22 +476,7 @@
             </div>
           </div>
 
-          <!-- Training Stages Progress Bar -->
-          <div class="training-stages-bar">
-            <div
-              v-for="(stage, index) in trainingStages"
-              :key="stage.name"
-              class="stage-item-new"
-              :class="getStageStatusClass(index)"
-            >
-              <div class="stage-icon-wrapper">
-                <span class="stage-icon-emoji">{{
-                  getStageIconByStatus(index)
-                }}</span>
-              </div>
-              <span class="stage-name-new">{{ stage.name }}</span>
-            </div>
-          </div>
+          
         </div>
       </section>
 
@@ -732,6 +719,119 @@
               <div class="folds-grid">
                 <div v-for="(score, idx) in currentMetrics.cv_scores" :key="idx" class="fold-item">
                   <span class="fold-label">Fold {{ idx + 1 }}</span>
+                  <span class="fold-value"> {{ (score * 100).toFixed(2) }}%</span>
+                  <div class="fold-bar" :style="{ width: (score * 100) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Grid Search CV Results -->
+          <div v-if="currentMetrics.validation_method === 'grid_search'" class="cv-results-section">
+            <h3>🔍 Grid Search CV Results</h3>
+            
+            <!-- Best Score -->
+            <div class="cv-metrics-grid">
+              <div class="metric-card highlight">
+                <div class="metric-icon">🏆</div>
+                <div class="metric-content">
+                  <div class="metric-label">Best Score</div>
+                  <div class="metric-value">{{ (currentMetrics.best_score * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon">📊</div>
+                <div class="metric-content">
+                  <div class="metric-label">Mean CV Score</div>
+                  <div class="metric-value">{{ (currentMetrics.cv_mean * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon">📈</div>
+                <div class="metric-content">
+                  <div class="metric-label">Std Deviation</div>
+                  <div class="metric-value">± {{ (currentMetrics.cv_std * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Best Parameters -->
+            <div class="best-params-section" v-if="currentMetrics.best_params">
+              <h4>✨ Best Hyperparameters Found</h4>
+              <div class="params-grid">
+                <div v-for="(value, key) in currentMetrics.best_params" :key="key" class="param-badge">
+                  <span class="param-name">{{ key }}</span>
+                  <span class="param-value">{{ value }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Fold Scores -->
+            <div class="fold-scores-list">
+              <h4>Individual Fold Scores</h4>
+              <div class="folds-grid">
+                <div v-for="(score, idx) in currentMetrics.cv_scores" :key="idx" class="fold-item">
+                  <span class="fold-label">Fold {{ idx + 1 }}</span>
+                  <span class="fold-value">{{ (score * 100).toFixed(2) }}%</span>
+                  <div class="fold-bar" :style="{ width: (score * 100) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Randomized Search CV Results -->
+          <div v-if="currentMetrics.validation_method === 'randomized_search'" class="cv-results-section">
+            <h3>🎲 Randomized Search CV Results</h3>
+            
+            <!-- Best Score -->
+            <div class="cv-metrics-grid">
+              <div class="metric-card highlight">
+                <div class="metric-icon">🏆</div>
+                <div class="metric-content">
+                  <div class="metric-label">Best Score</div>
+                  <div class="metric-value">{{ (currentMetrics.best_score * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon">📊</div>
+                <div class="metric-content">
+                  <div class="metric-label">Mean CV Score</div>
+                  <div class="metric-value">{{ (currentMetrics.cv_mean * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon">📈</div>
+                <div class="metric-content">
+                  <div class="metric-label">Std Deviation</div>
+                  <div class="metric-value">± {{ (currentMetrics.cv_std * 100).toFixed(2) }}%</div>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon">🔢</div>
+                <div class="metric-content">
+                  <div class="metric-label">Iterations</div>
+                  <div class="metric-value">{{ currentMetrics.n_iterations }}</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Best Parameters -->
+            <div class="best-params-section" v-if="currentMetrics.best_params">
+              <h4>✨ Best Hyperparameters Found</h4>
+              <div class="params-grid">
+                <div v-for="(value, key) in currentMetrics.best_params" :key="key" class="param-badge">
+                  <span class="param-name">{{ key }}</span>
+                  <span class="param-value">{{ value }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Fold Scores -->
+            <div class="fold-scores-list">
+              <h4>Individual Fold Scores</h4>
+              <div class="folds-grid">
+                <div v-for="(score, idx) in currentMetrics.cv_scores" :key="idx" class="fold-item">
+                  <span class="fold-label">Fold {{ idx + 1 }}</span>
                   <span class="fold-value">{{ (score * 100).toFixed(2) }}%</span>
                   <div class="fold-bar" :style="{ width: (score * 100) + '%' }"></div>
                 </div>
@@ -754,15 +854,15 @@
         </section>
       </div>
 
-      <!-- Tweak Parameters Button (Visible after completion) -->
+      <!-- Try Different Configuration Button (Visible after completion) -->
       <div v-if="isCompleted" class="tweak-params-section">
-        <button @click="unlockConfiguration" class="tweak-params-btn">
+        <button @click="scrollToConfiguration" class="tweak-params-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+            <path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/>
           </svg>
           <div class="btn-content">
-            <span class="btn-title">🎛️ Tweak Parameters</span>
-            <span class="btn-subtitle">Adjust hyperparameters and retrain with different settings</span>
+            <span class="btn-title">✨ Try Different Configuration</span>
+            <span class="btn-subtitle">Scroll to configuration and train with new settings</span>
           </div>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
             <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
@@ -848,13 +948,20 @@ const logsContainer = ref(null);
 const chartContainer = ref(null);
 let trainingChart = null;
 
+// Progress simulation
+let progressSimulator = null;
+const targetProgress = ref(0);
+
 const currentMetrics = reactive({
   train_accuracy: 0, test_accuracy: 0, train_f1: 0, test_f1: 0,
   train_precision: 0, test_precision: 0, train_recall: 0, test_recall: 0,
   train_r2: 0, test_r2: 0, train_mse: 0, test_mse: 0,
   train_mae: 0, test_mae: 0,
   cv_mean: 0, cv_std: 0, cv_scores: [],
-  validation_method: 'simple'
+  validation_method: 'simple',
+  best_params: null,
+  best_score: 0,
+  n_iterations: 0
 });
 
 // Training History for comparison
@@ -887,7 +994,15 @@ const formatLogTime = (ts) => new Date(ts).toLocaleTimeString();
 const getCurrentStageIcon = () => '🔄';
 const getStageStatusClass = (i) => trainingStages.value[i]?.status || 'pending';
 const getStageIconByStatus = (i) => trainingStages.value[i]?.status === 'completed' ? '✓' : '○';
-const getValidationMethodDisplay = () => validationStrategy.value;
+const getValidationMethodDisplay = () => {
+  const methodLabels = {
+    'simple': 'Train/Test Split',
+    'kfold_cv': 'K-Fold CV',
+    'grid_search': 'Grid Search CV',
+    'randomized_search': 'Randomized Search CV'
+  };
+  return methodLabels[validationStrategy.value] || validationStrategy.value;
+};
 
 // ===== NEW HELPER FUNCTIONS FOR ENHANCED METRICS =====
 
@@ -982,6 +1097,22 @@ const updateMetrics = (metrics) => {
     currentMetrics.cv_std = metrics.cv_std || metrics.cvstd || 0;
     currentMetrics.cv_scores = metrics.cv_scores || metrics.cvscores || [];
   }
+  
+  // Grid Search / Randomized Search specific metrics
+  if (metrics.best_params !== undefined) {
+    currentMetrics.best_params = metrics.best_params;
+  }
+  if (metrics.best_score !== undefined) {
+    currentMetrics.best_score = metrics.best_score;
+  }
+  if (metrics.n_iterations !== undefined) {
+    currentMetrics.n_iterations = metrics.n_iterations;
+  }
+  
+  // Update validation method
+  if (metrics.validation_method !== undefined) {
+    currentMetrics.validation_method = metrics.validation_method;
+  }
 
   currentMetrics.samplesPerSec = Math.floor(800 + Math.random() * 400);
 
@@ -1004,6 +1135,50 @@ const updateMetrics = (metrics) => {
     test_mse: currentMetrics.test_mse,
     test_f1: currentMetrics.test_f1,
   });
+};
+
+// ===== PROGRESS SIMULATION FUNCTIONS =====
+
+const simulateProgress = (target, speed = 1, onComplete = null) => {
+  targetProgress.value = target;
+  
+  // Clear existing simulator
+  if (progressSimulator) {
+    clearInterval(progressSimulator);
+  }
+  
+  // Don't simulate if already at or past target
+  if (trainingProgress.value >= target) {
+    trainingProgress.value = target;
+    if (onComplete) onComplete();
+    return;
+  }
+  
+  // Gradually increment progress
+  progressSimulator = setInterval(() => {
+    if (trainingProgress.value < targetProgress.value) {
+      // Slower increment as we approach target (more realistic)
+      const remaining = targetProgress.value - trainingProgress.value;
+      const increment = Math.max(0.3, Math.min(remaining / 10, 1.5)) * speed;
+      
+      trainingProgress.value = Math.min(
+        trainingProgress.value + increment,
+        targetProgress.value
+      );
+    } else {
+      clearInterval(progressSimulator);
+      progressSimulator = null;
+      
+      // Execute callback when animation completes
+      if (onComplete) {
+        onComplete();
+      }
+    }
+  }, 150); // Update every 150ms for smooth animation
+};
+
+const getTrainingMessage = () => {
+  return 'Training in progress...';
 };
 
 // ===== NEW: Configuration Phase Functions =====
@@ -1557,6 +1732,15 @@ const stopTraining = () => {
   router.push("/algorithm-select");
 };
 
+const scrollToConfiguration = () => {
+  // Scroll to the top where configuration sections are located
+  addLog("info", "Navigating to configuration sections...");
+  
+  nextTick(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+};
+
 const unlockConfiguration = () => {
   // Return to configuration phase
   trainingPhase.value = 'configuration';
@@ -1697,6 +1881,10 @@ const startTraining = async () => {
       test_size: 1 - splitRatio.value,
       validation_method: validationStrategy.value,
       cv_folds: validationStrategy.value === 'kfold_cv' ? cvFolds.value : undefined,
+      grid_search_cv_folds: validationStrategy.value === 'grid_search' ? gridSearchCVFolds.value : undefined,
+      grid_density: validationStrategy.value === 'grid_search' ? gridDensity.value : undefined,
+      random_search_cv_folds: validationStrategy.value === 'randomized_search' ? randomSearchCVFolds.value : undefined,
+      random_search_iterations: validationStrategy.value === 'randomized_search' ? randomSearchIterations.value : undefined,
       hyperparameters: { ...hyperparameters }
     };
 
@@ -1772,53 +1960,77 @@ const handleTrainingMessage = (data) => {
   // Update stage status based on message
   if (status === 'started' || status === 'data_loaded') {
     trainingStages.value[0].status = 'active';
-    trainingProgress.value = 10;
+    simulateProgress(15, 0.5); // Slow start to 15%
   } else if (status === 'preprocessing' || status === 'model_init' || status === 'model_ready') {
     trainingStages.value[0].status = 'active';
-    trainingProgress.value = 25;
+    simulateProgress(30, 0.8); // Gradually to 30%
   } else if (status === 'training') {
     trainingStages.value[0].status = 'completed';
     trainingStages.value[1].status = 'active';
-    trainingProgress.value = 50;
+    
+    // Simulate progress based on validation strategy
+    if (validationStrategy.value === 'kfold_cv') {
+      simulateProgress(85, 0.6); // Slower for K-Fold (multiple folds)
+    } else if (validationStrategy.value === 'grid_search') {
+      simulateProgress(80, 0.4); // Even slower for Grid Search (many combinations)
+    } else if (validationStrategy.value === 'randomized_search') {
+      simulateProgress(82, 0.5); // Moderate for Randomized Search
+    } else {
+      simulateProgress(70, 1); // Moderate speed for simple validation
+    }
+    
     currentStageTitle.value = 'Training Model';
-    currentStageMessage.value = message || 'Training in progress...';
+    currentStageMessage.value = getTrainingMessage(); // Dynamic message with fold info
   } else if (status === 'training_complete') {
     trainingStages.value[1].status = 'completed';
-    trainingProgress.value = 75;
+    simulateProgress(88, 1.2); // Quick jump to 88%
   } else if (status === 'evaluating') {
     trainingStages.value[2].status = 'active';
-    trainingProgress.value = 85;
+    simulateProgress(95, 1.5); // Faster near end
     currentStageTitle.value = 'Evaluating Performance';
     currentStageMessage.value = 'Calculating metrics...';
   } else if (status === 'saving') {
     trainingStages.value[2].status = 'completed';
     trainingStages.value[3].status = 'active';
-    trainingProgress.value = 95;
+    simulateProgress(98, 2); // Very fast to 98%
   } else if (status === 'completed') {
     console.log('🎉 Training completed! Full data received:', data);
     console.log('🔍 Checking final_metrics:', data.final_metrics);
     
     trainingStages.value[3].status = 'completed';
-    trainingProgress.value = 100;
-    isTraining.value = false;
-    isCompleted.value = true;
-    currentStageTitle.value = 'Training Complete!';
-    currentStageMessage.value = 'Model trained successfully';
+    
+    // Animate to 100% first, then show completion state and metrics
+    simulateProgress(100, 2.5, () => {
+      // This callback runs AFTER animation reaches 100%
+      isTraining.value = false;
+      isCompleted.value = true;
+      currentStageTitle.value = 'Training Complete!';
+      currentStageMessage.value = 'Model trained successfully';
 
-    // Update metrics with final results
-    if (data.final_metrics) {
-      console.log('📊 Final metrics received:', data.final_metrics);
-      updateMetrics(data.final_metrics);
-    } else {
-      console.error('❌ No final_metrics in completion data!');
-    }
+      // Note: Configuration inputs will auto-unlock because isTraining = false
+      // We keep trainingPhase = 'training' to show the metrics section
 
+      // Update metrics with final results AFTER animation completes
+      if (data.final_metrics) {
+        console.log('📊 Final metrics received:', data.final_metrics);
+        updateMetrics(data.final_metrics);
+      } else {
+        console.error('❌ No final_metrics in completion data!');
+      }
+    });
     
   } else if (status === 'failed') {
     trainingStages.value.forEach(stage => {
       if (stage.status === 'active') stage.status = 'failed';
     });
     isTraining.value = false;
+    
+    // Stop progress simulation on failure
+    if (progressSimulator) {
+      clearInterval(progressSimulator);
+      progressSimulator = null;
+    }
+    
     addLog('error', message || 'Training failed');
   }
 
@@ -1908,7 +2120,12 @@ const updateChart = (epoch, trainScore, testScore) => {
   trainingChart.update();
 };
 
-
+const destroyChart = () => {
+  if (trainingChart) {
+    trainingChart.destroy();
+    trainingChart = null;
+  }
+};
 
 const goBack = () => {
   // Clean up before leaving
@@ -1924,6 +2141,8 @@ const goBack = () => {
   
   router.push('/algorithm-select');
 };
+
+
 
 const loadConfiguration = async () => {
   try {
@@ -2093,6 +2312,9 @@ onUnmounted(() => {
   }
   if (timeInterval) {
     clearInterval(timeInterval);
+  }
+  if (progressSimulator) {
+    clearInterval(progressSimulator);
   }
   destroyChart();
 });
@@ -3729,6 +3951,7 @@ onUnmounted(() => {
   background: rgba(102, 126, 234, 0.2);
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .param-slider::-webkit-slider-thumb {
@@ -3921,6 +4144,11 @@ onUnmounted(() => {
 .strategy-badge.advanced {
   background: rgba(251, 191, 36, 0.2);
   color: #fbbf24;
+}
+
+.strategy-badge.expert{
+  background: rgba(231, 60, 37, 0.2);
+  color: #e01b1b;
 }
 
 .strategy-description {
@@ -4174,5 +4402,202 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+/* Best Parameters Section */
+.best-params-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.best-params-section h4 {
+  color: #e0e7ff;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.param-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.param-badge:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(102, 126, 234, 0.5);
+  transform: translateY(-2px);
+}
+
+.param-name {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.param-value {
+  font-size: 1rem;
+  color: #e0e7ff;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+/* ===== CV RESULTS SECTION STYLES ===== */
+.cv-results-section {
+  margin-top: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.03), rgba(118, 75, 162, 0.03));
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.cv-results-section h3 {
+  color: #e0e7ff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cv-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.cv-metrics-grid .metric-card {
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.cv-metrics-grid .metric-card:hover {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.cv-metrics-grid .metric-card.highlight {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.cv-metrics-grid .metric-icon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.cv-metrics-grid .metric-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cv-metrics-grid .metric-label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.cv-metrics-grid .metric-value {
+  font-size: 1.75rem;
+  color: #e0e7ff;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+}
+
+/* ===== FOLD SCORES LIST STYLES ===== */
+.fold-scores-list {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.fold-scores-list h4 {
+  color: #e0e7ff;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.folds-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fold-item {
+  display: grid;
+  grid-template-columns: 80px 100px 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.fold-item:hover {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateX(4px);
+}
+
+.fold-label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fold-value {
+  font-size: 1rem;
+  color: #e0e7ff;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  text-align: right;
+}
+
+.fold-bar {
+  height: 8px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
 </style>
+
 

@@ -141,10 +141,14 @@ watch(() => props.selectedColumn, async (newColumn) => {
     } else {
       chartType.value = "doughnut";
     }
+    
+    console.log("📊 Chart update triggered for:", newColumn.name);
+    console.log("   Has backend distribution:", !!newColumn.distribution);
+
     await nextTick();
     await generateChart();
   }
-});
+}, { deep: true });
 
 watch(chartType, async () => {
   if (props.selectedColumn) {
@@ -247,32 +251,63 @@ const generateChart = async () => {
 };
 
 const generateNumericChart = async (Chart, ctx, data) => {
+  const distribution = props.selectedColumn.distribution;
+  const useBackend = distribution && distribution.type === "numerical";
+
   switch (chartType.value) {
     case "histogram":
-      await createHistogramChart(Chart, ctx, data);
+      if (useBackend && distribution.histogram) {
+        await createBackendHistogramChart(Chart, ctx, distribution.histogram);
+      } else {
+        await createHistogramChart(Chart, ctx, data);
+      }
       break;
     case "box":
-      await createBoxPlotChart(Chart, ctx, data);
+      if (useBackend && distribution.box_plot) {
+        await createBackendBoxPlotChart(Chart, ctx, distribution.box_plot);
+      } else {
+        await createBoxPlotChart(Chart, ctx, data);
+      }
       break;
     case "scatter":
+      // Scatter plot still requires raw data points, so use sample
       await createScatterChart(Chart, ctx, data);
       break;
     case "line":
-      await createLineChart(Chart, ctx, data);
+       // Distribution curve
+       if (useBackend && distribution.histogram) {
+          // Approximate curve from histogram
+           await createBackendHistogramChart(Chart, ctx, distribution.histogram); // Fallback to histogram for now or implement curve approx
+       } else {
+          await createLineChart(Chart, ctx, data);
+       }
       break;
     default:
-      await createHistogramChart(Chart, ctx, data);
+      if (useBackend && distribution.histogram) {
+        await createBackendHistogramChart(Chart, ctx, distribution.histogram);
+      } else {
+        await createHistogramChart(Chart, ctx, data);
+      }
   }
 };
 
 const generateCategoricalChart = async (Chart, ctx, data) => {
-  const counts = {};
-  data.forEach((val) => {
-    counts[val] = (counts[val] || 0) + 1;
-  });
-  const entries = Object.entries(counts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 15);
+  let entries = [];
+  const distribution = props.selectedColumn.distribution;
+
+  if (distribution && distribution.type === "categorical" && distribution.value_counts) {
+      // Use backend value counts
+      entries = Object.entries(distribution.value_counts);
+  } else {
+      // Fallback to sample data counting
+      const counts = {};
+      data.forEach((val) => {
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      entries = Object.entries(counts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 15);
+  }
 
   switch (chartType.value) {
     case "doughnut":
@@ -284,6 +319,57 @@ const generateCategoricalChart = async (Chart, ctx, data) => {
     default:
       await createDoughnutChart(Chart, ctx, entries);
   }
+};
+
+const createBackendHistogramChart = async (Chart, ctx, histogram) => {
+    // Histogram from backend: counts and bin_edges
+    // bin_edges has N+1 elements, counts has N elements
+    const labels = [];
+    for (let i = 0; i < histogram.counts.length; i++) {
+        const start = histogram.bin_edges[i];
+        const end = histogram.bin_edges[i+1];
+        labels.push(`${start.toFixed(1)}-${end.toFixed(1)}`);
+    }
+
+    chartInstance.value = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Count (Full Dataset)",
+          data: histogram.counts,
+          backgroundColor: "rgba(102, 126, 234, 0.7)",
+          borderColor: "rgba(102, 126, 234, 1)",
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: getChartOptions("Distribution (Full Dataset)"),
+  });
+};
+
+const createBackendBoxPlotChart = async (Chart, ctx, boxPlot) => {
+  chartInstance.value = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["Min", "Q1", "Median", "Q3", "Max"],
+      datasets: [
+        {
+          label: "Statistics (Full Dataset)",
+          data: [boxPlot.min, boxPlot.q1, boxPlot.median, boxPlot.q3, boxPlot.max],
+          backgroundColor: [
+            "rgba(239, 68, 68, 0.7)",
+            "rgba(245, 158, 11, 0.7)",
+            "rgba(16, 185, 129, 0.7)",
+            "rgba(59, 130, 246, 0.7)",
+            "rgba(139, 92, 246, 0.7)",
+          ],
+        },
+      ],
+    },
+    options: getChartOptions("Box Plot (Full Dataset)"),
+  });
 };
 
 const createHistogramChart = async (Chart, ctx, data) => {

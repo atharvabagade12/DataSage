@@ -14,7 +14,7 @@
           >
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
-          Back to Data
+          Back to Data-Preprocessing
         </button>
         <div class="breadcrumb">
           <span>Data Preview</span>
@@ -147,7 +147,7 @@ import TargetInsights from '../components/target-selection/TargetInsights.vue';
 
 const router = useRouter();
 const mlStore = useMLDataFlowStore();
-const { authenticatedPost } = useAuthenticatedFetch();
+const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch();
 const { processColumns } = useTargetAnalysis();
 
 // State
@@ -331,9 +331,60 @@ const continueToAdvancedPreprocessing = async () => {
   }
 };
 
+const fetchCompleteStatistics = async () => {
+  if (!datasetId.value) return;
+
+  try {
+    console.log("🔄 Fetching complete statistics...");
+    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}/statistics`);
+    
+    if (!response.ok) {
+      console.warn("⚠️ Failed to fetch statistics");
+      return;
+    }
+
+    const stats = await response.json();
+
+    if (stats.column_stats) {
+      // Update columns with backend statistics
+      stats.column_stats.forEach(stat => {
+        const col = columns.value.find(c => c.name === stat.name);
+        if (col) {
+          col.unique = stat.unique;
+          col.missing = stat.missing;
+          col.distribution = stat.distribution; // Store backend distribution data
+          // Use top values for preview if available (better than first 10 rows)
+          if (stat.top_values && stat.top_values.length > 0) {
+            col.hasBackendPreview = true;
+            col.backendPreview = stat.top_values;
+          }
+        }
+      });
+
+      // Re-process columns with new data
+      availableColumns.value = processColumns(dataset.value, columns.value);
+      
+      // Refresh selectedColumn if it exists to ensure it has the new stats
+      if (selectedColumn.value) {
+        const updatedCol = availableColumns.value.find(c => c.name === selectedColumn.value.name);
+        if (updatedCol) {
+          console.log("🔄 Refreshing selected column with full stats");
+          selectedColumn.value = updatedCol;
+        }
+      }
+      
+      console.log("✅ Updated columns with full dataset statistics");
+    }
+  } catch (error) {
+    console.warn("⚠️ Error updating statistics:", error);
+  }
+};
+
 onMounted(async () => {
   await mlStore.checkBackendConnection();
   await loadPreviousData();
+  // Fetch full stats after loading data
+  await fetchCompleteStatistics();
 });
 </script>
 

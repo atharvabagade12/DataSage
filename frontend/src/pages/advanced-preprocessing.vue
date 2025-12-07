@@ -2038,6 +2038,38 @@ const proceedToAlgorithmSelection = () => {
     console.error('❌ WARNING: datasetId.value is empty! Cannot save to localStorage');
   }
 
+  // CRITICAL FIX: Save the current processed data preview to localStorage
+  // This ensures algorithm-select.vue displays the preprocessed (scaled/encoded) data
+  const currentDataPreview = splitApplied.value 
+    ? (trainData.value.length > 0 ? trainData.value : originalDataset.value)
+    : originalDataset.value;
+
+  const processedDataPayload = {
+    data: currentDataPreview.slice(0, 200), // Save preview (first 200 rows)
+    fileName: fileName.value,
+    backendDatasetId: datasetId.value,
+    datasetId: datasetId.value,
+    totalRowsInBackend: totalRowsInBackend.value,
+    rowCount: totalRowsInBackend.value || currentDataPreview.length,
+    columnCount: columns.value.length,
+    columns: columns.value.map(col => col.name || col),
+    backendAvailable: mlStore.backendConnected,
+    preprocessingApplied: {
+      split: splitApplied.value,
+      scaling: scalingApplied.value,
+      encoding: encodingApplied.value,
+      scaledColumns: Array.from(scaledColumns.value)
+    }
+  };
+
+  localStorage.setItem('processedData', JSON.stringify(processedDataPayload));
+  console.log('✅ Saved processed data preview to localStorage:', {
+    rows: processedDataPayload.data.length,
+    columns: processedDataPayload.columnCount,
+    scaled: scalingApplied.value,
+    scaledColumns: processedDataPayload.preprocessingApplied.scaledColumns
+  });
+
   // Ensure pipeline state has targetColumn for navigation guard
   const pipelineState = JSON.parse(
     localStorage.getItem("datasage_pipeline_state") || "{}"
@@ -3603,6 +3635,7 @@ watch(currentSplitView, () => {
   border-radius: 3px;
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .range-slider::-webkit-slider-thumb {
@@ -4004,6 +4037,7 @@ watch(currentSplitView, () => {
   border-radius: 3px;
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .range-slider::-webkit-slider-thumb {
