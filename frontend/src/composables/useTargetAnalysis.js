@@ -428,6 +428,8 @@ export function useTargetAnalysis() {
         totalRows: dataset.length,
         uniqueValues,
         sampleValues: column.hasBackendPreview ? column.backendPreview : cleanData.slice(0, 10),
+        distribution: column.distribution || null, // Preserve backend distribution data
+        metrics: column.metrics || null, // Preserve backend metrics
         outliers: 0,
         statistics: null,
         encoding: column.encoding || "none",

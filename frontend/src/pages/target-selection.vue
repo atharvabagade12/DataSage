@@ -353,6 +353,7 @@ const fetchCompleteStatistics = async () => {
           col.unique = stat.unique;
           col.missing = stat.missing;
           col.distribution = stat.distribution; // Store backend distribution data
+          col.metrics = stat.detailed_metrics; // Store enhanced metrics
           // Use top values for preview if available (better than first 10 rows)
           if (stat.top_values && stat.top_values.length > 0) {
             col.hasBackendPreview = true;

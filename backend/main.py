@@ -840,7 +840,8 @@ async def get_dataset_statistics(
                 "unique": unique_count,
                 "missing": missing_count,
                 "top_values": [],
-                "distribution": None
+                "distribution": None,
+                "detailed_metrics": None
             }
 
             try:
@@ -867,18 +868,51 @@ async def get_dataset_statistics(
                                 "max": quantiles[4]
                             }
                         }
+                        
+                        # Detailed Metrics for Numerical
+                        stat_entry["detailed_metrics"] = {
+                            "mean": float(clean_series.mean()),
+                            "median": float(clean_series.median()),
+                            "min": float(clean_series.min()),
+                            "max": float(clean_series.max()),
+                            "range": float(clean_series.max() - clean_series.min()),
+                            "skewness": float(clean_series.skew()) if len(clean_series) > 1 else 0
+                        }
                 else:
                     # Calculate value counts for categorical columns
-                    top_vals_series = df[col].value_counts().head(15) # Top 15 for charts
-                    top_vals = top_vals_series.index.tolist()
-                    stat_entry["top_values"] = [str(v) for v in top_vals] # Keep for preview
+                    top_vals_series = df[col].value_counts()
+                    top_15_series = top_vals_series.head(15) 
+                    
+                    top_vals = top_15_series.index.tolist()
+                    stat_entry["top_values"] = [str(v) for v in top_vals] 
                     
                     stat_entry["distribution"] = {
                         "type": "categorical",
-                        "value_counts": {str(k): int(v) for k, v in top_vals_series.items()}
+                        "value_counts": {str(k): int(v) for k, v in top_15_series.items()}
                     }
+                    
+                    # Detailed Metrics for Categorical
+                    if not top_vals_series.empty:
+                        majority_class = top_vals_series.index[0]
+                        majority_count = top_vals_series.iloc[0]
+                        minority_class = top_vals_series.index[-1]
+                        minority_count = top_vals_series.iloc[-1]
+                        total_count = top_vals_series.sum()
+                        
+                        stat_entry["detailed_metrics"] = {
+                            "class_count": len(top_vals_series),
+                            "majority_class": {
+                                "name": str(majority_class),
+                                "percent": round((majority_count / total_count) * 100, 1) if total_count > 0 else 0
+                            },
+                            "minority_class": {
+                                "name": str(minority_class),
+                                "percent": round((minority_count / total_count) * 100, 1) if total_count > 0 else 0
+                            },
+                            "imbalance_ratio": round(majority_count / minority_count, 2) if minority_count > 0 else float('inf')
+                        }
             except Exception as e:
-                print(f"Error calculating distribution for {col}: {e}")
+                print(f"Error calculating distribution/metrics for {col}: {e}")
 
             column_stats.append(stat_entry)
 

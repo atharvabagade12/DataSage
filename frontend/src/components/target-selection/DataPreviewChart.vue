@@ -76,24 +76,85 @@
         <!-- ENHANCED CHART INSIGHTS -->
         <div v-if="!isLoadingChart" class="chart-insights">
           <div class="insight-cards">
-            <div class="insight-card">
-              <span class="insight-label">Distribution</span>
-              <span class="insight-value">{{ getDistributionType() }}</span>
-            </div>
-            <div class="insight-card">
-              <span class="insight-label">Outliers</span>
-              <span class="insight-value">{{ getOutlierCount() }}</span>
-            </div>
-            <div class="insight-card">
-              <span class="insight-label">Skewness</span>
-              <span class="insight-value">{{ getSkewness() }}</span>
-            </div>
-            <div class="insight-card">
-              <span class="insight-label">Completeness</span>
-              <span class="insight-value"
-                >{{ getCompletenessPercentage() }}%</span
-              >
-            </div>
+            <!-- NUMERICAL METRICS -->
+            <template v-if="selectedColumn.metrics && (selectedColumn.type === 'number' || selectedColumn.type === 'numerical')">
+              <div class="insight-card">
+                <span class="insight-label">Mean</span>
+                <span class="insight-value">{{ selectedColumn.metrics.mean.toFixed(2) }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Median</span>
+                <span class="insight-value">{{ selectedColumn.metrics.median.toFixed(2) }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Range</span>
+                <span class="insight-value">{{ selectedColumn.metrics.min !== undefined ? `${selectedColumn.metrics.min.toFixed(1)} - ${selectedColumn.metrics.max.toFixed(1)}` : selectedColumn.metrics.range.toFixed(2) }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Skewness</span>
+                <span class="insight-value">{{ selectedColumn.metrics.skewness.toFixed(2) }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Outliers</span>
+                <span class="insight-value">{{ getOutlierCount() }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Completeness</span>
+                <span class="insight-value">{{ getCompletenessPercentage() }}%</span>
+              </div>
+            </template>
+
+            <!-- CATEGORICAL METRICS -->
+            <template v-else-if="selectedColumn.metrics && (selectedColumn.type === 'string' || selectedColumn.type === 'categorical')">
+              <div class="insight-card">
+                <span class="insight-label">Classes</span>
+                <span class="insight-value">{{ selectedColumn.metrics.class_count }}</span>
+              </div>
+              <div class="insight-card" v-if="selectedColumn.metrics.majority_class">
+                <span class="insight-label">Majority</span>
+                <span class="insight-value" :title="selectedColumn.metrics.majority_class.name">
+                    {{ selectedColumn.metrics.majority_class.percent }}%
+                </span>
+                <span class="insight-sub">{{ getTruncatedName(selectedColumn.metrics.majority_class.name) }}</span>
+              </div>
+              <div class="insight-card" v-if="selectedColumn.metrics.minority_class">
+                <span class="insight-label">Minority</span>
+                <span class="insight-value" :title="selectedColumn.metrics.minority_class.name">
+                    {{ selectedColumn.metrics.minority_class.percent }}%
+                </span>
+                <span class="insight-sub">{{ getTruncatedName(selectedColumn.metrics.minority_class.name) }}</span>
+              </div>
+              <div class="insight-card" :title="getImbalanceTooltip(selectedColumn.metrics.imbalance_ratio)">
+                <span class="insight-label">Imbalance ℹ️</span>
+                <span class="insight-value">{{ formatImbalance(selectedColumn.metrics.imbalance_ratio.toFixed(1)) }}</span>
+              </div>
+              <div class="insight-card">
+                 <span class="insight-label">Completeness</span>
+                 <span class="insight-value">{{ getCompletenessPercentage() }}%</span>
+              </div>
+            </template>
+
+            <!-- FALLBACK METRICS -->
+            <template v-else>
+              <div class="insight-card">
+                <span class="insight-label">Distribution</span>
+                <span class="insight-value">{{ getDistributionType() }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Outliers</span>
+                <span class="insight-value">{{ getOutlierCount() }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Skewness</span>
+                <span class="insight-value">{{ getSkewness() }}</span>
+              </div>
+              <div class="insight-card">
+                <span class="insight-label">Completeness</span>
+                <span class="insight-value"
+                  >{{ getCompletenessPercentage() }}%</span
+                >
+              </div>
+            </template>
           </div>
 
           <!-- ENCODING INFORMATION -->
@@ -204,6 +265,29 @@ const getCompletenessPercentage = () => {
   return props.selectedColumn
     ? Math.round(100 - props.selectedColumn.missingPercent)
     : 0;
+};
+
+const getTruncatedName = (name) => {
+    if (!name) return "";
+    return String(name).length > 10 ? String(name).substring(0, 10) + "..." : String(name);
+};
+
+const formatImbalance = (ratio) => {
+  if (!ratio || ratio === Infinity) return "N/A";
+  // Format as "X:1"
+  return `${Number(ratio).toFixed(1)}:1`;
+};
+
+const getImbalanceTooltip = (ratio) => {
+  if (!ratio) return "";
+  const r = Number(ratio);
+  let status = "";
+  if (r <= 3) status = "Balanced";
+  else if (r <= 6) status = "Mild Imbalance";
+  else if (r <= 10) status = "High Imbalance";
+  else status = "Severe Imbalance 🚨";
+  
+  return `Ratio: ${r.toFixed(2)}:1\nStatus: ${status}\n\nReference:\n1:1 - 3:1: Balanced\n3:1 - 6:1: Mild Imbalance\n6:1 - 10:1: High Imbalance\n> 10:1: Severe Imbalance`;
 };
 
 // ============= CHART GENERATION =============
