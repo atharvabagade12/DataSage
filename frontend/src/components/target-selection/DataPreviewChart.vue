@@ -126,7 +126,7 @@
               </div>
               <div class="insight-card" :title="getImbalanceTooltip(selectedColumn.metrics.imbalance_ratio)">
                 <span class="insight-label">Imbalance ℹ️</span>
-                <span class="insight-value">{{ formatImbalance(selectedColumn.metrics.imbalance_ratio.toFixed(1)) }}</span>
+                <span class="insight-value">{{ formatImbalance(selectedColumn.metrics.imbalance_ratio) }}</span>
               </div>
               <div class="insight-card">
                  <span class="insight-label">Completeness</span>
@@ -134,7 +134,6 @@
               </div>
             </template>
 
-            <!-- FALLBACK METRICS -->
             <template v-else>
               <div class="insight-card">
                 <span class="insight-label">Distribution</span>
@@ -275,7 +274,7 @@ const getTruncatedName = (name) => {
 const formatImbalance = (ratio) => {
   if (!ratio || ratio === Infinity) return "N/A";
   // Format as "X:1"
-  return `${Number(ratio).toFixed(1)}:1`;
+  return `${Number(ratio).toFixed(0)}:1`;
 };
 
 const getImbalanceTooltip = (ratio) => {

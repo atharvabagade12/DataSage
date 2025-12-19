@@ -791,7 +791,7 @@ const randomSearchCVFolds = ref(5);
 const randomSearchIterations = ref(20);
 const showDistributionsPreview = ref(false);
 
-// âœ… STANDARDIZED BACKEND CONNECTION CHECK
+//  STANDARDIZED BACKEND CONNECTION CHECK
 const checkBackendConnection = async () => {
   try {
     console.log(" Checking backend connection...");
@@ -863,8 +863,19 @@ const loadDataFromPreviousSteps = () => {
                        (data.columns ? Object.keys(data.columns).length : 0) ||
                        0;
       
+      // Check if we have split info with potentially SMOTE-updated training rows
+      let actualRows = rows;
+      if (data.splitInfo && data.splitInfo.trainRows && data.splitInfo.testRows) {
+        // Use the sum of train + test rows (train rows may be updated by SMOTE)
+        actualRows = data.splitInfo.trainRows + data.splitInfo.testRows;
+        console.log(`📊 Using split info rows: ${data.splitInfo.trainRows} train + ${data.splitInfo.testRows} test = ${actualRows} total`);
+        if (data.splitInfo.smoteApplied) {
+          console.log(`✅ SMOTE applied: +${data.splitInfo.samplesAdded} synthetic samples`);
+        }
+      }
+      
       datasetStats.value = {
-        rows: rows,
+        rows: actualRows,
         features: features
       };
       
@@ -925,12 +936,12 @@ const loadDataFromPreviousSteps = () => {
         }
       });
     }
-
-    if (!targetData || !processedData) {
-      console.warn("⚠️ Missing required data, redirecting...");
-      router.push("/target-selection");
-      return false;
-    }
+    // console.log("total rows check now: ", data.totalRowsInBackend)
+    // if (!targetData || !processedData) {
+    //   console.warn("⚠️ Missing required data, redirecting...");
+    //   router.push("/target-selection");
+    //   return false;
+    // }
 
     // Validate that we have meaningful data
     if (datasetStats.value.rows === 0 || datasetStats.value.features === 0) {
@@ -941,7 +952,7 @@ const loadDataFromPreviousSteps = () => {
     return true;
   } catch (error) {
     console.error("❌ Error loading data:", error);
-    router.push("/target-selection");
+    // router.push("/target-selection");
     return false;
   }
 };

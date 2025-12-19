@@ -37,6 +37,15 @@ from sklearn.preprocessing import (
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_classif, f_regression
 
+# ===== IMBALANCED-LEARN (SMOTE) =====
+try:
+    from imblearn.over_sampling import SMOTE
+    SMOTE_AVAILABLE = True
+except ImportError:
+    SMOTE_AVAILABLE = False
+    print("⚠️ Warning: imbalanced-learn not installed. SMOTE functionality will be disabled.")
+
+
 # ===== METRICS IMPORTS =====
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
@@ -1196,6 +1205,288 @@ async def get_engineering_preview(dataset_id: str):
     
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+# ===== SMOTE (CLASS IMBALANCE HANDLING) =====
+
+@app.get("/api/datasets/{dataset_id}/check-imbalance")
+async def check_class_imbalance(
+    dataset_id: str,
+    target_column: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """
+    Check if class imbalance exists in the target column
+    Returns imbalance ratio and recommendation for SMOTE
+    """
+    global y_train_storage
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"🔍 CHECKING CLASS IMBALANCE: Dataset {dataset_id}, Target: {target_column}")
+        print(f"{'='*80}")
+        
+        # Check if dataset is split
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset must be split first")
+        
+        # Get training target data
+        if dataset_id not in y_train_storage:
+            raise HTTPException(status_code=400, detail="Training data not found")
+        
+        y_train = y_train_storage[dataset_id]
+        
+        # Calculate class distribution
+        class_counts = y_train.value_counts().to_dict()
+        total_samples = len(y_train)
+        
+        # Calculate imbalance ratio (max / min)
+        max_count = max(class_counts.values())
+        min_count = min(class_counts.values())
+        imbalance_ratio = max_count / min_count if min_count > 0 else float('inf')
+        
+        # Determine if imbalance exists with updated thresholds
+        # IR < 3: Balanced (SMOTE disabled)
+        # 3 ≤ IR < 5: Mild imbalance (SMOTE optional)
+        # IR ≥ 5: Severe imbalance (SMOTE strongly recommended)
+        threshold = 3.0
+        has_imbalance = imbalance_ratio >= threshold
+        
+        # Generate recommendation
+        if imbalance_ratio < 3.0:
+            recommendation = "Balanced dataset - SMOTE not recommended"
+            severity = "balanced"
+        elif imbalance_ratio < 5.0:
+            recommendation = "Mild imbalance detected - SMOTE optional but may improve model performance"
+            severity = "mild"
+        else:
+            recommendation = "Severe imbalance detected - SMOTE strongly recommended"
+            severity = "severe"
+        
+        # Calculate percentages
+        class_distribution = {
+            str(k): {
+                "count": int(v),
+                "percentage": round((v / total_samples) * 100, 2)
+            }
+            for k, v in class_counts.items()
+        }
+        
+        print(f"✅ Class Distribution:")
+        for cls, info in class_distribution.items():
+            print(f"   {cls}: {info['count']} ({info['percentage']}%)")
+        print(f"📊 Imbalance Ratio: {imbalance_ratio:.2f}")
+        print(f"🎯 Recommendation: {recommendation}")
+        print(f"{'='*80}\n")
+        
+        return {
+            "success": True,
+            "has_imbalance": has_imbalance,
+            "imbalance_ratio": round(imbalance_ratio, 2),
+            "threshold": threshold,
+            "severity": severity,
+            "recommendation": recommendation,
+            "class_distribution": class_distribution,
+            "total_samples": total_samples,
+            "num_classes": len(class_counts)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error checking imbalance: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/datasets/{dataset_id}/apply-smote")
+async def apply_smote(
+    dataset_id: str,
+    config: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """
+    Apply SMOTE to balance class distribution in training data
+    """
+    global X_train_storage, y_train_storage, datasets
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"⚖️ APPLYING SMOTE: Dataset {dataset_id}")
+        print(f"{'='*80}")
+        
+        # Check if SMOTE is available
+        if not SMOTE_AVAILABLE:
+            raise HTTPException(
+                status_code=500, 
+                detail="SMOTE not available. Please install imbalanced-learn: pip install imbalanced-learn"
+            )
+        
+        # Validate dataset exists and is split
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset must be split first")
+        
+        if dataset_id not in X_train_storage or dataset_id not in y_train_storage:
+            raise HTTPException(status_code=400, detail="Training data not found")
+        
+        # Get configuration
+        sampling_strategy = config.get('sampling_strategy', 'auto')
+        k_neighbors = config.get('k_neighbors', 5)
+        random_state = config.get('random_state', None)
+        
+        print(f"📋 Configuration:")
+        print(f"   Sampling Strategy: {sampling_strategy}")
+        print(f"   K-Neighbors: {k_neighbors}")
+        print(f"   Random State: {random_state}")
+        
+        # Get training data
+        X_train = X_train_storage[dataset_id]
+        y_train = y_train_storage[dataset_id]
+        
+        # Store original distribution
+        original_distribution = y_train.value_counts().to_dict()
+        original_total = len(y_train)
+        
+        print(f"\n📊 Original Distribution:")
+        for cls, count in original_distribution.items():
+            print(f"   {cls}: {count} ({(count/original_total)*100:.2f}%)")
+        
+        # Apply SMOTE
+        try:
+            smote = SMOTE(
+                sampling_strategy=sampling_strategy,
+                k_neighbors=k_neighbors,
+                random_state=random_state if random_state is not None else 42
+            )
+            
+            X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+            
+            # Convert back to DataFrame/Series with proper column names
+            X_train_resampled = pd.DataFrame(X_train_resampled, columns=X_train.columns)
+            y_train_resampled = pd.Series(y_train_resampled, name=y_train.name)
+            
+        except ValueError as e:
+            # Handle cases where SMOTE cannot be applied (e.g., too few samples)
+            raise HTTPException(
+                status_code=400,
+                detail=f"SMOTE cannot be applied: {str(e)}. Ensure you have enough samples per class (at least k_neighbors + 1)."
+            )
+        
+        # Calculate new distribution
+        new_distribution = y_train_resampled.value_counts().to_dict()
+        new_total = len(y_train_resampled)
+        samples_added = new_total - original_total
+        
+        print(f"\n📊 New Distribution (After SMOTE):")
+        for cls, count in new_distribution.items():
+            print(f"   {cls}: {count} ({(count/new_total)*100:.2f}%)")
+        print(f"\n✅ Samples Added: {samples_added}")
+        print(f"✅ New Total: {new_total}")
+        
+        # Update storage with resampled data
+        X_train_storage[dataset_id] = X_train_resampled
+        y_train_storage[dataset_id] = y_train_resampled
+        
+        # Mark SMOTE as applied in dataset metadata
+        datasets[dataset_id]['smote_applied'] = True
+        datasets[dataset_id]['smote_config'] = config
+        
+        # Prepare response
+        class_distribution_before = {
+            str(k): {
+                "count": int(v),
+                "percentage": round((v / original_total) * 100, 2)
+            }
+            for k, v in original_distribution.items()
+        }
+        
+        class_distribution_after = {
+            str(k): {
+                "count": int(v),
+                "percentage": round((v / new_total) * 100, 2)
+            }
+            for k, v in new_distribution.items()
+        }
+        
+        print(f"{'='*80}\n")
+        
+        return {
+            "success": True,
+            "message": "SMOTE applied successfully",
+            "original_samples": original_total,
+            "new_samples": new_total,
+            "samples_added": samples_added,
+            "class_distribution_before": class_distribution_before,
+            "class_distribution_after": class_distribution_after,
+            "config": {
+                "sampling_strategy": sampling_strategy,
+                "k_neighbors": k_neighbors,
+                "random_state": random_state
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error applying SMOTE: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/datasets/{dataset_id}/reset-smote")
+async def reset_smote(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """
+    Reset SMOTE transformation and restore original training data
+    """
+    global datasets
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"🔄 RESETTING SMOTE: Dataset {dataset_id}")
+        print(f"{'='*80}")
+        
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('smote_applied', False):
+            return {
+                "success": True,
+                "message": "SMOTE was not applied, nothing to reset"
+            }
+        
+        # Note: To properly reset, we would need to store the original training data
+        # For now, we'll require re-splitting the dataset
+        datasets[dataset_id]['smote_applied'] = False
+        datasets[dataset_id].pop('smote_config', None)
+        
+        print(f"✅ SMOTE reset. Please re-split the dataset to restore original data.")
+        print(f"{'='*80}\n")
+        
+        return {
+            "success": True,
+            "message": "SMOTE reset. Please re-split the dataset to restore original training data.",
+            "requires_resplit": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error resetting SMOTE: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ===== TARGET VARIABLE SELECTION =====

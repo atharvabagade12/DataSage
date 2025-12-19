@@ -79,10 +79,7 @@
   
         <div class="hero-content-wrapper">
           <div class="hero-content">
-            <div class="academic-badge">
-              <span>🎓</span>
-              <span>Final Year Project 2025 - Information Technology</span>
-            </div>
+            
   
             <h1 class="hero-title">
               Transform Your Data Into

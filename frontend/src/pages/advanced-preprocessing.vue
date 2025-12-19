@@ -59,11 +59,15 @@
           
           <div class="summary-stat">
             <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3,3H21V21H3V3M5,5V19H19V5H5M7,7H9V9H7V7M11,7H13V9H11V7M15,7H17V9H15V7Z"/>
+              <path d="M3,3H21V21H3V3M5,5V19H19V5H5M7,7H17V9H7V7M7,11H17V13H7V11M7,15H17V17H7V15Z"/>
             </svg>
             <div class="stat-content">
               <span class="stat-label">Rows</span>
-              <span class="stat-value">{{ totalRows.toLocaleString() }}</span>
+              <span class="stat-value" v-if="!splitApplied">{{ totalRows.toLocaleString() }}</span>
+              <span class="stat-value" v-else>
+                {{ (trainRows + testRows).toLocaleString() }}
+                <span v-if="smoteApplied" style="color: #10b981; font-size: 0.85em;"> (+{{ (trainRows - Math.floor(totalRows * splitRatio)).toLocaleString() }})</span>
+              </span>
             </div>
           </div>
           
@@ -845,6 +849,204 @@
             </template>
           </Modal>
 
+          <!-- ========== CARD 4: SMOTE ANALYSIS ========== -->
+          <Card 
+            class="preprocessing-tool-card" 
+            hover 
+            :class="{ disabled: !splitApplied || (!hasClassImbalance && !smoteApplied) }"
+            v-if="problemType === 'classification'"
+          >
+            <div class="tool-header">
+              <div class="tool-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </div>
+              <div class="tool-info">
+                <h3>
+                  SMOTE Analysis
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                  <span v-else-if="smoteApplied && !hasClassImbalance" class="balanced-badge">✓ Applied & Balanced</span>
+                  <span v-else-if="!hasClassImbalance && splitApplied" class="balanced-badge">✓ Balanced (IR < 3.0)</span>
+                  <span v-else-if="hasClassImbalance && imbalanceSeverity === 'mild'" class="imbalance-badge-mild">
+                    ⚠️ Mild Imbalance: {{ imbalanceRatio.toFixed(2) }}x
+                  </span>
+                  <span v-else-if="hasClassImbalance && imbalanceSeverity === 'severe'" class="imbalance-badge-severe">
+                    ⚠️ Severe Imbalance: {{ imbalanceRatio.toFixed(2) }}x
+                  </span>
+                </h3>
+                <p>Balance class distribution using synthetic minority oversampling</p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': smoteApplied }">
+                {{ smoteApplied ? "✓ Applied" : "Not Applied" }}
+              </div>
+            </div>
+            
+            <div class="tool-footer">
+              <Button 
+                variant="primary" 
+                @click="showSmoteModal = true" 
+                :disabled="!splitApplied || (!hasClassImbalance && !smoteApplied)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                {{ smoteApplied ? 'View SMOTE Details' : 'Configure SMOTE' }}
+              </Button>
+            </div>
+          </Card>
+          
+          <!-- SMOTE Configuration Modal -->
+          <Modal v-model="showSmoteModal" title="SMOTE Configuration" size="xl">
+            <div class="modal-section">
+              <!-- Class Distribution Display -->
+              <div class="config-group" v-if="classDistribution && Object.keys(classDistribution).length > 0">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                  </svg>
+                  Current Class Distribution
+                </label>
+                
+                <div class="class-distribution-grid">
+                  <div 
+                    v-for="(info, className) in classDistribution" 
+                    :key="className"
+                    class="class-item"
+                  >
+                    <div class="class-name">{{ className }}</div>
+                    <div class="class-stats">
+                      <span class="class-count">{{ info.count }} samples</span>
+                      <span class="class-percentage">{{ info.percentage }}%</span>
+                    </div>
+                    <div class="class-bar">
+                      <div 
+                        class="class-bar-fill" 
+                        :style="{ width: info.percentage + '%' }"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="imbalance-info" v-if="imbalanceRatio >= 3" :class="'imbalance-' + imbalanceSeverity">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                  </svg>
+                  <span>
+                    Imbalance Ratio: <strong>{{ imbalanceRatio.toFixed(2) }}x</strong>
+                    <span v-if="imbalanceSeverity === 'severe'" class="severity-label"> (Severe - SMOTE Strongly Recommended)</span>
+                    <span v-else-if="imbalanceSeverity === 'mild'" class="severity-label"> (Mild - SMOTE Optional)</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Sampling Strategy -->
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                  </svg>
+                  Sampling Strategy
+                </label>
+                <select v-model="smoteStrategy" class="config-select">
+                  <option value="auto">Auto (Balance all classes)</option>
+                  <option value="minority">Minority (Oversample minority only)</option>
+                  <option value="not minority">Not Minority (Oversample all except majority)</option>
+                </select>
+                <p class="config-help">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  </svg>
+                  {{ 
+                    smoteStrategy === 'auto' 
+                      ? 'Automatically balance all classes to have equal samples' 
+                      : smoteStrategy === 'minority'
+                      ? 'Only oversample the minority class to match the majority'
+                      : 'Oversample all classes except the majority class'
+                  }}
+                </p>
+              </div>
+
+              <!-- K-Neighbors Parameter -->
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                  </svg>
+                  K-Neighbors
+                  <span class="config-value-badge">{{ smoteKNeighbors }}</span>
+                </label>
+                
+                <div class="slider-container">
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    v-model.number="smoteKNeighbors"
+                    class="split-slider"
+                  />
+                  <div class="slider-labels">
+                    <span>1</span>
+                    <span>10</span>
+                  </div>
+                </div>
+                
+                <p class="config-help">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  </svg>
+                  Number of nearest neighbors used to generate synthetic samples. Default: 5
+                </p>
+              </div>
+
+              <!-- Random Seed -->
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  Random Seed
+                  <span class="optional-tag">Optional</span>
+                </label>
+                <input
+                  type="number"
+                  v-model.number="smoteRandomSeed"
+                  placeholder="Enter seed for reproducibility (e.g., 42)"
+                  class="config-input"
+                />
+                <p class="config-help">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  </svg>
+                  Set a seed value for reproducible results. Leave empty for random generation.
+                </p>
+              </div>
+            </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showSmoteModal = false">
+                Cancel
+              </Button>
+              <Button 
+                v-if="smoteApplied"
+                variant="primary"
+                @click="resetSmote"
+                style="background: #ef4444; border-color: #ef4444;"
+              >
+                Reset SMOTE
+              </Button>
+              <Button 
+                variant="primary" 
+                :loading="isProcessing"
+                @click="applySmote"
+                :disabled="isProcessing"
+              >
+                Apply SMOTE
+              </Button>
+            </template>
+          </Modal>
+
           <!-- Reset Confirmation Modal -->
           <Modal v-model="showResetConfirmModal" title="Reset All Transformations?" size="md">
             <div class="modal-section">
@@ -1061,6 +1263,15 @@ watch(scaledColumns, (newSet) => {
   });
 }, { deep: true });
 
+// Watch for split applied to check class imbalance
+watch(splitApplied, async (newValue) => {
+  if (newValue && selectedTarget.value && problemType.value === 'classification') {
+    // Wait a bit for the split to complete
+    await nextTick();
+    await checkClassImbalance();
+  }
+});
+
 // ==================== TOOLKIT STATE ====================
 const enabledTools = ref([]);
 const openDropdowns = ref([]);
@@ -1071,6 +1282,18 @@ const showEncodingModal = ref(false);
 const showScalingModal = ref(false);
 const showResetConfirmModal = ref(false);
 const showResetSplitModal = ref(false);
+const showSmoteModal = ref(false);
+
+// ==================== SMOTE STATE ====================
+const smoteApplied = ref(false);
+const smoteStrategy = ref('auto'); // 'auto', 'minority', 'not minority'
+const smoteKNeighbors = ref(5);
+const smoteRandomSeed = ref(null);
+const hasClassImbalance = ref(false);
+const imbalanceRatio = ref(1.0);
+const imbalanceSeverity = ref('balanced'); // 'balanced', 'mild', 'severe'
+const classDistribution = ref({});
+const problemType = ref(mlAppState.problemType || 'classification');
 
 // ==================== TABLE STATE ====================
 const searchQuery = ref("");
@@ -1703,6 +1926,175 @@ const confirmResetAll = async () => {
   }
 };
 
+// ==================== SMOTE OPERATIONS ====================
+
+// Check for class imbalance
+const checkClassImbalance = async () =>{
+  if (!splitApplied.value || !selectedTarget.value) {
+    return;
+  }
+
+  try {
+    const response = await authenticatedGet(
+      `http://localhost:8000/api/datasets/${datasetId.value}/check-imbalance?target_column=${selectedTarget.value}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      hasClassImbalance.value = data.has_imbalance;
+      imbalanceRatio.value = data.imbalance_ratio;
+      imbalanceSeverity.value = data.severity;
+      classDistribution.value = data.class_distribution;
+
+      console.log('📊 Class Imbalance Check:');
+      console.log('  Has Imbalance:', data.has_imbalance);
+      console.log('  Ratio:', data.imbalance_ratio);
+      console.log('  Severity:', data.severity);
+      console.log('  Recommendation:', data.recommendation);
+    }
+  } catch (error) {
+    console.error('❌ Error checking class imbalance:', error);
+    // Don't show error to user, just log it
+  }
+};
+
+// Apply SMOTE
+const applySmote = async () => {
+  if (!splitApplied.value || !hasClassImbalance.value) {
+    showWarning('SMOTE Not Available', 'Dataset must be split and have class imbalance');
+    return;
+  }
+
+  console.log("\n" + "=".repeat(80));
+  console.log("⚖️ APPLYING SMOTE");
+  console.log("=".repeat(80));
+
+  isProcessing.value = true;
+  processingMessage.value = "Applying SMOTE...";
+
+  try {
+    const payload = {
+      sampling_strategy: smoteStrategy.value,
+      k_neighbors: smoteKNeighbors.value,
+      random_state: smoteRandomSeed.value
+    };
+
+    console.log('🔍 SMOTE Request Debug:');
+    console.log('  Dataset ID:', datasetId.value);
+    console.log('  Configuration:', payload);
+
+    const response = await authenticatedPost(
+      `http://localhost:8000/api/datasets/${datasetId.value}/apply-smote`,
+      payload
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log("✅ SMOTE applied successfully");
+      console.log(`  Original samples: ${data.original_samples}`);
+      console.log(`  New samples: ${data.new_samples}`);
+      console.log(`  Samples added: ${data.samples_added}`);
+
+      smoteApplied.value = true;
+      trainRows.value = data.new_samples;
+
+      // Update class distribution
+      classDistribution.value = data.class_distribution_after;
+
+      // Update mlStore with new training row count
+      mlStore.splitInfo = {
+        ...mlStore.splitInfo,
+        trainRows: data.new_samples,
+        smoteApplied: true,
+        samplesAdded: data.samples_added
+      };
+
+      console.log("=".repeat(80) + "\n");
+
+      showSuccess(
+        'SMOTE Applied Successfully!',
+        `Added ${data.samples_added} synthetic samples to balance the training set. New training size: ${data.new_samples.toLocaleString()} rows`
+      );
+
+      addPreprocessingStep('SMOTE Analysis');
+
+      // Re-check class imbalance to update the UI with new balanced distribution
+      await checkClassImbalance();
+
+      // ✅ CRITICAL: Update processedData in localStorage immediately
+      // This ensures algorithm-select page sees the updated row counts
+      const existingProcessedData = JSON.parse(localStorage.getItem('processedData') || '{}');
+      existingProcessedData.splitInfo = mlStore.splitInfo; // Update with SMOTE-modified split info
+      localStorage.setItem('processedData', JSON.stringify(existingProcessedData));
+      console.log('✅ Updated processedData in localStorage with SMOTE-modified splitInfo');
+
+      // Close the modal
+      showSmoteModal.value = false;
+    } else {
+      throw new Error(data.detail || "SMOTE application failed");
+    }
+  } catch (error) {
+    console.error("❌ SMOTE error:", error);
+    showError('SMOTE Failed', error.message || 'Failed to apply SMOTE');
+  } finally {
+    isProcessing.value = false;
+  }
+};
+
+// Reset SMOTE
+const resetSmote = async () => {
+  if (!smoteApplied.value) {
+    return;
+  }
+
+  try {
+    const response = await authenticatedPost(
+      `http://localhost:8000/api/datasets/${datasetId.value}/reset-smote`,
+      {}
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      smoteApplied.value = false;
+      
+      showInfo(
+        'SMOTE Reset',
+        data.message || 'SMOTE has been reset. Please re-split the dataset to restore original training data.'
+      );
+
+      // Close modal
+      showSmoteModal.value = false;
+
+      // If requires resplit, suggest it
+      if (data.requires_resplit) {
+        showWarning(
+          'Re-split Required',
+          'Please reset and re-apply the dataset split to restore original training data and row counts'
+        );
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error resetting SMOTE:', error);
+    showError('Reset Failed', error.message);
+  }
+};
+
+
 // ==================== SCALING OPERATIONS ====================
 
 const applyScaling = async () => {
@@ -2054,6 +2446,7 @@ const proceedToAlgorithmSelection = () => {
     columnCount: columns.value.length,
     columns: columns.value.map(col => col.name || col),
     backendAvailable: mlStore.backendConnected,
+    splitInfo: mlStore.splitInfo, // ✅ Include split info with SMOTE-updated training rows
     preprocessingApplied: {
       split: splitApplied.value,
       scaling: scalingApplied.value,
@@ -6356,6 +6749,142 @@ watch(currentSplitView, () => {
 .footer-btn:disabled:hover {
   transform: none;
   box-shadow: none;
+}
+
+/* ==================== SMOTE STYLES ==================== */
+
+/* SMOTE Badges */
+.balanced-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  margin-left: 8px;
+}
+
+.imbalance-badge-mild {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  margin-left: 8px;
+}
+
+.imbalance-badge-severe {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+/* Class Distribution Grid */
+.class-distribution-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(25, 27, 44, 0.5);
+  border-radius: 8px;
+}
+
+.class-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.class-name {
+  font-weight: 600;
+  color: #e0e7ef;
+  font-size: 0.95rem;
+}
+
+.class-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.class-count {
+  color: #94a3b8;
+}
+
+.class-percentage {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.class-bar {
+  height: 8px;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.class-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Imbalance Info */
+.imbalance-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.imbalance-info.imbalance-mild {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.imbalance-info.imbalance-severe {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.imbalance-info svg {
+  flex-shrink: 0;
+}
+
+.imbalance-info strong {
+  color: inherit;
+  font-weight: 700;
+}
+
+.imbalance-info .severity-label {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+/* Config Value Badge */
+.config-value-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  margin-left: 8px;
+  font-weight: 600;
 }
 
 </style>
