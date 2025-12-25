@@ -1,10 +1,14 @@
-# Node modules
+# =========================
+# Node / Frontend
+# =========================
 node_modules/
 .nuxt/
 .output/
 dist/
 
+# =========================
 # Python
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,37 +17,74 @@ __pycache__/
 venv/
 env/
 
-# Database files
+# Python build
+build/
+dist/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# =========================
+# Machine Learning Artifacts
+# =========================
+backend/models/
+*.joblib
+*.pkl
+*.h5
+*.onnx
+*.pt
+*.ckpt
+*.weights
+
+.mlruns/
+wandb/
+tensorboard/
+lightning_logs/
+
+# =========================
+# Databases
+# =========================
 *.db
 *.sqlite
 *.sqlite3
 datasage_users.db
 
-# Environment variables
+# =========================
+# Environment Variables
+# =========================
 .env
 .env.local
 
-# IDE
+# =========================
+# IDE / OS
+# =========================
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS files
 .DS_Store
 Thumbs.db
 
+# =========================
 # Logs
+# =========================
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Large datasets
+# =========================
+# Datasets
+# =========================
+data/
+datasets/
 enterprise_datasets/
-*.csv
-*.xlsx
-*.parquet
 
-# Uploaded files
+!data/sample_*.csv
+!datasets/sample_*.csv
+
+# =========================
+# Uploads
+# =========================
 uploads/
