@@ -180,6 +180,42 @@ const detectColumnType = (data) => {
   return "string";
 };
 
+// Methods
+const detectProblemType = (target) => {
+  if (!target) return "classification";
+  const uniqueValues = target.uniqueValues || 0;
+  const dataType = target.type?.toLowerCase() || "";
+
+  console.log("🔍 Running Problem Type Detection:", {
+    target: target.name,
+    dataType,
+    uniqueValues
+  });
+
+  // Priority 1: Check uniqueValues first
+  if (uniqueValues === 2) {
+    return "classification";
+  } 
+  else if (uniqueValues > 2 && uniqueValues <= 20) {
+    return "classification";
+  }
+
+  // Priority 2: Check dataType for continuous/numerical data
+  if (dataType === "numerical" || 
+      dataType === "numeric" || 
+      dataType === "number" ||
+      dataType === "float") {
+    return "regression";
+  }
+
+  // Priority 3: Check for high cardinality
+  if (uniqueValues > 20) {
+    return "regression";
+  }
+
+  return "classification";
+};
+
 const loadPreviousData = async () => {
   try {
     isLoading.value = true;
@@ -294,12 +330,16 @@ const continueToAdvancedPreprocessing = async () => {
     // Store target data
     localStorage.setItem('selectedTarget', JSON.stringify(targetData));
 
+    // Detect problem type
+    const detectedProblemType = detectProblemType(targetData);
+
     // Update global state
     const currentState = JSON.parse(localStorage.getItem('mlAppState')) || {};
     currentState.selectedTarget = selectedColumn.value.name;
     currentState.targetColumn = selectedColumn.value;
     currentState.backendDatasetId = backendDatasetId;
     currentState.datasetId = datasetId.value;
+    currentState.problemType = detectedProblemType; // Save detected type
     currentState.updatedAt = Date.now();
     localStorage.setItem('mlAppState', JSON.stringify(currentState));
 

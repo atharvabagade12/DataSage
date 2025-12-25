@@ -399,3 +399,104 @@ class DataPreprocessor:
     def get_processed_dataframe(self):
         """Return the processed dataframe"""
         return self.df
+
+class TargetEncoder:
+    """
+    Custom Target Encoder with mandatory smoothing
+    Formula: (n * category_mean + k * global_mean) / (n + k)
+    """
+    def __init__(self, smoothing=10):
+        self.smoothing = smoothing
+        self.mappings = {}
+        self.global_mean = None
+        self.problem_type = None
+
+    def fit(self, X, y, column, problem_type='regression'):
+        """
+        Fit the encoder using training data
+        """
+        self.problem_type = problem_type
+        
+        # ✅ Ensure y is numeric for mean calculation (important for classification)
+        y_numeric = pd.to_numeric(y, errors='coerce')
+        self.global_mean = y_numeric.mean()
+        
+        # ✅ Fallback if global_mean is NaN (should not happen with valid data)
+        if pd.isna(self.global_mean):
+            self.global_mean = 0.0
+            
+        print(f"   Fitting TargetEncoder for {column}. Global Mean: {self.global_mean}")
+            
+        # Combine X and y for easier calculation
+        data = pd.DataFrame({column: X[column], 'target': y_numeric})
+        
+        # ✅ Drop NaNs in X for fitting to prevent NaN keys in mappings
+        data = data.dropna(subset=[column])
+        
+        if problem_type == 'classification' and y.nunique() > 2:
+            # Multiclass encoding: one mapping per class
+            self.mappings[column] = {}
+            unique_classes = sorted(y.unique())
+            for cls in unique_classes:
+                y_binary = (y == cls).astype(int)
+                cls_global_mean = y_binary.mean()
+                if pd.isna(cls_global_mean): cls_global_mean = 0.0
+                
+                # Count occurrences of this class per category
+                stats = data.groupby(column)['target'].apply(lambda x: (x == cls).sum()).reset_index()
+                counts = data.groupby(column)['target'].count().reset_index()
+                
+                merged = stats.merge(counts, on=column)
+                merged.columns = [column, 'sum', 'count']
+                
+                # Apply smoothing
+                merged['encoded'] = (merged['sum'] + self.smoothing * cls_global_mean) / (merged['count'] + self.smoothing)
+                
+                # Store mapping
+                self.mappings[column][cls] = dict(zip(merged[column], merged['encoded']))
+                self.mappings[column][cls]['_global_mean'] = cls_global_mean
+        else:
+            # Binary classification or Regression
+            stats = data.groupby(column)['target'].agg(['count', 'mean'])
+            
+            # Apply smoothing formula: (n * mean + k * global_mean) / (n + k)
+            smoothed = (stats['count'] * stats['mean'] + self.smoothing * self.global_mean) / (stats['count'] + self.smoothing)
+            
+            # ✅ Convert to dict and handle any internal NaNs
+            self.mappings[column] = smoothed.fillna(self.global_mean).to_dict()
+            self.mappings[column]['_global_mean'] = self.global_mean
+
+    def transform(self, X, column):
+        """
+        Apply the learned mapping to X. 
+        CRITICAL: Never output NaN. Use global mean as fallback for unseen or NaN categories.
+        """
+        if column not in self.mappings:
+            return X, []
+            
+        X_encoded = X.copy()
+        mapping = self.mappings[column]
+        
+        # Determine global fallback
+        global_fallback = mapping.get('_global_mean', self.global_mean)
+        if pd.isna(global_fallback): global_fallback = 0.0
+        
+        if self.problem_type == 'classification' and isinstance(mapping, dict) and any(isinstance(v, dict) for k, v in mapping.items() if k != '_global_mean'):
+            # Multiclass: create new columns
+            new_cols = []
+            for cls, cls_mapping in mapping.items():
+                col_name = f"{column}_target_{cls}"
+                cls_fallback = cls_mapping.get('_global_mean', global_fallback)
+                
+                # Apply mapping and strictly fill NaNs with class-specific global mean
+                X_encoded[col_name] = X_encoded[column].map(cls_mapping).fillna(cls_fallback)
+                new_cols.append(col_name)
+            
+            # Drop original column
+            X_encoded = X_encoded.drop(columns=[column])
+            return X_encoded, new_cols
+        else:
+            # Binary/Regression: replace original column
+            # Apply mapping and strictly fill NaNs with global mean
+            X_encoded[column] = X_encoded[column].map(mapping).fillna(global_fallback)
+            return X_encoded, [column]

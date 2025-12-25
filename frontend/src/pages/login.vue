@@ -16,50 +16,13 @@
         <!-- DataSage Brand Header -->
         <div class="brand-header">
           <!-- Logo -->
-          <div class="logo-container">
-            <div class="logo-wrapper">
-              <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
-                <defs>
-                  <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-                  </linearGradient>
-                </defs>
-                
-                <!-- Hexagon base -->
-                <polygon points="40,8 60,20 60,40 40,52 20,40 20,20" 
-                         fill="none" 
-                         stroke="url(#primaryGradient)" 
-                         stroke-width="2" 
-                         opacity="0.3"/>
-                
-                <!-- Data nodes -->
-                <circle cx="40" cy="20" r="4" fill="url(#primaryGradient)"/>
-                <circle cx="52" cy="30" r="4" fill="url(#primaryGradient)" opacity="0.8"/>
-                <circle cx="52" cy="42" r="4" fill="url(#primaryGradient)" opacity="0.6"/>
-                <circle cx="40" cy="52" r="4" fill="url(#primaryGradient)" opacity="0.8"/>
-                <circle cx="28" cy="42" r="4" fill="url(#primaryGradient)" opacity="0.6"/>
-                <circle cx="28" cy="30" r="4" fill="url(#primaryGradient)" opacity="0.8"/>
-                
-                <!-- Connections -->
-                <path d="M40 20 L52 30 L52 42 L40 52 L28 42 L28 30 Z" 
-                      stroke="url(#primaryGradient)" 
-                      stroke-width="2" 
-                      fill="none" 
-                      opacity="0.4"/>
-                
-                <!-- Center processing node -->
-                <circle cx="40" cy="36" r="6" fill="url(#primaryGradient)" opacity="0.9"/>
-                <circle cx="40" cy="36" r="3" fill="white" opacity="0.8"/>
-              </svg>
-            </div>
-          </div>
+          
 
           <!-- Brand Title -->
           <div class="brand-title-section">
             <h1 class="brand-title">DataSage</h1>
-            <p class="brand-subtitle">Transform Raw Data into</p>
-            <p class="brand-subtitle-accent">Actionable Insights</p>
+            <!-- <p class="brand-subtitle">Transform Raw Data into</p>
+            <p class="brand-subtitle-accent">Actionable Insights</p> -->
           </div>
         </div>
 
@@ -237,7 +200,7 @@
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
-                  Account created! Switching to login...
+                  Account created! Entering into dashboard...
                 </div>
               </transition>
 

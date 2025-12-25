@@ -255,6 +255,12 @@
                         class="encoded-badge"
                         >Scaled</span
                       >
+                      <span
+                        v-if="targetEncodedColumns.has(column)"
+                        class="encoded-badge"
+                        style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.2);"
+                        >Target Encoded</span
+                      >
                     </div>
                   </td>
                 </tr>
@@ -686,6 +692,9 @@
                   <button @click="selectAllCategoricalColumns" class="btn-secondary small">
                     Select All
                   </button>
+                  <button @click="selectRecommendedCategoricalColumns" class="btn-secondary small">
+                    Select Recommended
+                  </button>
                   <button @click="deselectAllCategoricalColumns" class="btn-secondary small">
                     Deselect All
                   </button>
@@ -693,20 +702,42 @@
 
                 <div class="encoding-list">
                   <div
-                    v-for="column in categoricalColumns.filter(c => c.name !== selectedTarget)"
+                    v-for="column in categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name))"
                     :key="column.name"
                     class="encoding-row"
                     :class="{ active: column.encode }"
                   >
-                    <label class="checkbox-label">
-                      <input
-                        type="checkbox"
-                        v-model="column.encode"
-                        @change="toggleColumnEncoding(column)"
-                      />
-                      <span class="checkbox-custom"></span>
-                      <span class="col-name">{{ column.name }}</span>
-                    </label>
+                    <div class="col-main-info">
+                      <label class="checkbox-label" :class="{ disabled: getEncodingRecommendation(column).method === 'target' }">
+                        <input
+                          type="checkbox"
+                          v-model="column.encode"
+                          @change="toggleColumnEncoding(column)"
+                          :disabled="getEncodingRecommendation(column).method === 'target'"
+                        />
+                        <span class="checkbox-custom"></span>
+                        <span class="col-name">
+                          {{ column.name }}
+                          <span class="category-count">({{ column.unique }} categories)</span>
+                        </span>
+                      </label>
+
+                      <!-- Recommendation Badge -->
+                      <div class="recommendation-info">
+                        <span 
+                          class="rec-badge" 
+                          :class="getEncodingRecommendation(column).method"
+                        >
+                          {{ 
+                            getEncodingRecommendation(column).method === 'onehot' ? 'One-Hot' : 
+                            getEncodingRecommendation(column).method === 'label' ? 'Label' : 
+                            getEncodingRecommendation(column).method === 'target' ? 'Target' : 'Ordinal' 
+                          }}
+                        </span>
+                        <span class="rec-reason">{{ getEncodingRecommendation(column).reason }}</span>
+                        <p v-if="getEncodingRecommendation(column).note" class="rec-note" style="color: #8b5cf6; font-weight: 600;">{{ getEncodingRecommendation(column).note }}</p>
+                      </div>
+                    </div>
                     
                     <div class="encoding-select-wrapper" v-if="column.encode">
                       <select
@@ -721,7 +752,7 @@
                     </div>
                   </div>
                   
-                  <div v-if="categoricalColumns.filter(c => c.name !== selectedTarget).length === 0" class="empty-state">
+                  <div v-if="categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name)).length === 0" class="empty-state">
                     No categorical columns found available for encoding.
                   </div>
                 </div>
@@ -737,9 +768,163 @@
                 variant="primary" 
                 :loading="isProcessing"
                 @click="applyCategoricalEncoding"
-                :disabled="categoricalColumns.filter(c => c.name !== selectedTarget && c.encode).length === 0"
+                :disabled="categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name) && c.encode).length === 0"
               >
                 Apply Encoding
+              </Button>
+            </template>
+          </Modal>
+          
+          <!-- ========== CARD 2.5: TARGET ENCODING (ADVANCED) ========== -->
+          <Card class="preprocessing-tool-card" hover :class="{ disabled: !splitApplied || !selectedTarget }">
+            <div class="tool-header">
+              <div class="tool-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/>
+                </svg>
+              </div>
+              <div class="tool-info">
+                <h3>
+                  Target Encoding
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                  <span v-else-if="!selectedTarget" class="requires-split-inline">⚠️ Requires Target</span>
+                </h3>
+                <p>Encode high-cardinality features using target statistics with smoothing</p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': targetEncodingApplied }">
+                {{ targetEncodingApplied ? "✓ Applied" : "Not Applied" }}
+              </div>
+            </div>
+            
+            <div class="tool-footer">
+              <Button variant="primary" @click="showTargetEncodingModal = true" :disabled="!splitApplied || !selectedTarget">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                Configure Target Encoding
+              </Button>
+            </div>
+          </Card>
+
+          <!-- Target Encoding Modal -->
+          <Modal v-model="showTargetEncodingModal" title="Target Encoding Configuration" size="xl">
+            <div class="modal-section">
+              <div class="info-alert">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                </svg>
+                <div>
+                  <strong>What is Target Encoding?</strong>
+                  <p>Target encoding replaces each category with the average target value for that category. It is highly effective for columns with many unique categories where One-Hot encoding would create too many columns.</p>
+                </div>
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/>
+                  </svg>
+                  Select Columns for Target Encoding
+                  <span class="help-icon" title="Recommended for columns with >10 unique categories.">ⓘ</span>
+                </label>
+
+                <div class="selection-controls">
+                  <button @click="selectAllTargetEncoding" class="btn-secondary small">
+                    Select All
+                  </button>
+                  <button @click="selectRecommendedTargetEncoding" class="btn-secondary small">
+                    Select Recommended
+                  </button>
+                  <button @click="deselectAllTargetEncoding" class="btn-secondary small">
+                    Deselect All
+                  </button>
+                </div>
+                
+                <div class="encoding-list">
+                  <div
+                    v-for="column in categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name))"
+                    :key="column.name"
+                    class="encoding-row"
+                    :class="{ active: column.targetEncode }"
+                  >
+                    <label class="checkbox-label">
+                      <input
+                        type="checkbox"
+                        v-model="column.targetEncode"
+                      />
+                      <span class="checkbox-custom"></span>
+                      <span class="col-name">
+                        {{ column.name }}
+                        <span class="category-count">({{ column.unique }} categories)</span>
+                      </span>
+                    </label>
+                    
+                    <div class="recommendation-badge" v-if="column.unique > 30">
+                      <span class="strongly-rec" title="High cardinality detected. Target encoding is strongly recommended over One-Hot.">🔥 Strongly Recommended</span>
+                    </div>
+                    <div class="recommendation-badge" v-else-if="column.unique >= 10">
+                      <span class="recommended" title="Medium cardinality detected. Target encoding helps prevent overfitting compared to One-Hot.">👍 Recommended</span>
+                    </div>
+                    <div class="recommendation-badge" v-else-if="column.unique <= 8">
+                      <span class="not-recommended" title="Low cardinality detected. One-Hot encoding is generally better for very few categories.">ℹ️ One-Hot may be better</span>
+                    </div>
+                  </div>
+
+                  <div v-if="categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name)).length === 0" class="empty-state">
+                    No categorical columns found available for target encoding.
+                  </div>
+                </div>
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,3L2,12h3v8h14v-8h3L12,3z M12,7.7c1.4,0,2.5,1.1,2.5,2.5S13.4,12.7,12,12.7s-2.5-1.1-2.5-2.5S10.6,7.7,12,7.7z"/>
+                  </svg>
+                  Smoothing Factor (k)
+                  <span class="config-value-badge">{{ targetEncodingSmoothing }}</span>
+                </label>
+                <div class="slider-container">
+                  <input
+                    type="range"
+                    min="1"
+                    max="50"
+                    step="1"
+                    v-model.number="targetEncodingSmoothing"
+                    class="split-slider"
+                  />
+                  <div class="slider-labels">
+                    <span>Low Smoothing (1)</span>
+                    <span>High Smoothing (50)</span>
+                  </div>
+                </div>
+                <p class="config-help">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2zm1,15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                  </svg>
+                  Higher smoothing pushes rare categories closer to the global average, which prevents overfitting.
+                </p>
+              </div>
+
+              <div class="leakage-warning">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
+                </svg>
+                <span><strong>Anti-Leakage Protection:</strong> Statistics are calculated only on the Training Set and then mapped to the Test Set.</span>
+              </div>
+            </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showTargetEncodingModal = false">
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                :loading="isProcessing"
+                @click="applyTargetEncoding"
+                :disabled="!categoricalColumns.some(c => c.targetEncode)"
+              >
+                Apply Target Encoding
               </Button>
             </template>
           </Modal>
@@ -813,6 +998,20 @@
                         <span v-if="col.isAlreadyScaled" class="requires-split-inline" style="margin-left: 8px; font-size: 0.7rem;">Scaled</span>
                       </span>
                     </label>
+
+                    <div class="recommendation-info scaling-rec">
+                      <span 
+                        class="rec-badge" 
+                        :class="getScalingRecommendation(col).method"
+                      >
+                        {{ 
+                          getScalingRecommendation(col).method === 'standard' ? 'Standard' : 
+                          getScalingRecommendation(col).method === 'robust' ? 'Robust' : 
+                          getScalingRecommendation(col).method === 'minmax' ? 'MinMax' : 'MaxAbs' 
+                        }}
+                      </span>
+                      <span class="rec-reason">{{ getScalingRecommendation(col).reason }}</span>
+                    </div>
                     
                     <div class="encoding-select-wrapper" v-if="col.scale">
                       <select
@@ -907,6 +1106,17 @@
                   </svg>
                   Current Class Distribution
                 </label>
+                
+                <!-- SMOTE Validation Warning -->
+                <div v-if="!smoteValidation.valid" class="leakage-warning" style="margin-bottom: 1.5rem; background: rgba(239, 68, 68, 0.05); color: #ef4444; border-color: rgba(239, 68, 68, 0.2);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/>
+                  </svg>
+                  <div>
+                    <strong>Numerical Data Required</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85rem; opacity: 0.9;">{{ smoteValidation.message }}</p>
+                  </div>
+                </div>
                 
                 <div class="class-distribution-grid">
                   <div 
@@ -1040,7 +1250,7 @@
                 variant="primary" 
                 :loading="isProcessing"
                 @click="applySmote"
-                :disabled="isProcessing"
+                :disabled="isProcessing || !smoteValidation.valid || smoteApplied"
               >
                 Apply SMOTE
               </Button>
@@ -1250,12 +1460,14 @@ console.log('='.repeat(80) + '\n');
 const splitApplied = ref(false);
 const scalingApplied = ref(false);
 const encodingApplied = ref(false);
+const targetEncodingApplied = ref(false);
 const currentSplitView = ref("full"); // 'full', 'train', 'test'
 const splitRatio = ref(0.8);
 const splitStrategy = ref("random"); // 'random' or 'stratified'
 const randomSeed = ref(null);
 const scalingMethod = ref("standard"); // 'standard', 'minmax', 'robust', 'maxabs', 'none'
 const scaledColumns = ref(new Set()); // Track scaled columns
+const targetEncodedColumns = ref(new Set()); // Track target encoded columns
 
 watch(scaledColumns, (newSet) => {
   columns.value.forEach(col => {
@@ -1283,16 +1495,20 @@ const showScalingModal = ref(false);
 const showResetConfirmModal = ref(false);
 const showResetSplitModal = ref(false);
 const showSmoteModal = ref(false);
+const showTargetEncodingModal = ref(false);
 
 // ==================== SMOTE STATE ====================
 const smoteApplied = ref(false);
 const smoteStrategy = ref('auto'); // 'auto', 'minority', 'not minority'
 const smoteKNeighbors = ref(5);
 const smoteRandomSeed = ref(null);
+const targetEncodingSmoothing = ref(10);
 const hasClassImbalance = ref(false);
 const imbalanceRatio = ref(1.0);
 const imbalanceSeverity = ref('balanced'); // 'balanced', 'mild', 'severe'
 const classDistribution = ref({});
+
+// Load correct problemType from mlAppState
 const problemType = ref(mlAppState.problemType || 'classification');
 
 // ==================== TABLE STATE ====================
@@ -1385,8 +1601,19 @@ const categoricalColumns = computed(() =>
 );
 
 const numericalColumns = computed(() =>
-  columns.value.filter(col => col.type === 'numerical' && col.name !== selectedTarget.value)
+  columns.value.filter(col => col.type === 'numerical' && col.name !== selectedTarget.value && !scaledColumns.value.has(col.name))
 );
+
+const smoteValidation = computed(() => {
+  const cats = columns.value.filter(col => col.type === 'categorical' && col.name !== selectedTarget.value);
+  if (cats.length > 0) {
+    return {
+      valid: false,
+      message: `SMOTE requires all feature columns to be numerical. Please encode the following categorical columns first: ${cats.map(c => c.name).join(', ')}.`
+    };
+  }
+  return { valid: true };
+});
 
 // For per-column encoding selection state (update as needed for your structure)
 categoricalColumns.value.forEach(col => {
@@ -1544,14 +1771,18 @@ const getColumnSample = (column) => {
 
 // Toggle encoding for a column
 function toggleColumnEncoding(column) {
-  // If column is selected but has no encoding method, default to 'onehot'
-  if (column.encode && !column.encoding) column.encoding = 'onehot';
+  // If column is selected but has no encoding method, default to the recommendation
+  if (column.encode && !column.encoding) {
+    column.encoding = getEncodingRecommendation(column).method;
+  }
 }
 
 // Toggle scaling for a column
 function toggleColumnScaling(column) {
-  // If column is selected but has no scaling method, default to 'standard'
-  if (column.scale && !column.scalingMethod) column.scalingMethod = 'standard';
+  // Use recommendation when selected if no method set
+  if (column.scale && !column.scalingMethod) {
+    column.scalingMethod = getScalingRecommendation(column).method;
+  }
 }
 
 // Set encoding method for a column
@@ -1564,7 +1795,12 @@ function setEncodingMethod(columnName, method) {
 function selectAllCategoricalColumns() {
   categoricalColumns.value.forEach(col => {
     const baseCol = columns.value.find(c => c.name === col.name);
-    if (baseCol) baseCol.encode = true;
+    if (baseCol) {
+      baseCol.encode = true;
+      if (!baseCol.encoding) {
+        baseCol.encoding = getEncodingRecommendation(col).method;
+      }
+    }
   });
 }
 
@@ -1575,13 +1811,173 @@ function deselectAllCategoricalColumns() {
   });
 }
 
+// Select recommended columns for categorical encoding (exclude high cardinality)
+function selectRecommendedCategoricalColumns() {
+  categoricalColumns.value.forEach(col => {
+    const baseCol = columns.value.find(c => c.name === col.name);
+    if (baseCol) {
+       const rec = getEncodingRecommendation(col);
+       if (rec.method !== 'target' && col.name !== selectedTarget.value) {
+         baseCol.encode = true;
+         baseCol.encoding = rec.method;
+       } else {
+         baseCol.encode = false;
+       }
+    }
+  });
+}
+
 // Smart auto-select (exclude target column by name)
 function autoSelectForEncoding(targetName) {
   categoricalColumns.value.forEach(col => {
     const baseCol = columns.value.find(c => c.name === col.name);
-    if (baseCol) baseCol.encode = (col.name !== targetName && col.unique > 2);
+    if (baseCol) {
+      baseCol.encode = (col.name !== targetName && col.unique > 1);
+      if (baseCol.encode && !baseCol.encoding) {
+        baseCol.encoding = getEncodingRecommendation(col).method;
+      }
+    }
   });
 }
+
+// Select recommended columns for target encoding (high cardinality)
+function selectRecommendedTargetEncoding() {
+  categoricalColumns.value.forEach(col => {
+    if (col.name !== selectedTarget.value && !targetEncodedColumns.value.has(col.name)) {
+      if (col.unique >= 10) {
+        col.targetEncode = true;
+      }
+    }
+  });
+}
+
+function selectAllTargetEncoding() {
+  categoricalColumns.value.forEach(col => {
+    if (col.name !== selectedTarget.value && !targetEncodedColumns.value.has(col.name)) {
+      col.targetEncode = true;
+    }
+  });
+}
+
+function deselectAllTargetEncoding() {
+  categoricalColumns.value.forEach(col => {
+    col.targetEncode = false;
+  });
+}
+
+// Categorical Encoding Recommendation Rules
+const getEncodingRecommendation = (column) => {
+  if (!column) return { method: 'onehot', reason: 'Defaulting to One-Hot' };
+
+  const name = (column.name || '').toLowerCase();
+  const uniqueCount = column.unique || 0;
+
+  // 1. Ordinal Exclusion List (Columns that should NOT be ordinal)
+  const nominalOnlyKeywords = [
+    'occupation', 'city', 'country', 'department', 'relationship', 
+    'gender', 'product', 'id', 'name', 'zip', 'email', 'phone'
+  ];
+  const isNominalOnly = nominalOnlyKeywords.some(k => name.includes(k));
+
+  // 2. Ordinal Detection (Name-based)
+  const ordinalNameKeywords = [
+    'level', 'rating', 'rank', 'priority', 'severity', 'stage', 
+    'size', 'satisfaction', 'education', 'experience', 'performance', 'grade'
+  ];
+  const hasOrdinalName = ordinalNameKeywords.some(k => name.includes(k));
+
+  // 3. Ordinal Detection (Value-based - check sample values)
+  const ordinalValueTerms = ['low', 'medium', 'high', 'small', 'large', 'poor', 'average', 'good', 'excellent', 'beginner', 'intermediate', 'expert', 'bronze', 'silver', 'gold'];
+  const ordinalValuePatterns = [/level_\d+/i, /grade_\d+/i, /rank_\d+/i, /stage_\d+/i, /priority_\d+/i];
+  
+  // Get samples from originalDataset
+  const samples = originalDataset.value
+    .slice(0, 10)
+    .map(row => String(row[column.name] || '').toLowerCase());
+  
+  const hasOrdinalValue = samples.some(s => 
+    ordinalValueTerms.some(term => s.includes(term)) || 
+    ordinalValuePatterns.some(pattern => pattern.test(s))
+  );
+
+  // Recommend Ordinal if confident (and not on exclusion list)
+  if (!isNominalOnly && (hasOrdinalName || hasOrdinalValue)) {
+    return {
+      method: 'ordinal',
+      reason: `Natural order detected based on ${hasOrdinalName ? 'column name' : 'category values'}.`,
+      isOrdinal: true
+    };
+  }
+
+  // 4. Cardinality-based Rules (Fallbacks)
+  if (uniqueCount <= 10) {
+    return {
+      method: 'onehot',
+      reason: 'Low cardinality detected; One-Hot is efficient and safe.'
+    };
+  } else if (uniqueCount <= 50) {
+    return {
+      method: 'label',
+      reason: 'Moderate cardinality; Label Encoding is recommended for Tree-based models.'
+    };
+  } else {
+    return {
+      method: 'target',
+      reason: 'High cardinality detected. One-Hot or Label Encoding may lead to poor performance.',
+      note: '🚨 Recommend: Use Target Encoding tool for this column.'
+    };
+  }
+};
+
+// Feature Scaling Recommendation Rules
+const getScalingRecommendation = (column) => {
+  if (!column || !column.backendMetrics) return { method: 'standard', reason: 'Defaulting to Standard Scaling' };
+
+  const m = column.backendMetrics;
+  const skew = Math.abs(m.skewness || 0);
+  const hasOutliers = (m.outliers_count || 0) > 0;
+  
+  // Bounded range detection (Rule 3)
+  const isBounded = (m.min >= 0 && (m.max <= 1 || m.max === 100 || m.max === 10 || m.max === 5));
+  
+  // Rule 4: MaxAbsScaler (Sparsity)
+  if ((m.zeros_pct || 0) > 30 || (Math.abs(m.mean || 0) < 0.1 && m.std > 0)) {
+     return {
+       method: 'maxabs',
+       reason: 'MaxAbsScaler preserves sparsity and scales by maximum absolute value.'
+     };
+  }
+
+  // Rule 1: RobustScaler (Outliers/Skewness)
+  if (hasOutliers || skew > 1.5) {
+    return {
+      method: 'robust',
+      reason: 'RobustScaler is resistant to outliers and skewed distributions.'
+    };
+  }
+
+  // Rule 3: MinMaxScaler (Bounded Range)
+  if (isBounded) {
+    return {
+      method: 'minmax',
+      reason: 'MinMaxScaler preserves relative distances within a fixed range.'
+    };
+  }
+
+  // Rule 2: StandardScaler (Normal/Symmetric)
+  if (skew < 1 && !hasOutliers) {
+    return {
+      method: 'standard',
+      reason: 'StandardScaler works best for normally distributed data.'
+    };
+  }
+
+  // Default Fallback
+  return {
+    method: 'standard',
+    reason: 'StandardScaler is recommended for this distribution.'
+  };
+};
 
 
 // ==================== TOOLKIT FUNCTIONS ====================
@@ -1658,6 +2054,39 @@ const fetchBackendDatasetInfo = async (datasetId) => {
   }
 };
 
+const fetchCompleteStatistics = async () => {
+  if (!datasetId.value) return;
+
+  try {
+    console.log("🔄 Fetching complete statistics for accurate category counts...");
+    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}/statistics`);
+    
+    if (!response.ok) {
+      console.warn("⚠️ Failed to fetch statistics from backend");
+      return;
+    }
+
+    const stats = await response.json();
+
+    if (stats.column_stats) {
+      console.log("✅ Received full statistics, updating column metadata");
+      // Update columns with backend statistics
+      stats.column_stats.forEach(stat => {
+        const col = columns.value.find(c => c.name === stat.name);
+        if (col) {
+          col.unique = stat.unique;
+          col.missing = stat.missing;
+          // Store additional metrics if needed for future use
+          col.backendMetrics = stat.detailed_metrics; 
+        }
+      });
+      console.log("✅ Updated unique category counts from full dataset");
+    }
+  } catch (error) {
+    console.warn("⚠️ Error updating statistics:", error);
+  }
+};
+
 
 // ==================== DATA LOADING ====================
 
@@ -1719,6 +2148,11 @@ const loadInitialData = async () => {
 
     // Step 5: Analyze columns
     analyzeColumns();
+
+    // Step 6: Fetch complete statistics after initial analysis (Accurate category counts)
+    if (mlStore.backendConnected && datasetId.value) {
+      await fetchCompleteStatistics();
+    }
 
     originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
 
@@ -1883,6 +2317,10 @@ const confirmResetSplit = () => {
   mlStore.isScaled = false;
   mlStore.isEncoded = false;
 
+  // Clear Target Encoding State
+  targetEncodingApplied.value = false;
+  targetEncodedColumns.value.clear();
+
   showResetSplitModal.value = false;
   console.log("🔄 Split reset");
   showSuccess('Split Reset', 'All transformations have been cleared');
@@ -1915,6 +2353,10 @@ const confirmResetAll = async () => {
     mlStore.isSplit = false;
     mlStore.isScaled = false;
     mlStore.isEncoded = false;
+
+    // Clear Target Encoding State
+    targetEncodingApplied.value = false;
+    targetEncodedColumns.value.clear();
     
     console.log("🔄 All transformations reset");
     showSuccess('Reset Complete', 'Dataset returned to original state');
@@ -1928,11 +2370,15 @@ const confirmResetAll = async () => {
 
 // ==================== SMOTE OPERATIONS ====================
 
-// Check for class imbalance
-const checkClassImbalance = async () =>{
-  if (!splitApplied.value || !selectedTarget.value) {
+// Re-check class imbalance on the backend
+const checkClassImbalance = async () => {
+  // 🛑 GUARD: SMOTE and imbalance checks only apply to classification
+  if (problemType.value !== 'classification') {
+    console.log("⏭️ Skipping imbalance check: Problem type is", problemType.value);
     return;
   }
+
+  if (!splitApplied.value || !selectedTarget.value) return;
 
   try {
     const response = await authenticatedGet(
@@ -2158,8 +2604,10 @@ const applyScaling = async () => {
       mlStore.isScaled = true;
       mlStore.scalingMethod = scalingMethod.value;
       
-      // Track scaled columns
-      columnsToScale.forEach(col => scaledColumns.value.add(col.name));
+      // Track scaled columns (Force reactive update)
+      const newScaledSet = new Set(scaledColumns.value);
+      columnsToScale.forEach(col => newScaledSet.add(col.name));
+      scaledColumns.value = newScaledSet;
 
       console.log("=".repeat(80) + "\n");
 
@@ -2193,7 +2641,9 @@ const applyScaling = async () => {
 const selectAllNumericalColumns = () => {
   numericalColumns.value.forEach(col => {
     col.scale = true;
-    if (!col.scalingMethod) col.scalingMethod = 'standard';
+    if (!col.scalingMethod) {
+      col.scalingMethod = getScalingRecommendation(col).method;
+    }
   });
 };
 
@@ -2335,6 +2785,7 @@ async function applyCategoricalEncoding() {
         const existingCol = columns.value.find(c => c.name === colName);
         
         if (existingCol) {
+          if (isEncodedColumn) existingCol.type = 'numerical';
           return existingCol;
         } else {
           // New column (from one-hot encoding)
@@ -2382,6 +2833,105 @@ async function applyCategoricalEncoding() {
     showError('Encoding Failed', error.message);
   } finally {
     isProcessing.value = false;
+  }
+}
+
+
+
+
+async function applyTargetEncoding() {
+  const columnsToEncode = categoricalColumns.value
+    .filter(col => col.targetEncode)
+    .map(col => ({
+      name: col.name,
+      smoothing: targetEncodingSmoothing.value
+    }));
+
+  if (columnsToEncode.length === 0) {
+    alert('Please select at least one categorical column for target encoding.');
+    return;
+  }
+
+  if (!datasetId.value) {
+    alert("⚠️ No dataset ID found. Please refresh the page.");
+    return;
+  }
+
+  isProcessing.value = true;
+  processingMessage.value = "Applying Target Encoding...";
+
+  try {
+    const payload = {
+      dataset_id: datasetId.value,
+      columns: columnsToEncode
+    };
+
+    console.log('🔍 Target Encoding Request:', payload);
+
+    const response = await authenticatedPost('http://localhost:8000/api/apply-target-encoding', payload)
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(`HTTP ${response.status}: ${errorBody.detail || errorBody.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    if (data.success) {
+      console.log('✅ Target encoding successful');
+      
+      trainData.value = data.train_preview || [];
+      testData.value = data.test_preview || [];
+      targetEncodingApplied.value = true;
+      
+      // Track which columns were encoded (Force reactive update)
+      const newEncodedSet = new Set(targetEncodedColumns.value);
+      columnsToEncode.forEach(col => newEncodedSet.add(col.name));
+      targetEncodedColumns.value = newEncodedSet;
+      
+      // Update columns list if new columns were added (multiclass)
+      if (data.columns && data.columns.length > 0) {
+        // Rebuild columns array
+        columns.value = data.columns.map(colName => {
+          const isNewEncodedCol = data.encoded_columns?.includes(colName);
+          const existingCol = columns.value.find(c => c.name === colName);
+          
+          if (existingCol) {
+            // Update type to numerical if it was target encoded
+            if (isNewEncodedCol) existingCol.type = 'numerical';
+            return existingCol;
+          }
+          
+          return {
+            name: colName,
+            type: 'numerical',
+            unique: 0,
+            missing: 0,
+            remove: false,
+            encode: false,
+            encoding: 'onehot'
+          };
+        });
+      }
+      
+      currentSplitView.value = 'train';
+      
+      const encodedCount = columnsToEncode.length;
+      showSuccess(
+        'Target Encoding Applied!',
+        `Encoded ${encodedCount} column${encodedCount !== 1 ? 's' : ''} using category means with smoothing (k=${targetEncodingSmoothing.value}).`
+      );
+      
+      addPreprocessingStep('Target Encoding');
+      showTargetEncodingModal.value = false;
+    } else {
+      throw new Error(data.detail || 'Target encoding failed');
+    }
+  } catch (error) {
+    console.error('❌ Target encoding error:', error);
+    showError('Target Encoding Failed', error.message);
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = "";
   }
 }
 
@@ -4212,6 +4762,107 @@ watch(currentSplitView, () => {
   font-size: 1rem;
   font-weight: 600;
   color: #ffffff;
+}
+
+.col-name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.category-count {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-left: 4px;
+}
+
+.col-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.recommendation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 2rem;
+}
+
+.rec-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.rec-badge.onehot {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.rec-badge.label {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.rec-badge.ordinal {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.rec-badge.target {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.rec-badge.standard {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.rec-badge.minmax {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.rec-badge.robust {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.rec-badge.maxabs {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.scaling-rec {
+  margin-top: 4px;
+}
+
+.rec-reason {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.rec-note {
+  font-size: 0.7rem;
+  color: #6366f1;
+  margin: 0;
+  font-weight: 500;
 }
 
 .info-text {
@@ -6419,6 +7070,16 @@ watch(currentSplitView, () => {
   flex: 1;
 }
 
+.checkbox-label.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-label.disabled .checkbox-custom {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 .checkbox-label input {
   display: none;
 }
@@ -6432,21 +7093,24 @@ watch(currentSplitView, () => {
   transition: all 0.2s ease;
 }
 
+.checkbox-custom::after {
+  content: "✓";
+  color: white;
+  font-size: 14px;
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .checkbox-label input:checked + .checkbox-custom {
   background: #667eea;
   border-color: #667eea;
 }
 
 .checkbox-label input:checked + .checkbox-custom::after {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 2px;
-  width: 5px;
-  height: 10px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  display: block;
 }
 
 .col-name {
@@ -6885,6 +7549,89 @@ watch(currentSplitView, () => {
   color: #667eea;
   margin-left: 8px;
   font-weight: 600;
+}
+
+
+.category-count {
+  font-size: 0.85rem;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.recommendation-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strongly-rec {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.recommended {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.not-recommended {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+.leakage-warning {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #d97706;
+  font-size: 0.9rem;
+  margin-top: 16px;
+}
+
+.leakage-warning svg {
+  flex-shrink: 0;
+}
+
+.info-alert {
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  color: #1e40af;
+}
+
+.info-alert strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.info-alert p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0.8;
 }
 
 </style>

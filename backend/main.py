@@ -59,7 +59,7 @@ import xgboost as xgb
 import joblib
 
 # ===== PREPROCESSING MODULE =====
-from preprocessing import DataPreprocessor
+from preprocessing import DataPreprocessor, TargetEncoder
 
 # ===== DIRECTORIES =====
 # UPLOAD_DIR = "enterprise_datasets"  <-- Deprecated
@@ -879,13 +879,20 @@ async def get_dataset_statistics(
                         }
                         
                         # Detailed Metrics for Numerical
+                        iqr = float(quantiles[3] - quantiles[1])
+                        outliers_mask = (clean_series < (quantiles[1] - 1.5 * iqr)) | (clean_series > (quantiles[3] + 1.5 * iqr))
+                        
                         stat_entry["detailed_metrics"] = {
                             "mean": float(clean_series.mean()),
+                            "std": float(clean_series.std()) if len(clean_series) > 1 else 0,
                             "median": float(clean_series.median()),
                             "min": float(clean_series.min()),
                             "max": float(clean_series.max()),
                             "range": float(clean_series.max() - clean_series.min()),
-                            "skewness": float(clean_series.skew()) if len(clean_series) > 1 else 0
+                            "skewness": float(clean_series.skew()) if len(clean_series) > 1 else 0,
+                            "iqr": iqr,
+                            "outliers_count": int(outliers_mask.sum()),
+                            "zeros_pct": float((clean_series == 0).sum() / len(clean_series) * 100) if not clean_series.empty else 0
                         }
                 else:
                     # Calculate value counts for categorical columns
@@ -1351,6 +1358,14 @@ async def apply_smote(
         X_train = X_train_storage[dataset_id]
         y_train = y_train_storage[dataset_id]
         
+        # Check for non-numeric columns (SMOTE requirement)
+        non_numeric_cols = X_train.select_dtypes(exclude=['number']).columns.tolist()
+        if non_numeric_cols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"SMOTE requires all features to be numerical. Found non-numeric columns: {', '.join(non_numeric_cols)}. Please encode them first."
+            )
+        
         # Store original distribution
         original_distribution = y_train.value_counts().to_dict()
         original_total = len(y_train)
@@ -1714,8 +1729,106 @@ class CategoricalEncodingRequest(BaseModel):
     dataset_id: str
     columns: List[ColumnEncoding]
 
+class TargetEncodingColumn(BaseModel):
+    name: str
+    smoothing: Optional[int] = 10
+
+class TargetEncodingRequest(BaseModel):
+    dataset_id: str
+    columns: List[TargetEncodingColumn]
+
 # Storage for encoders (similar to split_scalers)
 categorical_encoders = {}
+target_encoders = {}
+
+@app.post("/api/apply-target-encoding")
+async def apply_target_encoding(request: TargetEncodingRequest):
+    """
+    Apply smoothed target encoding to specified categorical columns.
+    Must be called AFTER dataset is split.
+    """
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, target_encoders
+    
+    try:
+        dataset_id = request.dataset_id
+        columns_to_encode = request.columns
+        
+        print("\n" + "=" * 80)
+        print(f"📊 TARGET ENCODING REQUEST: Dataset {dataset_id}")
+        print(f"   Columns: {[c.name for c in columns_to_encode]}")
+        print("=" * 80)
+        
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset must be split before target encoding")
+        
+        X_train = X_train_storage[dataset_id].copy()
+        X_test = X_test_storage[dataset_id].copy()
+        y_train = y_train_storage[dataset_id]
+        
+        # Detect problem type if not already known
+        problem_type = datasets[dataset_id].get('problem_type', 'regression')
+        
+        encoders_used = {}
+        new_encoded_cols = []
+        
+        for col_info in columns_to_encode:
+            col_name = col_info.name
+            smoothing = col_info.smoothing if col_info.smoothing is not None else 10
+            
+            if col_name not in X_train.columns:
+                print(f"⚠️ Column {col_name} not found, skipping...")
+                continue
+                
+            print(f"Encoding {col_name} (smoothing={smoothing})...")
+            
+            encoder = TargetEncoder(smoothing=smoothing)
+            encoder.fit(X_train, y_train, col_name, problem_type=problem_type)
+            
+            X_train, cols_added = encoder.transform(X_train, col_name)
+            X_test, _ = encoder.transform(X_test, col_name)
+            
+            encoders_used[col_name] = encoder
+            new_encoded_cols.extend(cols_added)
+            
+        # Update storage
+        X_train_storage[dataset_id] = X_train
+        X_test_storage[dataset_id] = X_test
+        target_encoders[dataset_id] = encoders_used
+        
+        # Update metadata
+        datasets[dataset_id]['target_encoded'] = True
+        datasets[dataset_id]['target_encoded_columns'] = list(encoders_used.keys())
+        
+        # Preview data
+        y_test = y_test_storage[dataset_id]
+        train_preview = pd.concat([X_train.head(200), y_train.head(200)], axis=1).to_dict('records')
+        test_preview = pd.concat([X_test.head(200), y_test.head(200)], axis=1).to_dict('records')
+        
+        print(f"✅ Target encoding complete. Added {len(new_encoded_cols)} columns.")
+        print("=" * 80 + "\n")
+        
+        target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
+        all_columns = list(X_train.columns) + [target_col_name]
+        
+        return {
+            "success": True,
+            "message": f"Successfully applied target encoding to {len(encoders_used)} original columns",
+            "train_preview": train_preview,
+            "test_preview": test_preview,
+            "columns": all_columns,
+            "encoded_columns": new_encoded_cols
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Target encoding error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/apply-categorical-encoding")
 async def apply_categorical_encoding(request: CategoricalEncodingRequest):
