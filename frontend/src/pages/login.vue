@@ -21,8 +21,6 @@
           <!-- Brand Title -->
           <div class="brand-title-section">
             <h1 class="brand-title">DataSage</h1>
-            <!-- <p class="brand-subtitle">Transform Raw Data into</p>
-            <p class="brand-subtitle-accent">Actionable Insights</p> -->
           </div>
         </div>
 
@@ -116,7 +114,7 @@
             <form v-if="activeTab === 'register'" @submit.prevent="handleRegister" class="auth-form">
               <div class="form-header">
                 <h2>Create Account</h2>
-                <p>Join DataSage and unlock powerful ML analytics</p>
+                <p>Join DataSage and unlock powerful ML pipeline</p>
               </div>
 
               <div class="form-group">
@@ -525,20 +523,20 @@ const handleRegister = async () => {
 
 .brand-title-section {
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .brand-title {
   font-size: 3rem;
   font-weight: 800;
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.5rem 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 2;
   text-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
 }
 

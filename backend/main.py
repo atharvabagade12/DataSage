@@ -1,6 +1,6 @@
 
 
-from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File
+from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
@@ -10,9 +10,12 @@ import io
 import sys
 import os
 import traceback
-from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi.responses import StreamingResponse
+import multiprocessing
+import queue
+import time
+from datetime import datetime
 
 
 # ===== SKLEARN IMPORTS =====
@@ -36,6 +39,8 @@ from sklearn.preprocessing import (
 )
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_classif, f_regression
+from sklearn.feature_extraction.text import TfidfVectorizer
+from scipy.sparse import hstack, issparse, csr_matrix
 
 # ===== IMBALANCED-LEARN (SMOTE) =====
 try:
@@ -117,6 +122,16 @@ X_test_storage: Dict[str, Any] = {}
 y_train_storage: Dict[str, Any] = {}
 y_test_storage: Dict[str, Any] = {}
 split_scalers: Dict[str, Any] = {}
+
+# TF-IDF storage
+tfidf_vectorizers: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: TfidfVectorizer}
+tfidf_feature_names: Dict[str, Dict[str, list]] = {}  # dataset_id -> {col_name: [feature_names]}
+categorical_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: encoder_info}
+target_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: TargetEncoder}
+
+# Global tracker for active training processes to allow interruption
+# Format: { websocket_id: multiprocessing.Process }
+active_training_processes: Dict[str, multiprocessing.Process] = {}
 
 # ===== ALGORITHM MAPPING =====
 CLASSIFICATION_ALGORITHMS = {
@@ -257,7 +272,7 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
         
         print(f"🎯 Initializing {variant.capitalize()} Naive Bayes with params: {params}")
         return model_class(**params)
-    
+
     # ===== DEFAULT INITIALIZATION FOR ALL OTHER ALGORITHMS =====
     model_params = {}
     
@@ -280,6 +295,227 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
     except Exception as e:
         print(f"⚠️ Failed to initialize with params, using defaults: {e}")
         return model_class()
+
+
+def training_worker(config, X_train, X_test, y_train, y_test, result_queue):
+    """
+    Worker function to run training in a separate process.
+    Sends progress and results back via a multiprocessing.Queue.
+    """
+    try:
+        algorithm_name = config['algorithm_name']
+        problem_type = config.get('problem_type', 'classification')
+        hyperparameters = config.get('hyperparameters', {})
+        validation_method = config.get('validation_method', 'train_test_split')
+        cv_folds = config.get('cv_folds', 5)
+        
+        # Initialize model
+        model = initialize_algorithm_with_params(algorithm_name, problem_type, hyperparameters)
+        start_time = time.time()
+        
+        # Combine data for CV methods
+        if validation_method in ['kfold_cv', 'grid_search', 'randomized_search']:
+            if isinstance(X_train, np.ndarray):
+                X_full = np.concatenate((X_train, X_test), axis=0)
+                y_full = np.concatenate((y_train, y_test), axis=0)
+            else:
+                X_full = pd.concat([pd.DataFrame(X_train), pd.DataFrame(X_test)], axis=0).values
+                y_full = pd.concat([pd.Series(y_train), pd.Series(y_test)], axis=0).values
+
+        # Initialize metrics to avoid UnboundLocalError
+        metrics = {}
+        
+        if validation_method in ['train_test_split', 'simple']:
+            result_queue.put({'status': 'training', 'message': f'⏳ Training {algorithm_name}...'})
+            
+            model.fit(X_train, y_train)
+            
+            # Predict on both sets
+            y_pred_test = model.predict(X_test)
+            y_pred_train = model.predict(X_train)
+            
+            if problem_type == 'classification':
+                # Test metrics
+                test_accuracy = accuracy_score(y_test, y_pred_test)
+                test_precision = precision_score(y_test, y_pred_test, average='weighted', zero_division=0)
+                test_recall = recall_score(y_test, y_pred_test, average='weighted', zero_division=0)
+                test_f1 = f1_score(y_test, y_pred_test, average='weighted', zero_division=0)
+                
+                # Train metrics
+                train_accuracy = accuracy_score(y_train, y_pred_train)
+                train_precision = precision_score(y_train, y_pred_train, average='weighted', zero_division=0)
+                train_recall = recall_score(y_train, y_pred_train, average='weighted', zero_division=0)
+                train_f1 = f1_score(y_train, y_pred_train, average='weighted', zero_division=0)
+                
+                metrics = {
+                    'validation_method': 'train_test_split',
+                    'accuracy': float(test_accuracy),
+                    'test_accuracy': float(test_accuracy),
+                    'test_precision': float(test_precision),
+                    'test_recall': float(test_recall),
+                    'test_f1': float(test_f1),
+                    'train_accuracy': float(train_accuracy),
+                    'train_precision': float(train_precision),
+                    'train_recall': float(train_recall),
+                    'train_f1': float(train_f1),
+                    'n_classes': int(len(np.unique(y_test))),
+                    'problem_type': problem_type
+                }
+            else:
+                # Test metrics
+                test_r2 = r2_score(y_test, y_pred_test)
+                test_mse = mean_squared_error(y_test, y_pred_test)
+                test_mae = mean_absolute_error(y_test, y_pred_test)
+                
+                # Train metrics
+                train_r2 = r2_score(y_train, y_pred_train)
+                train_mse = mean_squared_error(y_train, y_pred_train)
+                train_mae = mean_absolute_error(y_train, y_pred_train)
+                
+                metrics = {
+                    'validation_method': 'train_test_split',
+                    'r2': float(test_r2),
+                    'test_r2': float(test_r2),
+                    'test_mse': float(test_mse),
+                    'test_mae': float(test_mae),
+                    'test_rmse': float(np.sqrt(test_mse)),
+                    'train_r2': float(train_r2),
+                    'train_mse': float(train_mse),
+                    'train_mae': float(train_mae),
+                    'problem_type': problem_type
+                }
+                
+            
+        elif validation_method == 'kfold_cv':
+            result_queue.put({'status': 'training', 'message': f'🔄 Running {cv_folds}-fold CV...'})
+            
+            if problem_type == 'classification':
+                cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
+                scoring = ['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted']
+            else:
+                cv = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
+                scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error']
+            
+            cv_results = cross_validate(model, X_full, y_full, cv=cv, scoring=scoring, return_train_score=True, n_jobs=-1)
+            
+            if problem_type == 'classification':
+                metrics = {
+                    'validation_method': 'kfold_cv',
+                    'cv_mean': float(cv_results['test_accuracy'].mean()),
+                    'cv_std': float(cv_results['test_accuracy'].std()),
+                    'test_accuracy': float(cv_results['test_accuracy'].mean()),
+                    'test_f1': float(cv_results['test_f1_weighted'].mean()),
+                    'test_precision': float(cv_results['test_precision_weighted'].mean()),
+                    'test_recall': float(cv_results['test_recall_weighted'].mean()),
+                    'train_accuracy': float(cv_results['train_accuracy'].mean()),
+                    'train_f1': float(cv_results['train_f1_weighted'].mean()),
+                    'train_precision': float(cv_results['train_precision_weighted'].mean()),
+                    'train_recall': float(cv_results['train_recall_weighted'].mean()),
+                    'problem_type': problem_type
+                }
+            else:
+                metrics = {
+                    'validation_method': 'kfold_cv',
+                    'cv_mean': float(cv_results['test_r2'].mean()),
+                    'cv_std': float(cv_results['test_r2'].std()),
+                    'test_r2': float(cv_results['test_r2'].mean()),
+                    'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
+                    'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
+                    'train_r2': float(cv_results['train_r2'].mean()),
+                    'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
+                    'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
+                    'problem_type': problem_type
+                }
+            
+            model.fit(X_full, y_full)
+            
+
+        elif validation_method in ['grid_search', 'randomized_search']:
+            is_grid = (validation_method == 'grid_search')
+            folds = config.get('grid_search_cv_folds' if is_grid else 'random_search_cv_folds', 5)
+            
+            result_queue.put({'status': 'training', 'message': f'🔍 Starting {"Grid" if is_grid else "Randomized"} Search...'})
+            
+            density = config.get('grid_density', 'normal')
+            param_grid = get_param_grid_for_algorithm(algorithm_name, problem_type, density if is_grid else 'fine')
+            
+            if problem_type == 'classification':
+                cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+                scoring = 'accuracy'
+            else:
+                cv = KFold(n_splits=folds, shuffle=True, random_state=42)
+                scoring = 'r2'
+            
+            base_model = initialize_algorithm_with_params(algorithm_name, problem_type, {})
+            
+            if is_grid:
+                search = GridSearchCV(base_model, param_grid, cv=cv, scoring=scoring, n_jobs=-1)
+            else:
+                n_iter = config.get('random_search_iterations', 20)
+                search = RandomizedSearchCV(base_model, param_grid, n_iter=n_iter, cv=cv, scoring=scoring, n_jobs=-1, random_state=42)
+            
+            search.fit(X_full, y_full)
+            
+            model = search.best_estimator_
+            
+            # Calculate metrics on the full dataset (which was used for final fit)
+            y_pred_full = model.predict(X_full)
+            if problem_type == 'classification':
+                train_acc = accuracy_score(y_full, y_pred_full)
+                train_f1 = f1_score(y_full, y_pred_full, average='weighted', zero_division=0)
+            else:
+                train_acc = r2_score(y_full, y_pred_full)
+                train_f1 = mean_squared_error(y_full, y_pred_full)
+
+            metrics = {
+                'validation_method': validation_method,
+                'best_params': search.best_params_,
+                'best_score': float(search.best_score_),
+                'test_accuracy' if problem_type == 'classification' else 'test_r2': float(search.best_score_),
+                'train_accuracy' if problem_type == 'classification' else 'train_r2': float(train_acc),
+                'train_f1' if problem_type == 'classification' else 'train_mse': float(train_f1),
+                'problem_type': problem_type
+            }
+            
+        # ===== FINALIZE & SAVE =====
+        from datetime import datetime
+        model_id = f"model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        import os
+        os.makedirs('models', exist_ok=True)
+        model_path = f"models/{model_id}.joblib"
+        import joblib
+        joblib.dump(model, model_path)
+        
+        model_info = {
+            'model_id': model_id,
+            'model_path': model_path,
+            'algorithm': algorithm_name,
+            'model_class': model.__class__.__name__,
+            'problem_type': problem_type,
+            'n_features': int(X_train.shape[1]),
+            'n_samples_train': int(len(X_train)),
+            'n_samples_test': int(len(X_test)),
+            'hyperparameters': hyperparameters,
+            'final_metrics': metrics,
+            'trained_at': datetime.now().isoformat(),
+            'validation_method': validation_method
+        }
+        
+        result_queue.put({
+            'status': 'success',
+            'metrics': metrics,
+            'model_info': model_info,
+            'message': f'✅ Training completed in {time.time() - start_time:.2f}s'
+        })
+
+    except Exception as e:
+        import traceback
+        result_queue.put({
+            'status': 'error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        })
+    
 
 
 
@@ -1983,6 +2219,18 @@ class ScalingRequest(BaseModel):
     dataset_id: str
     columns: List[ColumnScaling]
 
+# TF-IDF Request Models
+class TfidfColumnConfig(BaseModel):
+    name: str
+    max_features: int
+    min_df: int
+    max_df: float
+    ngram_range: tuple
+
+class TfidfRequest(BaseModel):
+    dataset_id: str
+    columns: List[TfidfColumnConfig]
+
 @app.post("/api/datasets/apply-scaling")
 @app.post("/api/datasets/apply-scaling")
 async def apply_scaling(request: ScalingRequest):
@@ -2090,6 +2338,531 @@ async def apply_scaling(request: ScalingRequest):
     except Exception as e:
         print(f"❌ Scaling error: {str(e)}")
         import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== TF-IDF ENDPOINTS =====
+
+@app.post("/api/detect-text-columns")
+async def detect_text_columns(request: Dict[str, Any]):
+    """
+    Detect text columns suitable for TF-IDF vectorization using multi-signal scoring.
+    
+    Scoring criteria:
+    1. Average character length (0-2 points)
+    2. Median word count (0-2 points)
+    3. Unique value ratio (0-1 point)
+    4. Vocabulary size (0-2 points)
+    5. Character entropy (0-3 points)
+    
+    Total score ≥ 5 = TEXT column
+    """
+    try:
+        dataset_id = request.get('dataset_id')
+        
+        print("\n" + "=" * 80)
+        print(f"📝 ENHANCED TEXT COLUMN DETECTION REQUEST")
+        print(f"   Dataset ID: {dataset_id}")
+        print("=" * 80)
+        
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset must be split before TF-IDF detection")
+        
+        if dataset_id not in X_train_storage:
+            raise HTTPException(status_code=400, detail="Split data not found")
+        
+        X_train = X_train_storage[dataset_id]
+        
+        # Get object/string columns
+        object_columns = X_train.select_dtypes(include=['object', 'string']).columns
+        
+        print(f"   Found {len(object_columns)} object/string columns")
+        
+        # Exclusion patterns (categorical identifiers)
+        exclude_patterns = ['id', 'code', 'country', 'category', 'type', 'status', 'name', 'gender', 'city', 'state', 'zip', 'postal', 'phone', 'email', 'url', 'uuid', 'guid']
+        
+        text_candidates = []
+        all_column_analysis = []
+        
+        for col in object_columns:
+            # Get non-null string data
+            col_data = X_train[col].dropna().astype(str)
+            
+            if len(col_data) == 0:
+                continue
+            
+            # Initialize scoring
+            score = 0
+            reasoning = []
+            
+            # ===== SIGNAL 1: Average Character Length (0-2 points) =====
+            avg_length = col_data.str.len().mean()
+            
+            if avg_length >= 100:
+                score += 2
+                reasoning.append(f"Very long text (avg: {avg_length:.0f} chars) +2")
+            elif avg_length >= 50:
+                score += 1.5
+                reasoning.append(f"Long text (avg: {avg_length:.0f} chars) +1.5")
+            elif avg_length >= 30:
+                score += 1
+                reasoning.append(f"Medium text (avg: {avg_length:.0f} chars) +1")
+            else:
+                reasoning.append(f"Short text (avg: {avg_length:.0f} chars) +0")
+            
+            # ===== SIGNAL 2: Median Word Count (0-2 points) =====
+            word_counts = col_data.str.split().str.len()
+            median_words = word_counts.median()
+            
+            if median_words >= 10:
+                score += 2
+                reasoning.append(f"Many words (median: {median_words:.0f}) +2")
+            elif median_words >= 5:
+                score += 1.5
+                reasoning.append(f"Several words (median: {median_words:.0f}) +1.5")
+            elif median_words >= 3:
+                score += 1
+                reasoning.append(f"Few words (median: {median_words:.0f}) +1")
+            else:
+                reasoning.append(f"Very few words (median: {median_words:.0f}) +0")
+            
+            # ===== SIGNAL 3: Unique Value Ratio (0-1 point) =====
+            unique_count = col_data.nunique()
+            total_count = len(col_data)
+            unique_ratio = unique_count / total_count if total_count > 0 else 0
+            
+            if unique_ratio >= 0.95:
+                # Too unique, likely IDs
+                reasoning.append(f"Very high uniqueness ({unique_ratio:.2%}) -1 (likely ID)")
+                score -= 1
+            elif unique_ratio >= 0.7:
+                score += 1
+                reasoning.append(f"High uniqueness ({unique_ratio:.2%}) +1")
+            elif unique_ratio >= 0.3:
+                score += 0.5
+                reasoning.append(f"Medium uniqueness ({unique_ratio:.2%}) +0.5")
+            else:
+                reasoning.append(f"Low uniqueness ({unique_ratio:.2%}) +0")
+            
+            # ===== SIGNAL 4: Vocabulary Size (0-2 points) =====
+            # Count unique words across all values
+            all_words = ' '.join(col_data.values).lower().split()
+            vocabulary_size = len(set(all_words))
+            
+            if vocabulary_size >= 1000:
+                score += 2
+                reasoning.append(f"Large vocabulary ({vocabulary_size} words) +2")
+            elif vocabulary_size >= 500:
+                score += 1.5
+                reasoning.append(f"Medium vocabulary ({vocabulary_size} words) +1.5")
+            elif vocabulary_size >= 100:
+                score += 1
+                reasoning.append(f"Small vocabulary ({vocabulary_size} words) +1")
+            else:
+                reasoning.append(f"Tiny vocabulary ({vocabulary_size} words) +0")
+            
+            # ===== SIGNAL 5: Character Entropy (0-3 points) =====
+            # Measure character diversity (higher = more varied text)
+            all_chars = ''.join(col_data.values)
+            char_counts = {}
+            for char in all_chars:
+                char_counts[char] = char_counts.get(char, 0) + 1
+            
+            total_chars = len(all_chars)
+            entropy = 0
+            for count in char_counts.values():
+                prob = count / total_chars
+                entropy -= prob * np.log2(prob)
+            
+            if entropy >= 4.5:
+                score += 3
+                reasoning.append(f"High character diversity (entropy: {entropy:.2f}) +3")
+            elif entropy >= 4.0:
+                score += 2
+                reasoning.append(f"Good character diversity (entropy: {entropy:.2f}) +2")
+            elif entropy >= 3.5:
+                score += 1
+                reasoning.append(f"Moderate character diversity (entropy: {entropy:.2f}) +1")
+            else:
+                reasoning.append(f"Low character diversity (entropy: {entropy:.2f}) +0")
+            
+            # ===== EXCLUSION PATTERN CHECK =====
+            is_excluded = any(pattern in col.lower() for pattern in exclude_patterns)
+            if is_excluded:
+                reasoning.append(f"⚠️ Matches exclusion pattern (likely categorical ID)")
+                score -= 2  # Penalty for matching exclusion patterns
+            
+            # ===== FINAL CLASSIFICATION =====
+            is_text_column = score >= 6 and not is_excluded
+            
+            print(f"\n   Column: {col}")
+            print(f"      Score: {score:.1f}/10")
+            print(f"      Classification: {'TEXT' if is_text_column else 'NOT TEXT'}")
+            print(f"      Reasoning:")
+            for reason in reasoning:
+                print(f"         - {reason}")
+            
+            # Store analysis for all columns
+            analysis = {
+                'name': col,
+                'score': round(score, 2),
+                'is_text': is_text_column,
+                'avg_length': round(avg_length, 1),
+                'median_words': round(median_words, 1),
+                'unique_count': int(unique_count),
+                'unique_ratio': round(unique_ratio, 3),
+                'vocabulary_size': vocabulary_size,
+                'entropy': round(entropy, 2),
+                'reasoning': reasoning,
+                'sample_text': col_data.iloc[0][:100] if len(col_data) > 0 else ""
+            }
+            
+            all_column_analysis.append(analysis)
+            
+            if is_text_column:
+                text_candidates.append(analysis)
+        
+        print(f"\n✅ Detected {len(text_candidates)} text columns out of {len(object_columns)} total")
+        print("=" * 80 + "\n")
+        
+        return {
+            "success": True,
+            "text_columns": text_candidates,
+            "all_columns_analysis": all_column_analysis,
+            "total_detected": len(text_candidates),
+            "total_analyzed": len(object_columns)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Text detection error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/configure-tfidf")
+async def configure_tfidf(request: Dict[str, Any]):
+    """
+    Generate dataset-size-aware TF-IDF parameters.
+    
+    Returns recommended parameters based on:
+    - Dataset row count
+    - Existing feature count
+    - Text column characteristics
+    """
+    try:
+        dataset_id = request.get('dataset_id')
+        text_columns = request.get('text_columns', [])
+        
+        print("\n" + "=" * 80)
+        print(f"⚙️ TF-IDF CONFIGURATION REQUEST")
+        print(f"   Dataset ID: {dataset_id}")
+        print(f"   Text Columns: {len(text_columns)}")
+        print("=" * 80)
+        
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if dataset_id not in X_train_storage:
+            raise HTTPException(status_code=400, detail="Split data not found")
+        
+        X_train = X_train_storage[dataset_id]
+        num_rows = len(X_train)
+        num_existing_features = X_train.shape[1]
+        
+        print(f"   Dataset rows: {num_rows}")
+        print(f"   Existing features: {num_existing_features}")
+        
+        # Dataset-size-aware parameter selection
+        if num_rows < 2000:
+            base_params = {
+                'max_features': 800,
+                'min_df': 2,
+                'max_df': 0.85,
+                'ngram_range': (1, 1),
+                'tier': 'small'
+            }
+        elif num_rows <= 20000:
+            base_params = {
+                'max_features': 2000,
+                'min_df': 5,
+                'max_df': 0.9,
+                'ngram_range': (1, 2),
+                'tier': 'medium'
+            }
+        else:
+            base_params = {
+                'max_features': 4000,
+                'min_df': 10,
+                'max_df': 0.95,
+                'ngram_range': (1, 2),
+                'tier': 'large'
+            }
+        
+        # Apply feature safety constraint: TF-IDF features <= 5 × existing features
+        max_allowed_tfidf_features = num_existing_features * 5
+        total_tfidf_features = base_params['max_features'] * len(text_columns)
+        
+        warnings = []
+        adjustments_made = False
+        
+        if total_tfidf_features > max_allowed_tfidf_features:
+            # Reduce max_features to satisfy constraint
+            adjusted_max_features = max(100, int(max_allowed_tfidf_features / len(text_columns)))
+            warnings.append({
+                'type': 'feature_explosion',
+                'message': f'Feature count would exceed 5× constraint ({total_tfidf_features} > {max_allowed_tfidf_features}). Reduced max_features from {base_params["max_features"]} to {adjusted_max_features}.',
+                'severity': 'warning'
+            })
+            base_params['max_features'] = adjusted_max_features
+            adjustments_made = True
+        
+        # Generate configuration for each text column
+        column_configs = []
+        for col_info in text_columns:
+            col_name = col_info if isinstance(col_info, str) else col_info.get('name')
+            column_configs.append({
+                'name': col_name,
+                'max_features': base_params['max_features'],
+                'min_df': base_params['min_df'],
+                'max_df': base_params['max_df'],
+                'ngram_range': base_params['ngram_range'],
+                'stop_words': 'english',
+                'sublinear_tf': True
+            })
+        
+        # Model compatibility recommendations
+        recommended_models = [
+            'Logistic Regression',
+            'Ridge',
+            'Lasso',
+            'ElasticNet',
+            'LightGBM',
+            'XGBoost',
+            'CatBoost'
+        ]
+        
+        not_recommended_models = [
+            'Neural Network (MLP)',
+            'Neural Network Regressor (MLP)'
+        ]
+        
+        print(f"✅ Configuration generated (tier: {base_params['tier']})")
+        print(f"   Max features per column: {base_params['max_features']}")
+        print(f"   Total TF-IDF features: {base_params['max_features'] * len(text_columns)}")
+        print(f"   Adjustments made: {adjustments_made}")
+        print("=" * 80 + "\n")
+        
+        return {
+            "success": True,
+            "base_params": base_params,
+            "column_configs": column_configs,
+            "warnings": warnings,
+            "adjustments_made": adjustments_made,
+            "recommended_models": recommended_models,
+            "not_recommended_models": not_recommended_models,
+            "dataset_info": {
+                'num_rows': num_rows,
+                'num_existing_features': num_existing_features,
+                'max_allowed_tfidf_features': max_allowed_tfidf_features
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ TF-IDF configuration error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/apply-tfidf")
+async def apply_tfidf(request: TfidfRequest):
+    """
+    Apply TF-IDF vectorization to text columns.
+    
+    Safety features:
+    - Fit on train set only (prevent data leakage)
+    - Apply 5× feature safety constraint
+    - Keep sparse matrices (memory efficient)
+    - Concatenate with existing features
+    """
+    global X_train_storage, X_test_storage, tfidf_vectorizers, tfidf_feature_names
+    
+    try:
+        dataset_id = request.dataset_id
+        columns_config = request.columns
+        
+        print("\n" + "=" * 80)
+        print(f"🔤 TF-IDF APPLICATION REQUEST")
+        print(f"   Dataset ID: {dataset_id}")
+        print(f"   Columns to vectorize: {len(columns_config)}")
+        print("=" * 80)
+        
+        # Validate dataset exists and is split
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        if not datasets[dataset_id].get('is_split', False):
+            raise HTTPException(status_code=400, detail="Dataset must be split before TF-IDF")
+        
+        if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
+            raise HTTPException(status_code=400, detail="Split data not found")
+        
+        X_train = X_train_storage[dataset_id].copy()
+        X_test = X_test_storage[dataset_id].copy()
+        y_train = y_train_storage[dataset_id]
+        y_test = y_test_storage[dataset_id]
+        
+        vectorizers_used = {}
+        feature_names_used = {}
+        tfidf_features_train = []
+        tfidf_features_test = []
+        columns_to_drop = []
+        
+        for col_config in columns_config:
+            col_name = col_config.name
+            
+            if col_name not in X_train.columns:
+                print(f"⚠️  Column {col_name} not found, skipping...")
+                continue
+            
+            print(f"Vectorizing {col_name}...")
+            print(f"   max_features: {col_config.max_features}")
+            print(f"   min_df: {col_config.min_df}")
+            print(f"   max_df: {col_config.max_df}")
+            print(f"   ngram_range: {col_config.ngram_range}")
+            
+            # Create TF-IDF vectorizer
+            vectorizer = TfidfVectorizer(
+                max_features=col_config.max_features,
+                min_df=col_config.min_df,
+                max_df=col_config.max_df,
+                ngram_range=tuple(col_config.ngram_range),
+                stop_words='english',
+                sublinear_tf=True,
+                dtype=np.float32  # Use float32 to save memory
+            )
+            
+            # Fit on train set only (prevent data leakage)
+            train_text = X_train[col_name].fillna('').astype(str)
+            test_text = X_test[col_name].fillna('').astype(str)
+            
+            train_tfidf = vectorizer.fit_transform(train_text)
+            test_tfidf = vectorizer.transform(test_text)
+            
+            # Get feature names
+            feature_names = [f"{col_name}_tfidf_{i}" for i in range(train_tfidf.shape[1])]
+            
+            print(f"   Generated {train_tfidf.shape[1]} TF-IDF features")
+            print(f"   Train shape: {train_tfidf.shape}")
+            print(f"   Test shape: {test_tfidf.shape}")
+            
+            # Store vectorizer and feature names
+            vectorizers_used[col_name] = vectorizer
+            feature_names_used[col_name] = feature_names
+            
+            # Collect TF-IDF features
+            tfidf_features_train.append(train_tfidf)
+            tfidf_features_test.append(test_tfidf)
+            
+            # Mark original column for removal
+            columns_to_drop.append(col_name)
+        
+        if not vectorizers_used:
+            raise HTTPException(status_code=400, detail="No valid columns to vectorize")
+        
+        # Drop original text columns
+        X_train_numeric = X_train.drop(columns=columns_to_drop)
+        X_test_numeric = X_test.drop(columns=columns_to_drop)
+        
+        # Convert numeric dataframes to sparse matrices
+        X_train_sparse = csr_matrix(X_train_numeric.values)
+        X_test_sparse = csr_matrix(X_test_numeric.values)
+        
+        # Concatenate all TF-IDF features
+        if len(tfidf_features_train) > 1:
+            tfidf_train_combined = hstack(tfidf_features_train)
+            tfidf_test_combined = hstack(tfidf_features_test)
+        else:
+            tfidf_train_combined = tfidf_features_train[0]
+            tfidf_test_combined = tfidf_features_test[0]
+        
+        # Concatenate numeric features with TF-IDF features
+        X_train_final = hstack([X_train_sparse, tfidf_train_combined])
+        X_test_final = hstack([X_test_sparse, tfidf_test_combined])
+        
+        # Convert back to DataFrame for compatibility
+        # Combine column names
+        all_feature_names = list(X_train_numeric.columns)
+        for col_name in columns_to_drop:
+            all_feature_names.extend(feature_names_used[col_name])
+        
+        X_train_final_df = pd.DataFrame.sparse.from_spmatrix(
+            X_train_final,
+            columns=all_feature_names,
+            index=X_train.index
+        )
+        X_test_final_df = pd.DataFrame.sparse.from_spmatrix(
+            X_test_final,
+            columns=all_feature_names,
+            index=X_test.index
+        )
+        
+        # Update storage
+        X_train_storage[dataset_id] = X_train_final_df
+        X_test_storage[dataset_id] = X_test_final_df
+        tfidf_vectorizers[dataset_id] = vectorizers_used
+        tfidf_feature_names[dataset_id] = feature_names_used
+        
+        # Update metadata
+        datasets[dataset_id]['tfidf_applied'] = True
+        datasets[dataset_id]['tfidf_columns'] = list(vectorizers_used.keys())
+        
+        # Create preview data
+        train_preview_df = pd.concat([X_train_final_df.head(200).sparse.to_dense(), y_train.head(200)], axis=1)
+        test_preview_df = pd.concat([X_test_final_df.head(200).sparse.to_dense(), y_test.head(200)], axis=1)
+        
+        train_preview = train_preview_df.to_dict('records')
+        test_preview = test_preview_df.to_dict('records')
+        
+        total_tfidf_features = sum(len(names) for names in feature_names_used.values())
+        
+        print(f"✅ TF-IDF vectorization complete!")
+        print(f"   Original features: {X_train_numeric.shape[1]}")
+        print(f"   TF-IDF features added: {total_tfidf_features}")
+        print(f"   Final feature count: {X_train_final_df.shape[1]}")
+        print(f"   Train shape: {X_train_final_df.shape}")
+        print(f"   Test shape: {X_test_final_df.shape}")
+        print("=" * 80 + "\n")
+        
+        # Include target column in the columns list
+        target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
+        all_columns = list(X_train_final_df.columns) + [target_col_name]
+        
+        return {
+            "success": True,
+            "message": f"Successfully applied TF-IDF to {len(vectorizers_used)} columns",
+            "train_shape": list(X_train_final_df.shape),
+            "test_shape": list(X_test_final_df.shape),
+            "original_features": X_train_numeric.shape[1],
+            "tfidf_features_added": total_tfidf_features,
+            "final_feature_count": X_train_final_df.shape[1],
+            "vectorized_columns": list(vectorizers_used.keys()),
+            "train_preview": train_preview,
+            "test_preview": test_preview,
+            "columns": all_columns
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ TF-IDF application error: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2421,509 +3194,116 @@ async def train_model_websocket(websocket: WebSocket):
             }))
             return
         
-        # ===== TRAINING & VALIDATION =====
-        if validation_method == 'kfold_cv':
-            # --- K-FOLD CROSS-VALIDATION ---
-            await websocket.send_text(json.dumps({
-                'status': 'training',
-                'message': f'🔄 Starting {cv_folds}-Fold Cross-Validation...',
-                'timestamp': datetime.now().timestamp()
-            }))
-            
-            try:
-                # Combine data for CV
-                if hasattr(X_train, 'values'):
-                    X_full = np.concatenate((X_train.values, X_test.values), axis=0)
-                    y_full = np.concatenate((y_train.values, y_test.values), axis=0)
-                else:
-                    X_full = np.concatenate((X_train, X_test), axis=0)
-                    y_full = np.concatenate((y_train, y_test), axis=0)
-                
-                # Setup CV
-                if problem_type == 'classification':
-                    cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
-                    scoring = ['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted']
-                else:
-                    cv = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
-                    scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error']
-                
-                # Run CV
-                cv_results = cross_validate(
-                    model, X_full, y_full, 
-                    cv=cv, 
-                    scoring=scoring,
-                    return_train_score=True,
-                    n_jobs=-1
-                )
-                
-                # Calculate metrics
-                final_metrics = {
-                    'validation_method': 'kfold_cv',
-                    'n_folds': cv_folds,
-                    'problem_type': problem_type,
-                    'cv_mean': float(cv_results['test_accuracy'].mean() if problem_type == 'classification' else cv_results['test_r2'].mean()),
-                    'cv_std': float(cv_results['test_accuracy'].std() if problem_type == 'classification' else cv_results['test_r2'].std()),
-                    'cv_scores': [float(s) for s in (cv_results['test_accuracy'] if problem_type == 'classification' else cv_results['test_r2'])],
-                    'train_mean': float(cv_results['train_accuracy'].mean() if problem_type == 'classification' else cv_results['train_r2'].mean())
-                }
-                
-                # Add detailed metrics
-                if problem_type == 'classification':
-                    final_metrics.update({
-                        'train_accuracy': float(cv_results['train_accuracy'].mean()),
-                        'test_accuracy': final_metrics['cv_mean'], # Use CV mean as main accuracy
-                        'train_f1': float(cv_results['train_f1_weighted'].mean()),
-                        'test_f1': float(cv_results['test_f1_weighted'].mean()),
-                        'train_precision': float(cv_results['train_precision_weighted'].mean()),
-                        'test_precision': float(cv_results['test_precision_weighted'].mean()),
-                        'train_recall': float(cv_results['train_recall_weighted'].mean()),
-                        'test_recall': float(cv_results['test_recall_weighted'].mean()),
-                        'n_classes': int(len(np.unique(y_full)))
-                    })
-                    main_metric = f"CV Accuracy: {final_metrics['cv_mean']*100:.2f}% (±{final_metrics['cv_std']*100:.2f}%)"
-                else:
-                    final_metrics.update({
-                        'train_r2': float(cv_results['train_r2'].mean()),
-                        'test_r2': final_metrics['cv_mean'],
-                        'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
-                        'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
-                        'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
-                        'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
-                        'train_rmse': float(np.sqrt(-cv_results['train_neg_mean_squared_error'].mean())),
-                        'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
-                    })
-                    main_metric = f"CV R²: {final_metrics['cv_mean']:.4f} (±{final_metrics['cv_std']:.4f})"
-
-                # Train final model on full dataset
-                await websocket.send_text(json.dumps({
-                    'status': 'training',
-                    'message': f'🎯 Training final model on full dataset...',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                model.fit(X_full, y_full)
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training_complete',
-                    'message': f'✅ Cross-validation completed',
-                    'timestamp': datetime.now().timestamp()
-                }))
-
-            except Exception as e:
-                await websocket.send_text(json.dumps({
-                    'status': 'failed',
-                    'message': f'❌ Cross-validation failed: {str(e)}',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                return
-
-        elif validation_method == 'grid_search':
-            # --- GRID SEARCH CV ---
-            grid_density = config.get('grid_density', 'normal')
-            grid_cv_folds = config.get('grid_search_cv_folds', 5)
-            
-            await websocket.send_text(json.dumps({
-                'status': 'training',
-                'message': f'🔍 Starting Grid Search CV with {grid_cv_folds} folds...',
-                'timestamp': datetime.now().timestamp()
-            }))
-            
-            try:
-                # Get parameter grid
-                param_grid = get_param_grid_for_algorithm(algorithm_name, problem_type, grid_density)
-                
-                if not param_grid:
-                    await websocket.send_text(json.dumps({
-                        'status': 'failed',
-                        'message': f'❌ No parameter grid defined for {algorithm_name}',
-                        'timestamp': datetime.now().timestamp()
-                    }))
-                    return
-                
-                # Combine data for grid search
-                if hasattr(X_train, 'values'):
-                    X_full = np.concatenate((X_train.values, X_test.values), axis=0)
-                    y_full = np.concatenate((y_train.values, y_test.values), axis=0)
-                else:
-                    X_full = np.concatenate((X_train, X_test), axis=0)
-                    y_full = np.concatenate((y_train, y_test), axis=0)
-                
-                # Setup CV
-                if problem_type == 'classification':
-                    cv = StratifiedKFold(n_splits=grid_cv_folds, shuffle=True, random_state=42)
-                    scoring = 'accuracy'
-                else:
-                    cv = KFold(n_splits=grid_cv_folds, shuffle=True, random_state=42)
-                    scoring = 'r2'
-                
-                # Initialize base model
-                base_model = initialize_algorithm_with_params(algorithm_name, problem_type, {})
-                
-                # Run Grid Search
-                grid_search = GridSearchCV(
-                    base_model,
-                    param_grid,
-                    cv=cv,
-                    scoring=scoring,
-                    n_jobs=-1,
-                    verbose=1,
-                    return_train_score=True
-                )
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training',
-                    'message': f'⚙️ Searching {len(param_grid)} hyperparameters...',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-                grid_search.fit(X_full, y_full)
-                
-                # Get best model
-                model = grid_search.best_estimator_
-                best_params = grid_search.best_params_
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training',
-                    'message': f'✅ Best params found: {best_params}',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-                # Calculate final metrics using best model
-                if problem_type == 'classification':
-                    cv_results = cross_validate(
-                        model, X_full, y_full,
-                        cv=cv,
-                        scoring=['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted'],
-                        return_train_score=True,
-                        n_jobs=-1
-                    )
-                    
-                    final_metrics = {
-                        'validation_method': 'grid_search',
-                        'n_folds': grid_cv_folds,
-                        'problem_type': problem_type,
-                        'best_params': best_params,
-                        'best_score': float(grid_search.best_score_),
-                        'cv_mean': float(cv_results['test_accuracy'].mean()),
-                        'cv_std': float(cv_results['test_accuracy'].std()),
-                        'cv_scores': [float(s) for s in cv_results['test_accuracy']],
-                        'train_accuracy': float(cv_results['train_accuracy'].mean()),
-                        'test_accuracy': float(cv_results['test_accuracy'].mean()),
-                        'train_f1': float(cv_results['train_f1_weighted'].mean()),
-                        'test_f1': float(cv_results['test_f1_weighted'].mean()),
-                        'train_precision': float(cv_results['train_precision_weighted'].mean()),
-                        'test_precision': float(cv_results['test_precision_weighted'].mean()),
-                        'train_recall': float(cv_results['train_recall_weighted'].mean()),
-                        'test_recall': float(cv_results['test_recall_weighted'].mean()),
-                        'n_classes': int(len(np.unique(y_full)))
-                    }
-                    main_metric = f"Grid Search Best Accuracy: {grid_search.best_score_*100:.2f}%"
-                else:
-                    cv_results = cross_validate(
-                        model, X_full, y_full,
-                        cv=cv,
-                        scoring=['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error'],
-                        return_train_score=True,
-                        n_jobs=-1
-                    )
-                    
-                    final_metrics = {
-                        'validation_method': 'grid_search',
-                        'n_folds': grid_cv_folds,
-                        'problem_type': problem_type,
-                        'best_params': best_params,
-                        'best_score': float(grid_search.best_score_),
-                        'cv_mean': float(cv_results['test_r2'].mean()),
-                        'cv_std': float(cv_results['test_r2'].std()),
-                        'cv_scores': [float(s) for s in cv_results['test_r2']],
-                        'train_r2': float(cv_results['train_r2'].mean()),
-                        'test_r2': float(cv_results['test_r2'].mean()),
-                        'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
-                        'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
-                        'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
-                        'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
-                        'train_rmse': float(np.sqrt(-cv_results['train_neg_mean_squared_error'].mean())),
-                        'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
-                    }
-                    main_metric = f"Grid Search Best R²: {grid_search.best_score_:.4f}"
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training_complete',
-                    'message': f'✅ Grid Search completed',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-            except Exception as e:
-                await websocket.send_text(json.dumps({
-                    'status': 'failed',
-                    'message': f'❌ Grid Search failed: {str(e)}',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                return
-
-        elif validation_method == 'randomized_search':
-            # --- RANDOMIZED SEARCH CV ---
-            n_iter = config.get('random_search_iterations', 20)
-            random_cv_folds = config.get('random_search_cv_folds', 5)
-            
-            await websocket.send_text(json.dumps({
-                'status': 'training',
-                'message': f'🎲 Starting Randomized Search CV with {n_iter} iterations...',
-                'timestamp': datetime.now().timestamp()
-            }))
-            
-            try:
-                # Get parameter grid (same as grid search but will sample randomly)
-                param_grid = get_param_grid_for_algorithm(algorithm_name, problem_type, 'fine')
-                
-                if not param_grid:
-                    await websocket.send_text(json.dumps({
-                        'status': 'failed',
-                        'message': f'❌ No parameter grid defined for {algorithm_name}',
-                        'timestamp': datetime.now().timestamp()
-                    }))
-                    return
-                
-                # Combine data for randomized search
-                if hasattr(X_train, 'values'):
-                    X_full = np.concatenate((X_train.values, X_test.values), axis=0)
-                    y_full = np.concatenate((y_train.values, y_test.values), axis=0)
-                else:
-                    X_full = np.concatenate((X_train, X_test), axis=0)
-                    y_full = np.concatenate((y_train, y_test), axis=0)
-                
-                # Setup CV
-                if problem_type == 'classification':
-                    cv = StratifiedKFold(n_splits=random_cv_folds, shuffle=True, random_state=42)
-                    scoring = 'accuracy'
-                else:
-                    cv = KFold(n_splits=random_cv_folds, shuffle=True, random_state=42)
-                    scoring = 'r2'
-                
-                # Initialize base model
-                base_model = initialize_algorithm_with_params(algorithm_name, problem_type, {})
-                
-                # Run Randomized Search
-                random_search = RandomizedSearchCV(
-                    base_model,
-                    param_grid,
-                    n_iter=n_iter,
-                    cv=cv,
-                    scoring=scoring,
-                    n_jobs=-1,
-                    verbose=1,
-                    random_state=42,
-                    return_train_score=True
-                )
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training',
-                    'message': f'⚙️ Testing {n_iter} random parameter combinations...',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-                random_search.fit(X_full, y_full)
-                
-                # Get best model
-                model = random_search.best_estimator_
-                best_params = random_search.best_params_
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training',
-                    'message': f'✅ Best params found: {best_params}',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-                # Calculate final metrics using best model
-                if problem_type == 'classification':
-                    cv_results = cross_validate(
-                        model, X_full, y_full,
-                        cv=cv,
-                        scoring=['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted'],
-                        return_train_score=True,
-                        n_jobs=-1
-                    )
-                    
-                    final_metrics = {
-                        'validation_method': 'randomized_search',
-                        'n_folds': random_cv_folds,
-                        'n_iterations': n_iter,
-                        'problem_type': problem_type,
-                        'best_params': best_params,
-                        'best_score': float(random_search.best_score_),
-                        'cv_mean': float(cv_results['test_accuracy'].mean()),
-                        'cv_std': float(cv_results['test_accuracy'].std()),
-                        'cv_scores': [float(s) for s in cv_results['test_accuracy']],
-                        'train_accuracy': float(cv_results['train_accuracy'].mean()),
-                        'test_accuracy': float(cv_results['test_accuracy'].mean()),
-                        'train_f1': float(cv_results['train_f1_weighted'].mean()),
-                        'test_f1': float(cv_results['test_f1_weighted'].mean()),
-                        'train_precision': float(cv_results['train_precision_weighted'].mean()),
-                        'test_precision': float(cv_results['test_precision_weighted'].mean()),
-                        'train_recall': float(cv_results['train_recall_weighted'].mean()),
-                        'test_recall': float(cv_results['test_recall_weighted'].mean()),
-                        'n_classes': int(len(np.unique(y_full)))
-                    }
-                    main_metric = f"Randomized Search Best Accuracy: {random_search.best_score_*100:.2f}%"
-                else:
-                    cv_results = cross_validate(
-                        model, X_full, y_full,
-                        cv=cv,
-                        scoring=['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error'],
-                        return_train_score=True,
-                        n_jobs=-1
-                    )
-                    
-                    final_metrics = {
-                        'validation_method': 'randomized_search',
-                        'n_folds': random_cv_folds,
-                        'n_iterations': n_iter,
-                        'problem_type': problem_type,
-                        'best_params': best_params,
-                        'best_score': float(random_search.best_score_),
-                        'cv_mean': float(cv_results['test_r2'].mean()),
-                        'cv_std': float(cv_results['test_r2'].std()),
-                        'cv_scores': [float(s) for s in cv_results['test_r2']],
-                        'train_r2': float(cv_results['train_r2'].mean()),
-                        'test_r2': float(cv_results['test_r2'].mean()),
-                        'train_mse': float(-cv_results['train_neg_mean_squared_error'].mean()),
-                        'test_mse': float(-cv_results['test_neg_mean_squared_error'].mean()),
-                        'train_mae': float(-cv_results['train_neg_mean_absolute_error'].mean()),
-                        'test_mae': float(-cv_results['test_neg_mean_absolute_error'].mean()),
-                        'train_rmse': float(np.sqrt(-cv_results['train_neg_mean_squared_error'].mean())),
-                        'test_rmse': float(np.sqrt(-cv_results['test_neg_mean_squared_error'].mean()))
-                    }
-                    main_metric = f"Randomized Search Best R²: {random_search.best_score_:.4f}"
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training_complete',
-                    'message': f'✅ Randomized Search completed',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-            except Exception as e:
-                await websocket.send_text(json.dumps({
-                    'status': 'failed',
-                    'message': f'❌ Randomized Search failed: {str(e)}',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                return
-
-        else:
-            # --- STANDARD TRAIN/TEST SPLIT ---
-            await websocket.send_text(json.dumps({
-                'status': 'training',
-                'message': f'🎯 Training {model_class_name}...',
-                'timestamp': datetime.now().timestamp()
-            }))
-            
-            try:
-                model.fit(X_train, y_train)
-                
-                await websocket.send_text(json.dumps({
-                    'status': 'training_complete',
-                    'message': f'✅ Model trained successfully',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                
-            except Exception as e:
-                await websocket.send_text(json.dumps({
-                    'status': 'failed',
-                    'message': f'❌ Training failed: {str(e)}',
-                    'timestamp': datetime.now().timestamp()
-                }))
-                return
-            
-            # ===== PREDICTIONS & EVALUATION =====
-            await websocket.send_text(json.dumps({
-                'status': 'evaluating',
-                'message': '📊 Evaluating model performance...',
-                'timestamp': datetime.now().timestamp()
-            }))
-            
-            train_pred = model.predict(X_train)
-            test_pred = model.predict(X_test)
-            
-            # Calculate metrics based on problem type
-            if problem_type == 'classification':
-                final_metrics = {
-                    'train_accuracy': float(accuracy_score(y_train, train_pred)),
-                    'test_accuracy': float(accuracy_score(y_test, test_pred)),
-                    'train_f1': float(f1_score(y_train, train_pred, average='weighted')),
-                    'test_f1': float(f1_score(y_test, test_pred, average='weighted')),
-                    'problem_type': problem_type,
-                    'n_classes': int(len(np.unique(y_train)))
-                }
-                
-                # Add precision and recall
-                try:
-                    final_metrics['train_precision'] = float(precision_score(y_train, train_pred, average='weighted'))
-                    final_metrics['test_precision'] = float(precision_score(y_test, test_pred, average='weighted'))
-                    final_metrics['train_recall'] = float(recall_score(y_train, train_pred, average='weighted'))
-                    final_metrics['test_recall'] = float(recall_score(y_test, test_pred, average='weighted'))
-                except:
-                    pass
-                
-                main_metric = f"Test Accuracy: {final_metrics['test_accuracy']*100:.2f}%"
-                
-            else:  # regression
-                final_metrics = {
-                    'train_r2': float(r2_score(y_train, train_pred)),
-                    'test_r2': float(r2_score(y_test, test_pred)),
-                    'train_mse': float(mean_squared_error(y_train, train_pred)),
-                    'test_mse': float(mean_squared_error(y_test, test_pred)),
-                    'train_rmse': float(np.sqrt(mean_squared_error(y_train, train_pred))),
-                    'test_rmse': float(np.sqrt(mean_squared_error(y_test, test_pred))),
-                    'train_mae': float(mean_absolute_error(y_train, train_pred)),
-                    'test_mae': float(mean_absolute_error(y_test, test_pred)),
-                    'problem_type': problem_type
-                }
-                main_metric = f"Test R²: {final_metrics['test_r2']:.4f}"
+        # ===== TRAINING & VALIDATION (MULTIPROCESSING REFACTOR) =====
+        import uuid
+        ws_id = str(uuid.uuid4())
+        result_queue = multiprocessing.Queue()
         
-        # ===== SAVE MODEL =====
-       
-        import os
-        os.makedirs('models', exist_ok=True)
-        model_path = f"models/{model_id}.joblib"
-        joblib.dump(model, model_path)
-        
-        await websocket.send_text(json.dumps({
-            'status': 'saving',
-            'message': f'💾 {model_path}...',
-            'timestamp': datetime.now().timestamp()
-        }))
-        
-        # ===== STORE MODEL INFO =====
-        model_info = {
-            'model_id': model_id,
-            'model_path': model_path,
-            'algorithm': algorithm_name,
-            'model_class': model_class_name,
+        # Prepare worker config
+        worker_config = {
+            'algorithm_name': algorithm_name,
             'problem_type': problem_type,
-            'target_column': target_column,
-            'n_features': int(X_train.shape[1]),
-            'n_samples_train': int(len(X_train)),
-            'n_samples_test': int(len(X_test)),
             'hyperparameters': hyperparameters,
-            'final_metrics': final_metrics,
-            'dataset_id': dataset_id,
-            'trained_at': datetime.now().isoformat(),
             'validation_method': validation_method,
-            'uses_preprocessed_data': True  # Flag to indicate this model used preprocessed data
+            'cv_folds': cv_folds,
+            'grid_density': config.get('grid_density', 'normal'),
+            'grid_search_cv_folds': config.get('grid_search_cv_folds', 5),
+            'random_search_iterations': config.get('random_search_iterations', 20),
+            'random_search_cv_folds': config.get('random_search_cv_folds', 5)
         }
         
-        trained_models[model_id] = model_info
+        # Start training process
+        p = multiprocessing.Process(
+            target=training_worker, 
+            args=(worker_config, X_train, X_test, y_train, y_test, result_queue)
+        )
+        active_training_processes[ws_id] = p
+        p.start()
         
-        print(f"✅ Model {model_id} saved successfully")
-        print(f"📊 {main_metric}")
+        print(f"🚀 [Training] Started worker process {p.pid} for WS {ws_id}")
         
-        # ===== SEND COMPLETION =====
-        await websocket.send_text(json.dumps({
-            'status': 'completed',
-            'model_id': model_id,
-            'final_metrics': final_metrics,
-            'message': f'🎉 Training completed! {main_metric}',
-            'timestamp': datetime.now().timestamp()
-        }))
+        try:
+            while p.is_alive() or not result_queue.empty():
+                # 1. Listen for "stop" message from client (with timeout)
+                try:
+                    # We use a non-blocking wait to check for messages
+                    raw_msg = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                    msg = json.loads(raw_msg)
+                    if msg.get('action') == 'stop':
+                        print(f"🛑 [Training] Stop signal received for {ws_id}")
+                        p.terminate()
+                        p.join()
+                        await websocket.send_text(json.dumps({
+                            'status': 'stopped',
+                            'message': '⏹️ Training stopped by user',
+                            'timestamp': datetime.now().timestamp()
+                        }))
+                        return
+                except asyncio.TimeoutError:
+                    pass # No message received, continue
+                except Exception as e:
+                    # Handle disconnection or other WS errors
+                    if not str(e).strip(): # Happens on close
+                        print(f"🔌 [Training] WebSocket closed during training for {ws_id}")
+                    else:
+                        print(f"⚠️ [Training] WS error: {e}")
+                    p.terminate()
+                    break
+                
+                # 2. Check for updates from worker
+                try:
+                    update = result_queue.get_nowait()
+                    if update['status'] == 'success':
+                        # Store in global dictionary
+                        model_info = update.get('model_info')
+                        if model_info:
+                            # Add missing context
+                            model_info['dataset_id'] = dataset_id
+                            model_info['target_column'] = target_column
+                            trained_models[model_info['model_id']] = model_info
+                            
+                            await websocket.send_text(json.dumps({
+                                'status': 'completed',
+                                'model_id': model_info['model_id'],
+                                'final_metrics': model_info['final_metrics'],
+                                'message': f"🎉 Training completed! {update['message']}",
+                                'timestamp': datetime.now().timestamp()
+                            }))
+                        break
+                    elif update['status'] == 'error':
+                        await websocket.send_text(json.dumps({
+                            'status': 'failed',
+                            'message': f"❌ Error: {update['message']}",
+                            'timestamp': datetime.now().timestamp()
+                        }))
+                        break
+                    else:
+                        # Forward progress messages
+                        await websocket.send_text(json.dumps({
+                            'status': update['status'],
+                            'message': update['message'],
+                            'timestamp': datetime.now().timestamp()
+                        }))
+                except queue.Empty:
+                    await asyncio.sleep(0.5) # Wait before next check
+                    
+            p.join()
+            
+        finally:
+            if ws_id in active_training_processes:
+                del active_training_processes[ws_id]
+                
+    except Exception as e:
+        print(f"❌ [Training] Global error: {e}")
+        traceback.print_exc()
+        try:
+            await websocket.send_text(json.dumps({
+                'status': 'failed',
+                'message': f"❌ Training failed: {str(e)}",
+                'timestamp': datetime.now().timestamp()
+            }))
+        except:
+            pass
         
     except WebSocketDisconnect:
         print("⚠️ WebSocket disconnected during training")

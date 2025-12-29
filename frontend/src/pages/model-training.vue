@@ -399,39 +399,6 @@
             </button>
 
             <button
-              @click="pauseTraining"
-              :disabled="!isTraining"
-              class="control-btn pause"
-              v-if="isTraining && !isPaused"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M14,19H18V5H14M6,19H10V5H6V19Z" />
-              </svg>
-              Pause
-            </button>
-
-            <button
-              @click="resumeTraining"
-              class="control-btn resume"
-              v-if="isPaused"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-              </svg>
-              Resume
-            </button>
-
-            <button
               @click="stopTraining"
               :disabled="!isTraining"
               class="control-btn stop"
@@ -445,7 +412,7 @@
               >
                 <path d="M18,18H6V6H18V18Z" />
               </svg>
-              Stop
+              Stop Training
             </button>
           </div>
         </div>
@@ -1717,19 +1684,25 @@ const resumeTraining = () => {
 };
 
 const stopTraining = () => {
-  isTraining.value = false;
-  isPaused.value = false;
+  if (!isTraining.value) return;
 
-  if (websocket) {
-    websocket.close();
-    websocket = null;
-  }
+  console.log('🛑 Requesting training stop...');
+  addLog("warning", "Requesting training stop...");
 
-  if (timeInterval) {
-    clearInterval(timeInterval);
-    timeInterval = null;
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
+    websocket.send(JSON.stringify({ action: "stop" }));
+    console.log('📤 Sent stop signal');
+  } else {
+    // Fallback if socket is already closed/unstable
+    isTraining.value = false;
+    isPaused.value = false;
+    if (timeInterval) {
+      clearInterval(timeInterval);
+      timeInterval = null;
+    }
+    trainingPhase.value = 'configuration';
+    addLog("error", "WebSocket not available. Local state reset.");
   }
-  router.push("/algorithm-select");
 };
 
 const scrollToConfiguration = () => {
@@ -2019,19 +1992,28 @@ const handleTrainingMessage = (data) => {
       }
     });
     
-  } else if (status === 'failed') {
-    trainingStages.value.forEach(stage => {
-      if (stage.status === 'active') stage.status = 'failed';
-    });
+    addLog('error', message || 'Training failed');
+  } else if (status === 'stopped') {
     isTraining.value = false;
+    isCompleted.value = false;
     
-    // Stop progress simulation on failure
+    if (timeInterval) {
+      clearInterval(timeInterval);
+      timeInterval = null;
+    }
+    
     if (progressSimulator) {
       clearInterval(progressSimulator);
       progressSimulator = null;
     }
     
-    addLog('error', message || 'Training failed');
+    trainingPhase.value = 'configuration';
+    addLog("info", message || "⏹️ Training stopped by user");
+    
+    // Scroll back to configuration section
+    nextTick(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   }
 
   // Add log message

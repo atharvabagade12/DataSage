@@ -1257,6 +1257,187 @@
             </template>
           </Modal>
 
+          <!-- ========== CARD 5: TF-IDF VECTORIZATION ========== -->
+          <Card 
+            class="preprocessing-tool-card" 
+            hover 
+            :class="{ disabled: !splitApplied }"
+          >
+            <div class="tool-header">
+              <div class="tool-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/>
+                </svg>
+              </div>
+              <div class="tool-info">
+                <h3>
+                  TF-IDF Vectorization
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                </h3>
+                <p>Convert text columns (reviews, descriptions) to numerical features</p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': tfidfApplied }">
+                {{ tfidfApplied ? "✓ Applied" : "Not Applied" }}
+              </div>
+            </div>
+            
+            <div class="tool-footer">
+              <Button variant="primary" @click="detectAndConfigureTfidf" :disabled="!splitApplied">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                Configure TF-IDF
+              </Button>
+            </div>
+          </Card>
+
+          <!-- TF-IDF Configuration Modal -->
+          <Modal v-model="showTfidfModal" title="TF-IDF Vectorization Configuration" size="xl">
+            <div class="modal-section">
+              <!-- Info Alert -->
+              <div class="info-alert">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                </svg>
+                <div>
+                  <strong>What is TF-IDF?</strong>
+                  <p>TF-IDF (Term Frequency-Inverse Document Frequency) converts text into numerical features by measuring word importance. Ideal for reviews, descriptions, and other text data.</p>
+                </div>
+              </div>
+
+              <!-- No Text Columns Detected -->
+              <div v-if="textColumns.length === 0" class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.3;">
+                  <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/>
+                </svg>
+                <p>No text columns detected in your dataset.</p>
+                <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem;">Text columns must have average length ≥ 30 characters.</p>
+              </div>
+
+              <!-- Detected Text Columns -->
+              <div v-else class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/>
+                  </svg>
+                  Detected Text Columns ({{ textColumns.length }})
+                </label>
+                
+                <div class="encoding-list">
+                  <div
+                    v-for="column in textColumns"
+                    :key="column.name"
+                    class="encoding-row"
+                    :class="{ active: column.selected }"
+                  >
+                    <label class="checkbox-label">
+                      <input
+                        type="checkbox"
+                        v-model="column.selected"
+                      />
+                      <span class="checkbox-custom"></span>
+                      <span class="col-name">
+                        {{ column.name }}
+                        <span class="category-count" style="color: #3b82f6; font-weight: 600;">
+                          Score: {{ column.score }}/10
+                        </span>
+                      </span>
+                    </label>
+
+                    <!-- Column Metrics -->
+                    <div class="recommendation-info" style="margin-top: 0.5rem; flex-wrap: wrap;">
+                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                        {{ column.avg_length }} chars avg
+                      </span>
+                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                        {{ column.median_words }} words median
+                      </span>
+                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                        {{ column.vocabulary_size }} vocab
+                      </span>
+                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                        entropy: {{ column.entropy }}
+                      </span>
+                    </div>
+
+                    <!-- Reasoning (expandable) -->
+                    <div v-if="column.reasoning && column.reasoning.length > 0" style="margin-top: 0.5rem;">
+                      <details style="cursor: pointer;">
+                        <summary style="color: #94a3b8; font-size: 0.85rem; user-select: none;">
+                          📊 View detection reasoning ({{ column.reasoning.length }} signals)
+                        </summary>
+                        <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0; color: #b3b3d1; font-size: 0.85rem; line-height: 1.6;">
+                          <li v-for="(reason, idx) in column.reasoning" :key="idx">
+                            {{ reason }}
+                          </li>
+                        </ul>
+                      </details>
+                    </div>
+
+                    <!-- Configuration Display -->
+                    <div v-if="column.selected && column.config" class="recommendation-info" style="margin-top: 0.75rem; border-top: 1px solid rgba(102, 126, 234, 0.2); padding-top: 0.75rem;">
+                      <span class="rec-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                        max_features: {{ column.config.max_features }}
+                      </span>
+                      <span class="rec-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                        ngram: {{ column.config.ngram_range[0] }}-{{ column.config.ngram_range[1] }}
+                      </span>
+                      <span class="rec-reason">Dataset tier: {{ tfidfConfig.base_params?.tier || 'auto' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Warnings -->
+              <div v-if="tfidfWarnings.length > 0" class="leakage-warning" style="margin-top: 1.5rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
+                </svg>
+                <div>
+                  <strong>Safety Adjustments:</strong>
+                  <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
+                    <li v-for="warning in tfidfWarnings" :key="warning.type">
+                      {{ warning.message }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Model Compatibility -->
+              <div v-if="tfidfConfig.recommended_models" class="info-alert" style="background: rgba(59, 130, 246, 0.05); margin-top: 1.5rem;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                </svg>
+                <div>
+                  <strong>Recommended Models:</strong>
+                  <p style="margin: 0.5rem 0 0 0;">Linear models (Ridge, ElasticNet) or boosting models (LightGBM, XGBoost, CatBoost) work best with TF-IDF features.</p>
+                </div>
+              </div>
+
+              <!-- Anti-Leakage Protection -->
+              <div class="leakage-warning" style="margin-top: 1.5rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
+                </svg>
+                <span><strong>Anti-Leakage Protection:</strong> TF-IDF will be fit on Training Set only and then applied to Test Set.</span>
+              </div>
+            </div>
+            
+            <template #footer>
+              <Button variant="ghost" @click="showTfidfModal = false">
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                :loading="isProcessing"
+                @click="applyTfidf"
+                :disabled="!textColumns.some(c => c.selected)"
+              >
+                Apply TF-IDF
+              </Button>
+            </template>
+          </Modal>
+
           <!-- Reset Confirmation Modal -->
           <Modal v-model="showResetConfirmModal" title="Reset All Transformations?" size="md">
             <div class="modal-section">
@@ -1510,6 +1691,14 @@ const classDistribution = ref({});
 
 // Load correct problemType from mlAppState
 const problemType = ref(mlAppState.problemType || 'classification');
+
+// ==================== TF-IDF STATE ====================
+const showTfidfModal = ref(false);
+const tfidfApplied = ref(false);
+const textColumns = ref([]);  // Detected text columns with metadata
+const tfidfConfig = ref({});  // Recommended configuration
+const tfidfWarnings = ref([]);  // Safety warnings
+const selectedTextColumns = ref([]);  // User-selected columns for TF-IDF
 
 // ==================== TABLE STATE ====================
 const searchQuery = ref("");
@@ -2833,6 +3022,154 @@ async function applyCategoricalEncoding() {
     showError('Encoding Failed', error.message);
   } finally {
     isProcessing.value = false;
+  }
+}
+
+
+// ===== TF-IDF METHODS =====
+
+async function detectAndConfigureTfidf() {
+  try {
+    if (!datasetId.value) {
+      showError('Error', 'No dataset ID found');
+      return;
+    }
+
+    isProcessing.value = true;
+    processingMessage.value = 'Detecting text columns...';
+
+    // Step 1: Detect text columns
+    const detectResponse = await authenticatedPost('http://localhost:8000/api/detect-text-columns', {
+      dataset_id: datasetId.value
+    });
+
+    const detectData = await detectResponse.json();
+
+    if (!detectData.success) {
+      throw new Error('Text column detection failed');
+    }
+
+    console.log('📝 Detected text columns:', detectData.text_columns);
+
+    // Step 2: Configure TF-IDF parameters
+    if (detectData.text_columns.length > 0) {
+      processingMessage.value = 'Configuring TF-IDF parameters...';
+
+      const configResponse = await authenticatedPost('http://localhost:8000/api/configure-tfidf', {
+        dataset_id: datasetId.value,
+        text_columns: detectData.text_columns
+      });
+
+      const configData = await configResponse.json();
+
+      if (!configData.success) {
+        throw new Error('TF-IDF configuration failed');
+      }
+
+      console.log('⚙️ TF-IDF configuration:', configData);
+
+      // Store configuration
+      tfidfConfig.value = configData;
+      tfidfWarnings.value = configData.warnings || [];
+
+      // Prepare text columns with configuration
+      textColumns.value = detectData.text_columns.map(col => ({
+        ...col,
+        selected: false,
+        config: configData.column_configs.find(c => c.name === col.name)
+      }));
+
+      showSuccess('Text Columns Detected', `Found ${detectData.text_columns.length} text column(s)`);
+    } else {
+      textColumns.value = [];
+      showInfo('No Text Columns', 'No text columns detected in your dataset');
+    }
+
+    // Show modal
+    showTfidfModal.value = true;
+
+  } catch (error) {
+    console.error('❌ TF-IDF detection error:', error);
+    showError('Detection Failed', error.message);
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
+  }
+}
+
+async function applyTfidf() {
+  try {
+    const selectedColumns = textColumns.value.filter(c => c.selected);
+
+    if (selectedColumns.length === 0) {
+      showWarning('No Selection', 'Please select at least one text column');
+      return;
+    }
+
+    if (!datasetId.value) {
+      showError('Error', 'No dataset ID found');
+      return;
+    }
+
+    isProcessing.value = true;
+    processingMessage.value = `Applying TF-IDF to ${selectedColumns.length} column(s)...`;
+
+    // Prepare request payload
+    const columnsConfig = selectedColumns.map(col => ({
+      name: col.name,
+      max_features: col.config.max_features,
+      min_df: col.config.min_df,
+      max_df: col.config.max_df,
+      ngram_range: col.config.ngram_range
+    }));
+
+    console.log('🔤 Applying TF-IDF with config:', columnsConfig);
+
+    const response = await authenticatedPost('http://localhost:8000/api/apply-tfidf', {
+      dataset_id: datasetId.value,
+      columns: columnsConfig
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.detail || 'TF-IDF application failed');
+    }
+
+    console.log('✅ TF-IDF applied successfully:', data);
+
+    // Update preview data
+    trainData.value = data.train_preview || [];
+    testData.value = data.test_preview || [];
+    columns.value = data.columns.map(col => ({ name: col }));
+
+    // Update state
+    tfidfApplied.value = true;
+    showTfidfModal.value = false;
+
+    // Show success message with details
+    showSuccess(
+      'TF-IDF Applied',
+      `Added ${data.tfidf_features_added} TF-IDF features. Total features: ${data.final_feature_count}`
+    );
+
+    // Add preprocessing step
+    addPreprocessingStep({
+      type: 'tfidf',
+      description: `Applied TF-IDF to ${selectedColumns.length} text column(s)`,
+      details: {
+        columns: selectedColumns.map(c => c.name),
+        total_features_added: data.tfidf_features_added,
+        final_feature_count: data.final_feature_count
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ TF-IDF application error:', error);
+    showError('TF-IDF Failed', error.message);
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
   }
 }
 
