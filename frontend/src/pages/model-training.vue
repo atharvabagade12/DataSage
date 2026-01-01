@@ -823,6 +823,20 @@
 
       <!-- Try Different Configuration Button (Visible after completion) -->
       <div v-if="isCompleted" class="tweak-params-section">
+        <!-- View Detailed Results Button (NEW) -->
+        <button @click="viewDetailedResults" class="view-results-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11,9H13V7H11M11,17H13V11H11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+          </svg>
+          <div class="btn-content">
+            <span class="btn-title">📊 View Detailed Visualizations</span>
+            <span class="btn-subtitle">Analyze model performance with interactive plots</span>
+          </div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
+            <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
+          </svg>
+        </button>
+
         <button @click="scrollToConfiguration" class="tweak-params-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/>
@@ -896,6 +910,7 @@ const randomSearchIterations = ref(20);
 const isTraining = ref(false);
 const isPaused = ref(false);
 const isCompleted = ref(false);
+const lastTrainedModelId = ref(null);
 const preprocessingInfo = ref(null);
 const showPreprocessing = ref(false);
 const trainingProgress = ref(0);
@@ -1705,6 +1720,23 @@ const stopTraining = () => {
   }
 };
 
+const viewDetailedResults = () => {
+  if (!lastTrainedModelId.value) {
+    addLog('error', '❌ Model ID not found. Please retrain or refresh.');
+    return;
+  }
+  
+  // Save necessary context for the visualization page
+  localStorage.setItem('last_model_id', lastTrainedModelId.value);
+  localStorage.setItem('last_dataset_id', datasetId.value);
+  
+  // Navigate to visualizer
+  router.push({
+    name: 'model-visualization',
+    params: { modelId: lastTrainedModelId.value }
+  });
+};
+
 const scrollToConfiguration = () => {
   // Scroll to the top where configuration sections are located
   addLog("info", "Navigating to configuration sections...");
@@ -1977,6 +2009,7 @@ const handleTrainingMessage = (data) => {
       // This callback runs AFTER animation reaches 100%
       isTraining.value = false;
       isCompleted.value = true;
+      lastTrainedModelId.value = data.model_id; // Store model_id for visualization
       currentStageTitle.value = 'Training Complete!';
       currentStageMessage.value = 'Model trained successfully';
 
@@ -1987,6 +2020,12 @@ const handleTrainingMessage = (data) => {
       if (data.final_metrics) {
         console.log('📊 Final metrics received:', data.final_metrics);
         updateMetrics(data.final_metrics);
+        
+        // Update global pipeline state for router guards
+        const appState = JSON.parse(localStorage.getItem('datasage_pipeline_state') || '{}');
+        appState.trainedModel = true;
+        appState.modelTrained = true;
+        localStorage.setItem('datasage_pipeline_state', JSON.stringify(appState));
       } else {
         console.error('❌ No final_metrics in completion data!');
       }
@@ -3248,6 +3287,32 @@ onUnmounted(() => {
 
 .action-btn.secondary:hover {
   background: rgba(102, 126, 234, 0.3);
+}
+
+.view-results-btn {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: white;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  flex: 1;
+  min-width: 280px;
+}
+
+.view-results-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+  border-color: rgba(16, 185, 129, 0.6);
+}
+
+.view-results-btn:active {
+  transform: translateY(-1px);
 }
 
 /* ✅ ADD ALL THESE NEW STYLES AT THE END */

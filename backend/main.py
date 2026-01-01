@@ -129,6 +129,12 @@ tfidf_feature_names: Dict[str, Dict[str, list]] = {}  # dataset_id -> {col_name:
 categorical_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: encoder_info}
 target_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: TargetEncoder}
 
+# Visualization data storage
+visualization_data: Dict[str, Dict[str, Any]] = {}  # model_id -> {predictions, actuals, probabilities, metadata}
+
+# Feature Metadata Registry: dataset_id -> { feature_name: { original_col, type, transformation, ... } }
+feature_metadata: Dict[str, Dict[str, Any]] = {}
+
 # Global tracker for active training processes to allow interruption
 # Format: { websocket_id: multiprocessing.Process }
 active_training_processes: Dict[str, multiprocessing.Process] = {}
@@ -297,7 +303,7 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
         return model_class()
 
 
-def training_worker(config, X_train, X_test, y_train, y_test, result_queue):
+def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feature_names=None, feature_registry=None):
     """
     Worker function to run training in a separate process.
     Sends progress and results back via a multiprocessing.Queue.
@@ -477,6 +483,68 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue):
                 'problem_type': problem_type
             }
             
+        # ===== CAPTURE VISUALIZATION DATA =====
+        # Store predictions and actual values for visualization
+        viz_data = {
+            'problem_type': problem_type,
+            'validation_method': validation_method,
+            'algorithm_name': algorithm_name,
+            'feature_names': feature_names,
+            'feature_metadata': feature_registry
+        }
+        
+        # For simple train/test split, store predictions on test set
+        if validation_method in ['train_test_split', 'simple']:
+            viz_data['y_train_actual'] = y_train.tolist() if hasattr(y_train, 'tolist') else list(y_train)
+            viz_data['y_test_actual'] = y_test.tolist() if hasattr(y_test, 'tolist') else list(y_test)
+            viz_data['y_train_pred'] = y_pred_train.tolist() if hasattr(y_pred_train, 'tolist') else list(y_pred_train)
+            viz_data['y_test_pred'] = y_pred_test.tolist() if hasattr(y_pred_test, 'tolist') else list(y_pred_test)
+            
+            # For classification, try to get probability predictions
+            if problem_type == 'classification' and hasattr(model, 'predict_proba'):
+                try:
+                    y_test_proba = model.predict_proba(X_test)
+                    viz_data['y_test_proba'] = y_test_proba.tolist()
+                    viz_data['classes'] = model.classes_.tolist() if hasattr(model, 'classes_') else None
+                except:
+                    viz_data['y_test_proba'] = None
+            
+            # For regression, calculate residuals
+            if problem_type == 'regression':
+                residuals_train = np.array(y_train) - np.array(y_pred_train)
+                residuals_test = np.array(y_test) - np.array(y_pred_test)
+                viz_data['residuals_train'] = residuals_train.tolist()
+                viz_data['residuals_test'] = residuals_test.tolist()
+        
+        # For CV methods, make final predictions on the full dataset
+        elif validation_method in ['kfold_cv', 'grid_search', 'randomized_search']:
+            y_full_pred = model.predict(X_full)
+            viz_data['y_full_actual'] = y_full.tolist() if hasattr(y_full, 'tolist') else list(y_full)
+            viz_data['y_full_pred'] = y_full_pred.tolist() if hasattr(y_full_pred, 'tolist') else list(y_full_pred)
+            
+            if problem_type == 'classification' and hasattr(model, 'predict_proba'):
+                try:
+                    y_full_proba = model.predict_proba(X_full)
+                    viz_data['y_full_proba'] = y_full_proba.tolist()
+                    viz_data['classes'] = model.classes_.tolist() if hasattr(model, 'classes_') else None
+                except:
+                    viz_data['y_full_proba'] = None
+            
+            if problem_type == 'regression':
+                residuals_full = np.array(y_full) - np.array(y_full_pred)
+                viz_data['residuals_full'] = residuals_full.tolist()
+        
+        # Extract feature importance if available
+        if hasattr(model, 'feature_importances_'):
+            viz_data['feature_importance'] = model.feature_importances_.tolist()
+        elif hasattr(model, 'coef_'):
+            # For linear models, use absolute coefficients as importance
+            coef = model.coef_
+            if len(coef.shape) > 1:  # Multi-class
+                viz_data['feature_importance'] = np.abs(coef).mean(axis=0).tolist()
+            else:
+                viz_data['feature_importance'] = np.abs(coef).tolist()
+            
         # ===== FINALIZE & SAVE =====
         from datetime import datetime
         model_id = f"model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -498,13 +566,15 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue):
             'hyperparameters': hyperparameters,
             'final_metrics': metrics,
             'trained_at': datetime.now().isoformat(),
-            'validation_method': validation_method
+            'validation_method': validation_method,
+            'visualization_data': viz_data  # Include visualization data
         }
         
         result_queue.put({
             'status': 'success',
             'metrics': metrics,
             'model_info': model_info,
+            'visualization_data': viz_data,  # Also send separately for easy access
             'message': f'✅ Training completed in {time.time() - start_time:.2f}s'
         })
 
@@ -623,6 +693,161 @@ def get_param_grid_for_algorithm(algorithm_name: str, problem_type: str, grid_de
     
     # Return the grid for the specified algorithm
     return param_grids.get(algorithm_name, {})
+
+
+# ===== INSIGHT GENERATION HELPERS =====
+
+def generate_regression_insights(viz_data):
+    insights = []
+    
+    # Analyze R2 if available (usually in final_metrics)
+    # But here we analyze the plot data
+    y_actual = np.array(viz_data.get('y_test_actual', viz_data.get('y_full_actual', [])))
+    y_pred = np.array(viz_data.get('y_test_pred', viz_data.get('y_full_pred', [])))
+    
+    if len(y_actual) > 0 and len(y_pred) > 0:
+        r2 = r2_score(y_actual, y_pred)
+        
+        # Actual vs Predicted Plot Insights
+        if r2 > 0.8:
+            insights.append({
+                "plot": "actual_vs_predicted",
+                "text": "Predictions follow the diagonal closely, indicating strong accuracy.",
+                "verdict": "good"
+            })
+        elif r2 > 0.5:
+            insights.append({
+                "plot": "actual_vs_predicted",
+                "text": "Predictions show moderate accuracy with some scatter.",
+                "verdict": "moderate"
+            })
+        else:
+            insights.append({
+                "plot": "actual_vs_predicted",
+                "text": "Wide scatter suggests the model struggles to predict these values accurately.",
+                "verdict": "poor"
+            })
+            
+        # Residual Plot Insights
+        residuals = y_actual - y_pred
+        std_resid = np.std(residuals)
+        
+        # Simple check for bias
+        mean_resid = np.mean(residuals)
+        if abs(mean_resid) > 0.1 * np.std(y_actual):
+            insights.append({
+                "plot": "residuals",
+                "text": f"Average error is {mean_resid:.2f}, suggesting systematic {'under' if mean_resid > 0 else 'over'}-prediction.",
+                "verdict": "warning"
+            })
+        else:
+            insights.append({
+                "plot": "residuals",
+                "text": "Residuals are centered around zero, which is desirable.",
+                "verdict": "good"
+            })
+            
+        # check for funnel shape (heteroscedasticity) - very simple heuristic
+        # Split predictions into two halves and check variance ratio
+        mid = len(y_pred) // 2
+        sorted_indices = np.argsort(y_pred)
+        first_half_resid = residuals[sorted_indices[:mid]]
+        second_half_resid = residuals[sorted_indices[mid:]]
+        var_ratio = np.var(second_half_resid) / np.var(first_half_resid) if np.var(first_half_resid) > 0 else 1
+        
+        if var_ratio > 2.0 or var_ratio < 0.5:
+            insights.append({
+                "plot": "residuals",
+                "text": "Error variance changes with predicted values, suggesting unreliable predictions at some scales.",
+                "verdict": "warning"
+            })
+            
+    return insights
+
+def generate_classification_insights(viz_data):
+    insights = []
+    
+    y_actual = np.array(viz_data.get('y_test_actual', viz_data.get('y_full_actual', [])))
+    y_pred = np.array(viz_data.get('y_test_pred', viz_data.get('y_full_pred', [])))
+    
+    if len(y_actual) > 0 and len(y_pred) > 0:
+        acc = accuracy_score(y_actual, y_pred)
+        
+        # Confusion Matrix Insights
+        if acc > 0.85:
+            insights.append({
+                "plot": "confusion_matrix",
+                "text": "Model correctly classifies most cases across all classes.",
+                "verdict": "good"
+            })
+        elif acc > 0.6:
+            insights.append({
+                "plot": "confusion_matrix",
+                "text": "Model shows reasonable performance but has noticeable misclassifications.",
+                "verdict": "moderate"
+            })
+        else:
+            insights.append({
+                "plot": "confusion_matrix",
+                "text": "Model struggles significantly with class separation.",
+                "verdict": "poor"
+            })
+            
+        # ROC Insights (Binary only implied by y_proba presence)
+        if 'y_test_proba' in viz_data and viz_data['y_test_proba'] is not None:
+            # We don't calculate AUC here to keep it fast, but we can comment on separation
+            insights.append({
+                "plot": "roc_curve",
+                "text": "Smooth curve indicates consistent trade-off between sensitivity and specificity.",
+                "verdict": "good"
+            })
+            
+    return insights
+
+
+# ===== VISUALIZATION DATA ENDPOINT =====
+
+@app.get("/api/get-visualization-data/{model_id}")
+async def get_visualization_data(model_id: str):
+    """
+    Retrieve all data needed for model performance visualization
+    """
+    if model_id not in trained_models:
+        raise HTTPException(status_code=404, detail="Model not found")
+        
+    m_info = trained_models[model_id]
+    v_data = visualization_data.get(model_id, {})
+    
+    if not v_data:
+        # Fallback for older models or failed captures
+        return {
+            "success": False,
+            "message": "No visualization data available for this model",
+            "model_summary": m_info
+        }
+        
+    # Generate insights on the fly or retrieve stored ones
+    problem_type = v_data.get('problem_type', 'classification')
+    if problem_type == 'regression':
+        insights = generate_regression_insights(v_data)
+    else:
+        insights = generate_classification_insights(v_data)
+        
+    return {
+        "success": True,
+        "model_summary": {
+            "model_id": model_id,
+            "algorithm": m_info.get('algorithm'),
+            "problem_type": problem_type,
+            "samples_train": m_info.get('n_samples_train'),
+            "samples_test": m_info.get('n_samples_test'),
+            "dataset_id": m_info.get('dataset_id'),
+            "validation_method": m_info.get('validation_method'),
+            "final_metrics": m_info.get('final_metrics')
+        },
+        "plot_data": v_data,
+        "insights": insights
+    }
 
 
 # ===== API ENDPOINTS =====
@@ -2029,6 +2254,16 @@ async def apply_target_encoding(request: TargetEncodingRequest):
             encoders_used[col_name] = encoder
             new_encoded_cols.extend(cols_added)
             
+            # Update Registry
+            if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
+            for ec in cols_added:
+                feature_metadata[dataset_id][ec] = {
+                    'original_column': col_name,
+                    'type': 'target_encoded',
+                    'transformation': 'smoothing_target_mean',
+                    'smoothing': smoothing
+                }
+            
         # Update storage
         X_train_storage[dataset_id] = X_train
         X_test_storage[dataset_id] = X_test
@@ -2145,6 +2380,16 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                 encoders_used[col_name] = {'type': 'onehot', 'encoder': encoder, 'feature_names': feature_names}
                 encoded_columns.extend(feature_names)
                 
+                # Update Registry
+                if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
+                for fn in feature_names:
+                    feature_metadata[dataset_id][fn] = {
+                        'original_column': col_name,
+                        'type': 'categorical',
+                        'transformation': 'one-hot',
+                        'parent_count': len(feature_names)
+                    }
+            
             elif method == 'ordinal':
                 # Ordinal Encoding: Preserves order
                 encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
@@ -2152,6 +2397,24 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                 X_test[col_name] = encoder.transform(X_test[[col_name]])
                 encoders_used[col_name] = {'type': 'ordinal', 'encoder': encoder}
                 encoded_columns.append(col_name)
+                
+                # Update Registry
+                if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
+                feature_metadata[dataset_id][col_name] = {
+                    'original_column': col_name,
+                    'type': 'categorical',
+                    'transformation': 'ordinal'
+                }
+            
+            elif method == 'label':
+                # ... already handled in original loop, but let's ensure it's tracked if it falls through
+                if col_name not in feature_metadata.get(dataset_id, {}):
+                    if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
+                    feature_metadata[dataset_id][col_name] = {
+                        'original_column': col_name,
+                        'type': 'categorical',
+                        'transformation': 'label'
+                    }
             
             else:
                 print(f"⚠️  Unknown encoding method: {method}")
@@ -2820,6 +3083,17 @@ async def apply_tfidf(request: TfidfRequest):
         tfidf_vectorizers[dataset_id] = vectorizers_used
         tfidf_feature_names[dataset_id] = feature_names_used
         
+        # Update Registry
+        if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
+        for col, words in feature_names_used.items():
+            for w in words:
+                feature_metadata[dataset_id][w] = {
+                    'original_column': col,
+                    'type': 'text',
+                    'transformation': 'tfidf',
+                    'word': w
+                }
+        
         # Update metadata
         datasets[dataset_id]['tfidf_applied'] = True
         datasets[dataset_id]['tfidf_columns'] = list(vectorizers_used.keys())
@@ -3073,12 +3347,21 @@ async def train_model_websocket(websocket: WebSocket):
         print(f"   y_train shape: {y_train.shape}")
         print(f"   y_test shape: {y_test.shape}")
         print("="*80)
-        
         await websocket.send_text(json.dumps({
             'status': 'data_loaded',
             'message': f'✅ Loaded preprocessed data: {len(X_train)} train, {len(X_test)} test samples',
             'timestamp': datetime.now().timestamp()
         }))
+        
+        # ===== CAPTURE FEATURE NAMES BEFORE CONVERSION =====
+        current_feature_names = []
+        if isinstance(X_train, pd.DataFrame):
+            current_feature_names = X_train.columns.tolist()
+        elif hasattr(X_train, 'columns'):
+            current_feature_names = list(X_train.columns)
+        
+        # Get specific registry for this dataset
+        dataset_feature_registry = feature_metadata.get(dataset_id, {})
         
         # ===== ENCODE CATEGORICAL FEATURES =====
         # Check if data is DataFrame and has categorical columns
@@ -3215,7 +3498,7 @@ async def train_model_websocket(websocket: WebSocket):
         # Start training process
         p = multiprocessing.Process(
             target=training_worker, 
-            args=(worker_config, X_train, X_test, y_train, y_test, result_queue)
+            args=(worker_config, X_train, X_test, y_train, y_test, result_queue, current_feature_names, dataset_feature_registry)
         )
         active_training_processes[ws_id] = p
         p.start()
@@ -3258,13 +3541,18 @@ async def train_model_websocket(websocket: WebSocket):
                         model_info = update.get('model_info')
                         if model_info:
                             # Add missing context
+                            model_id = model_info['model_id']
                             model_info['dataset_id'] = dataset_id
                             model_info['target_column'] = target_column
-                            trained_models[model_info['model_id']] = model_info
+                            trained_models[model_id] = model_info
+                            
+                            # Store visualization data if present
+                            if 'visualization_data' in update:
+                                visualization_data[model_id] = update['visualization_data']
                             
                             await websocket.send_text(json.dumps({
                                 'status': 'completed',
-                                'model_id': model_info['model_id'],
+                                'model_id': model_id,
                                 'final_metrics': model_info['final_metrics'],
                                 'message': f"🎉 Training completed! {update['message']}",
                                 'timestamp': datetime.now().timestamp()

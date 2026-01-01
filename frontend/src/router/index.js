@@ -6,7 +6,7 @@ import DataPreview from "@/pages/data-preview.vue";
 import TargetSelection from "@/pages/target-selection.vue";
 import AlgorithmSelection from "@/pages/algorithm-select.vue";
 import ModelTraining from "@/pages/model-training.vue";
-import Results from "@/pages/results.vue";
+import ModelVisualization from "@/pages/model-visualization.vue";
 
 const routes = [
   {
@@ -63,12 +63,22 @@ const routes = [
     },
   },
   {
+    path: "/model-visualization/:modelId?",
+    name: "model-visualization",
+    component: ModelVisualization,
+    meta: {
+      title: "Model Visualization",
+      step: 6,
+      requiresModel: true,
+    },
+  },
+  {
     path: "/results",
     name: "Results",
     component: Results,
     meta: {
       title: "Results",
-      step: 6,
+      step: 7,
       requiresModel: true,
     },
   },
