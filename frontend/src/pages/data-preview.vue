@@ -4266,6 +4266,44 @@ const proceedToTargetSelection = async () => {
     const existingData = localStorage.getItem('processedData');
     const existingProcessingSteps = existingData ? JSON.parse(existingData).processingSteps || [] : [];
 
+    // START: Detect and add frontend preprocessing steps
+    const currentSteps = [];
+    
+    // 1. Column Selection
+    if (columns.value.some(col => col.remove)) {
+       currentSteps.push("Column Selection");
+    }
+    
+    // 2. Missing Values: Check if any strategy is applied (not 'keep')
+    const hasMissingHandling = missingColumnsDetailed.value.some(col => col.strategy && col.strategy !== 'keep');
+    if (hasMissingHandling) {
+       currentSteps.push("Missing Value Handling");
+    }
+
+    // 3. Outlier Handling
+    if (outlierStrategy.value && outlierStrategy.value !== 'keep') {
+       currentSteps.push("Outlier Handling");
+    }
+
+    // 4. Duplicate Removal
+    if (activeTools.value.includes('duplicateRemoval')) {
+        currentSteps.push("Duplicate Removal");
+    }
+    
+    // Merge new steps into existing ones
+    currentSteps.forEach(stepName => {
+        const exists = existingProcessingSteps.some(s => 
+            (typeof s === 'string' && s === stepName) || 
+            (typeof s === 'object' && s.name === stepName)
+        );
+        
+        if (!exists) {
+            console.log(`📝 Adding inferred step: ${stepName}`);
+            existingProcessingSteps.push(stepName);
+        }
+    });
+    // END: Preprocessing steps detection
+
     localStorage.setItem(
       "processedData",
       JSON.stringify({

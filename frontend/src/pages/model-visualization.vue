@@ -26,7 +26,7 @@
     <!-- Hero Section -->
     <div class="hero-section">
       <div class="hero-content">
-        <div class="hero-badge">Analysis Phase</div>
+        
         <h1>Model Visual Insights</h1>
         <p>Deep dive into performance patterns and predictive reliability</p>
       </div>
@@ -1093,7 +1093,11 @@ const cmInsights = computed(() => {
 });
 
 const goBack = () => {
-  router.push('/model-training');
+  const query = {};
+  if (modelSummary.value.dataset_id) {
+    query.datasetId = modelSummary.value.dataset_id;
+  }
+  router.push({ path: '/model-training', query });
 };
 
 onMounted(() => {
@@ -1167,30 +1171,29 @@ onUnmounted(() => {
 }
 
 .hero-section {
-  padding: 5rem 2.5rem;
-  background: radial-gradient(circle at top right, rgba(102, 126, 234, 0.1), transparent);
+  padding: 3rem 2rem;
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.1),
+    rgba(118, 75, 162, 0.1)
+  );
   text-align: center;
   margin-bottom: 4rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
 }
 
-.hero-badge {
-  display: inline-block;
-  padding: 0.4rem 1.2rem;
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  border-radius: 20px;
-  color: #667eea;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-bottom: 1.5rem;
+.hero-section p {
+  font-size: 1.25rem;
+  color: #b3b3d1;
+  margin: 0 0 2rem 0;
 }
+
 
 .hero-section h1 {
   font-size: 3rem;
-  font-weight: 800;
-  margin-bottom: 1rem;
-  background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;

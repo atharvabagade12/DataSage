@@ -315,6 +315,19 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
         validation_method = config.get('validation_method', 'train_test_split')
         cv_folds = config.get('cv_folds', 5)
         
+        # Robust target handling (belt and suspenders)
+        target_column = config.get('target_column', 'target')
+        if isinstance(target_column, str) and target_column.startswith('{'):
+            try:
+                import json
+                target_json = json.loads(target_column)
+                target_column = target_json.get('name', target_column)
+                print(f"🎯 Worker: Parsed target_column from JSON: {target_column}")
+            except:
+                pass
+
+        print(f"👷 Worker started for {algorithm_name} ({problem_type})")
+        
         # Initialize model
         model = initialize_algorithm_with_params(algorithm_name, problem_type, hyperparameters)
         start_time = time.time()
@@ -333,10 +346,11 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
         
         if validation_method in ['train_test_split', 'simple']:
             result_queue.put({'status': 'training', 'message': f'⏳ Training {algorithm_name}...'})
-            
+            print(f"⏳ Fitting model on training data...")
             model.fit(X_train, y_train)
             
             # Predict on both sets
+            print(f"🔮 Making predictions...")
             y_pred_test = model.predict(X_test)
             y_pred_train = model.predict(X_train)
             
@@ -399,10 +413,12 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
                 cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
                 scoring = ['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted']
             else:
-                cv = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
                 scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error']
             
-            cv_results = cross_validate(model, X_full, y_full, cv=cv, scoring=scoring, return_train_score=True, n_jobs=-1)
+            # IMPORTANT: For multiprocessing environments on Windows, n_jobs=1 is safer inside worker processes
+            print(f"🔄 Running {cv_folds}-fold CV (n_jobs=1)...")
+            cv_results = cross_validate(model, X_full, y_full, cv=cv, scoring=scoring, return_train_score=True, n_jobs=1)
+            print(f"✅ CV completed")
             
             if problem_type == 'classification':
                 metrics = {
@@ -454,13 +470,17 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
             
             base_model = initialize_algorithm_with_params(algorithm_name, problem_type, {})
             
+            # IMPORTANT: n_jobs=1 to avoid deadlocks on Windows sub-processes
             if is_grid:
-                search = GridSearchCV(base_model, param_grid, cv=cv, scoring=scoring, n_jobs=-1)
+                print(f"🔍 Starting GridSearchCV (n_jobs=1)...")
+                search = GridSearchCV(base_model, param_grid, cv=cv, scoring=scoring, n_jobs=1)
             else:
                 n_iter = config.get('random_search_iterations', 20)
-                search = RandomizedSearchCV(base_model, param_grid, n_iter=n_iter, cv=cv, scoring=scoring, n_jobs=-1, random_state=42)
+                print(f"🎲 Starting RandomizedSearchCV (n_iter={n_iter}, n_jobs=1)...")
+                search = RandomizedSearchCV(base_model, param_grid, n_iter=n_iter, cv=cv, scoring=scoring, n_jobs=1, random_state=42)
             
             search.fit(X_full, y_full)
+            print(f"✅ Search completed. Best params: {search.best_params_}")
             
             model = search.best_estimator_
             
@@ -1169,6 +1189,46 @@ async def export_test_dataset(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ===== RE-HYDRATION HELPERS =====
+
+async def ensure_dataset_in_memory(dataset_id: str, db: Session):
+    """Ensure dataset is loaded into the global memory storage"""
+    global datasets
+    
+    if dataset_id in datasets:
+        return datasets[dataset_id]
+        
+    try:
+        print(f"🔄 Attempting to re-hydrate dataset {dataset_id}...")
+        try:
+            db_id = int(dataset_id)
+        except ValueError:
+            print(f"⚠️ Invalid dataset ID format: {dataset_id}")
+            return None
+            
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == db_id).first()
+        
+        if not dataset:
+            print(f"❌ Re-hydration failed: Dataset {dataset_id} not found in DB")
+            return None
+            
+        # Load from disk
+        df = file_service.load_dataframe(dataset.storage_path)
+        
+        datasets[dataset_id] = {
+            'dataframe': df,
+            'filename': dataset.name,
+            'upload_time': dataset.upload_date,
+            'is_processed': dataset.is_processed
+        }
+        
+        print(f"✅ Re-hydrated dataset {dataset_id} ({len(df)} rows)")
+        return datasets[dataset_id]
+        
+    except Exception as e:
+        print(f"❌ Re-hydration error for {dataset_id}: {str(e)}")
+        return None
 
 
 @app.get("/api/datasets/{dataset_id}")
@@ -3309,9 +3369,12 @@ async def train_model_websocket(websocket: WebSocket):
         print(f"📊 Hyperparameters: {hyperparameters}")
     
         # ===== VALIDATE DATASET =====
-        if dataset_id not in datasets:
-            print(f"❌ [Training] Dataset {dataset_id} not found in memory")
-            print(f"   Available datasets: {list(datasets.keys())}")
+        # Try to re-hydrate if missing
+        db = next(get_db())
+        dataset_info = await ensure_dataset_in_memory(dataset_id, db)
+        
+        if not dataset_info:
+            print(f"❌ [Training] Dataset {dataset_id} not found even after re-hydration attempt")
             await websocket.send_text(json.dumps({
                 'status': 'failed',
                 'message': '❌ Dataset not found',
@@ -3326,14 +3389,46 @@ async def train_model_websocket(websocket: WebSocket):
         }))
         if (dataset_id not in X_train_storage or dataset_id not in X_test_storage or
             dataset_id not in y_train_storage or dataset_id not in y_test_storage):
-            error_msg = f"❌ Preprocessed data not found for dataset {dataset_id}. Please complete data splitting in Advanced Preprocessing first."
-            print(error_msg)
-            await websocket.send_text(json.dumps({
-                'status': 'failed',
-                'message': error_msg,
-                'timestamp': datetime.now().timestamp()
-            }))
-            return
+            
+            print(f"🔄 [Training] Preprocessed data not found for {dataset_id}. Attempting auto-split...")
+            try:
+                # We need the dataframe to split
+                if dataset_id not in datasets:
+                    # Should have been re-hydrated above, but double check
+                    await ensure_dataset_in_memory(dataset_id, db)
+                
+                if dataset_id not in datasets:
+                    raise Exception("Dataset not found in memory or DB")
+                
+                df = datasets[dataset_id]['dataframe']
+                if target_column not in df.columns:
+                    raise Exception(f"Target column '{target_column}' not found")
+                
+                # Perform split
+                X = df.drop(columns=[target_column])
+                y = df[target_column]
+                
+                from sklearn.model_selection import train_test_split
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=42
+                )
+                
+                # Store in memory
+                X_train_storage[dataset_id] = X_train
+                X_test_storage[dataset_id] = X_test
+                y_train_storage[dataset_id] = y_train
+                y_test_storage[dataset_id] = y_test
+                
+                print(f"✅ [Training] Auto-split successful for {dataset_id}")
+            except Exception as e:
+                error_msg = f"❌ Preprocessed data not found and auto-split failed: {str(e)}"
+                print(error_msg)
+                await websocket.send_text(json.dumps({
+                    'status': 'failed',
+                    'message': error_msg,
+                    'timestamp': datetime.now().timestamp()
+                }))
+                return
         
         # Retrieve preprocessed data and make copies to avoid mutation
         X_train = X_train_storage[dataset_id].copy()

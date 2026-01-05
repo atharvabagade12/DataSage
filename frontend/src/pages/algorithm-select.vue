@@ -489,43 +489,12 @@
             <h3>Advanced Configuration Summary</h3>
             <div class="summary-grid">
               <div class="summary-item">
-                <span class="summary-label">Algorithm</span>
+                <span class="summary-label">Algorithm: </span>
                 <span class="summary-value">{{ selectedAlgorithm.name }}</span>
               </div>
               <div class="summary-item">
-                <span class="summary-label">Problem Type</span>
-                <span class="summary-value">{{
-                  formatProblemType(problemType.type)
-                }}</span>
-              </div>
-              <div class="summary-item">
-                <span class="summary-label">Feature Scaling</span>
-                <span class="summary-value">{{
-                  formatScalingMethod(selectedScaling)
-                }}</span>
-              </div>
-              <div class="summary-item">
-                <span class="summary-label">Validation Method</span>
-                <span class="summary-value">{{
-                  formatValidationMethod(validationMethod)
-                }}</span>
-              </div>
-              <!-- âœ… ADD THESE NEW ITEMS -->
-              <div class="summary-item" v-if="hasFeatureEngineering()">
-                <span class="summary-label">Feature Engineering</span>
-                <span class="summary-value">{{
-                  getFeatureEngineeringSummary()
-                }}</span>
-              </div>
-              <div
-                class="summary-item"
-                v-if="
-                  validationMethod === 'cross_validation' ||
-                  validationMethod === 'stratified'
-                "
-              >
-                <span class="summary-label">CV Folds</span>
-                <span class="summary-value">{{ cvFolds }}-Fold</span>
+                <span class="summary-label">Problem Type: </span>
+                <span class="summary-value">{{formatProblemType(problemType.type)}}</span>
               </div>
             </div>
           </div>
@@ -936,12 +905,7 @@ const loadDataFromPreviousSteps = () => {
         }
       });
     }
-    // console.log("total rows check now: ", data.totalRowsInBackend)
-    // if (!targetData || !processedData) {
-    //   console.warn("⚠️ Missing required data, redirecting...");
-    //   router.push("/target-selection");
-    //   return false;
-    // }
+    
 
     // Validate that we have meaningful data
     if (datasetStats.value.rows === 0 || datasetStats.value.features === 0) {
@@ -1420,6 +1384,8 @@ const getAllAvailableAlgorithms = () => {
 // 🔧 COMPLETE REFACTORED getKeyParameters() FUNCTION
 
 const getKeyParameters = (algorithmName) => {
+  if (!algorithmName) return [];
+  
   const parameterSets = {
     "Random Forest": [
       {
@@ -1435,8 +1401,7 @@ const getKeyParameters = (algorithmName) => {
             step: 10,
             default: 100,
             impact: "high",
-            description:
-              "More trees generally improve performance but increase training time.",
+            description: "More trees generally improve performance but increase training time.",
           },
           {
             name: "max_depth",
@@ -1447,8 +1412,20 @@ const getKeyParameters = (algorithmName) => {
             step: 1,
             default: 10,
             impact: "high",
-            description:
-              "Controls tree complexity. Deeper trees can capture more patterns but may overfit.",
+            description: "Controls tree complexity. Deeper trees can capture more patterns but may overfit.",
+          },
+          {
+            name: "max_features",
+            label: "Max Features per Split",
+            type: "select",
+            options: [
+              { value: "sqrt", label: "sqrt (recommended)" },
+              { value: "log2", label: "log2" },
+              { value: null, label: "All features" }
+            ],
+            default: "sqrt",
+            impact: "high",
+            description: "Number of features considered at each split."
           },
           {
             name: "min_samples_split",
@@ -1472,11 +1449,19 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Minimum samples required at leaf node.",
           },
+          {
+            name: "bootstrap",
+            label: "Bootstrap Sampling",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Use bootstrap samples when building trees."
+          },
         ],
       },
     ],
 
-    XGBoost: [
+    "XGBoost": [
       {
         name: "Boosting Configuration",
         icon: "🚀",
@@ -1525,6 +1510,28 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Subsample ratio of training instances.",
           },
+          {
+            name: "reg_lambda",
+            label: "L2 Regularization (Lambda)",
+            type: "slider",
+            min: 0,
+            max: 10,
+            step: 0.1,
+            default: 1.0,
+            impact: "medium",
+            description: "Controls model complexity using L2 regularization."
+          },
+          {
+            name: "reg_alpha",
+            label: "L1 Regularization (Alpha)",
+            type: "slider",
+            min: 0,
+            max: 10,
+            step: 0.1,
+            default: 0.0,
+            impact: "medium",
+            description: "Encourages sparsity in features."
+          }
         ],
       },
     ],
@@ -1543,8 +1550,20 @@ const getKeyParameters = (algorithmName) => {
             step: 0.001,
             default: 1.0,
             impact: "high",
-            description:
-              "Inverse of regularization strength. Smaller values = stronger regularization.",
+            description: "Inverse of regularization strength. Smaller values = stronger regularization.",
+          },
+          {
+            name: "solver",
+            label: "Optimization Solver",
+            type: "select",
+            options: [
+              { value: "lbfgs", label: "LBFGS (default, fast)" },
+              { value: "liblinear", label: "Liblinear (small datasets)" },
+              { value: "saga", label: "SAGA (supports L1 & ElasticNet)" }
+            ],
+            default: "lbfgs",
+            impact: "high",
+            description: "Solver determines which penalties are supported and affects convergence speed."
           },
           {
             name: "penalty",
@@ -1558,6 +1577,18 @@ const getKeyParameters = (algorithmName) => {
             default: "l2",
             impact: "medium",
             description: "Type of penalty to apply.",
+          },
+          {
+            name: "l1_ratio",
+            label: "Elastic Net L1 Ratio",
+            type: "slider",
+            min: 0.0,
+            max: 1.0,
+            step: 0.01,
+            default: 0.5,
+            impact: "medium",
+            description: "The Elastic Net mixing parameter, with 0 <= l1_ratio <= 1.",
+            condition: "penalty === 'elasticnet'"
           },
           {
             name: "max_iter",
@@ -1588,13 +1619,12 @@ const getKeyParameters = (algorithmName) => {
             description: "Whether to calculate the intercept.",
           },
           {
-            name: "normalize",
-            label: "Normalize Features",
+            name: "positive",
+            label: "Positive Coefficients Only",
             type: "checkbox",
             default: false,
             impact: "low",
-            description:
-              "Normalize features before regression (deprecated, use scaler).",
+            description: "Forces coefficients to be non-negative (useful in some domains)."
           },
         ],
       },
@@ -1614,8 +1644,7 @@ const getKeyParameters = (algorithmName) => {
             step: 0.1,
             default: 1.0,
             impact: "high",
-            description:
-              "Regularization parameter. Higher values mean less regularization.",
+            description: "Regularization parameter. Higher values mean less regularization.",
           },
           {
             name: "kernel",
@@ -1630,6 +1659,18 @@ const getKeyParameters = (algorithmName) => {
             default: "rbf",
             impact: "high",
             description: "Kernel function to use.",
+          },
+          {
+            name: "degree",
+            label: "Polynomial Degree",
+            type: "slider",
+            min: 1,
+            max: 10,
+            step: 1,
+            default: 3,
+            impact: "medium",
+            description: "Degree of the polynomial kernel function ('poly').",
+            condition: "kernel === 'poly'"
           },
           {
             name: "gamma",
@@ -1688,6 +1729,20 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Distance metric for finding neighbors.",
           },
+          {
+            name: "algorithm",
+            label: "Neighbor Search Algorithm",
+            type: "select",
+            options: [
+              { value: "auto", label: "Auto" },
+              { value: "ball_tree", label: "Ball Tree" },
+              { value: "kd_tree", label: "KD Tree" },
+              { value: "brute", label: "Brute Force" }
+            ],
+            default: "auto",
+            impact: "low",
+            description: "Algorithm used to compute nearest neighbors."
+          }
         ],
       },
     ],
@@ -1755,6 +1810,18 @@ const getKeyParameters = (algorithmName) => {
             description: "Kernel type for non-linear transformation.",
           },
           {
+            name: "degree",
+            label: "Polynomial Degree",
+            type: "slider",
+            min: 1,
+            max: 10,
+            step: 1,
+            default: 3,
+            impact: "medium",
+            description: "Degree of the polynomial kernel function ('poly').",
+            condition: "kernel === 'poly'"
+          },
+          {
             name: "C",
             label: "Regularization Parameter",
             type: "slider",
@@ -1774,8 +1841,7 @@ const getKeyParameters = (algorithmName) => {
             step: 0.01,
             default: 0.1,
             impact: "medium",
-            description:
-              "Width of insensitive zone. No penalty for errors within this range.",
+            description: "Width of insensitive zone. No penalty for errors within this range.",
           },
           {
             name: "gamma",
@@ -1804,7 +1870,6 @@ const getKeyParameters = (algorithmName) => {
             type: "select",
             options: [
               { value: "gaussian", label: "Gaussian (Continuous features)" },
-             
               { value: "bernoulli", label: "Bernoulli (Binary features)" },
             ],
             default: "gaussian",
@@ -1820,19 +1885,20 @@ const getKeyParameters = (algorithmName) => {
             step: 0.1,
             default: 1.0,
             impact: "medium",
-            description:
-              "Laplace/Lidstone smoothing (0 = no smoothing). For multinomial/bernoulli only.",
-            condition: "variant !== 'gaussian'",
+            description: "Laplace/Lidstone smoothing (0 = no smoothing). For multinomial/bernoulli only.",
+            condition: "variant !== 'gaussian'"
           },
           {
             name: "var_smoothing",
             label: "Variance Smoothing",
-            type: "number",
-            default: "1e-9",
+            type: "slider",
+            min: 1e-11,
+            max: 1e-5,
+            step: 1e-11,
+            default: 1e-9,
             impact: "low",
-            description:
-              "Portion of largest variance added for stability. For Gaussian only.",
-            condition: "variant === 'gaussian'",
+            description: "Portion of largest variance added for stability. For Gaussian only.",
+            condition: "variant === 'gaussian'"
           },
           {
             name: "fit_prior",
@@ -1860,8 +1926,7 @@ const getKeyParameters = (algorithmName) => {
             step: 0.1,
             default: 1.0,
             impact: "high",
-            description:
-              "Higher values = more regularization (smaller coefficients).",
+            description: "Higher values = more regularization (smaller coefficients).",
           },
           {
             name: "solver",
@@ -1886,17 +1951,6 @@ const getKeyParameters = (algorithmName) => {
             impact: "low",
             description: "Calculate intercept (recommended).",
           },
-          {
-            name: "max_iter",
-            label: "Maximum Iterations",
-            type: "slider",
-            min: 100,
-            max: 10000,
-            step: 100,
-            default: 1000,
-            impact: "low",
-            description: "Maximum iterations for iterative solvers.",
-          },
         ],
       },
     ],
@@ -1915,8 +1969,7 @@ const getKeyParameters = (algorithmName) => {
             step: 0.1,
             default: 1.0,
             impact: "high",
-            description:
-              "Higher values = more feature elimination (stronger L1 penalty).",
+            description: "Higher values = more feature elimination (stronger L1 penalty).",
           },
           {
             name: "selection",
@@ -1937,25 +1990,6 @@ const getKeyParameters = (algorithmName) => {
             default: true,
             impact: "low",
             description: "Calculate intercept.",
-          },
-          {
-            name: "max_iter",
-            label: "Maximum Iterations",
-            type: "slider",
-            min: 100,
-            max: 10000,
-            step: 100,
-            default: 1000,
-            impact: "low",
-            description: "Maximum iterations for convergence.",
-          },
-          {
-            name: "tol",
-            label: "Tolerance",
-            type: "number",
-            default: "0.0001",
-            impact: "low",
-            description: "Tolerance for optimization convergence.",
           },
         ],
       },
@@ -4585,12 +4619,12 @@ onMounted(async () => {
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
+  
 }
 
 .summary-item {
   display: flex;
-  justify-content: space-between;
+  
   align-items: center;
   padding: 0.5rem 0;
 }

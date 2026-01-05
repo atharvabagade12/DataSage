@@ -93,7 +93,7 @@
     <div class="configuration-container">
       <section class="configuration-section">
         <div class="section-header">
-          <h2>🎛️ Configure {{ modelConfig?.algorithm?.name || 'Model' }}</h2>
+          <h2>Configure {{ modelConfig?.algorithm?.name || 'Model' }}</h2>
           <p class="section-description">
             Set hyperparameters and validation strategy before training
           </p>
@@ -138,11 +138,11 @@
                 </div>
 
                 <div class="params-list">
-                  <div
-                    v-for="param in paramGroup.params"
-                    :key="param.name"
-                    class="param-item"
-                  >
+                  <template v-for="param in paramGroup.params" :key="param.name">
+                    <div
+                      v-if="shouldShowParam(param)"
+                      class="param-item"
+                    >
                     <div class="param-header">
                       <label class="param-label">{{ param.label }}</label>
                       <span class="param-impact" :class="param.impact">
@@ -198,7 +198,8 @@
 
                     <p class="param-description">{{ param.description }}</p>
                   </div>
-                </div>
+                </template>
+              </div>
               </div>
             </div>
           </div>
@@ -837,18 +838,7 @@
           </svg>
         </button>
 
-        <button @click="scrollToConfiguration" class="tweak-params-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/>
-          </svg>
-          <div class="btn-content">
-            <span class="btn-title">✨ Try Different Configuration</span>
-            <span class="btn-subtitle">Scroll to configuration and train with new settings</span>
-          </div>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
-            <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
-          </svg>
-        </button>
+        
       </div>
 
       <!-- Logs Section -->
@@ -1199,6 +1189,19 @@ const getKeyParameters = (algorithmName) => {
             description: "Controls tree complexity. Deeper trees can capture more patterns but may overfit.",
           },
           {
+            name: "max_features",
+            label: "Max Features per Split",
+            type: "select",
+            options: [
+              { value: "sqrt", label: "sqrt (recommended)" },
+              { value: "log2", label: "log2" },
+              { value: null, label: "All features" }
+            ],
+            default: "sqrt",
+            impact: "high",
+            description: "Number of features considered at each split."
+          },
+          {
             name: "min_samples_split",
             label: "Min Samples to Split",
             type: "slider",
@@ -1219,6 +1222,14 @@ const getKeyParameters = (algorithmName) => {
             default: 1,
             impact: "medium",
             description: "Minimum samples required at leaf node.",
+          },
+          {
+            name: "bootstrap",
+            label: "Bootstrap Sampling",
+            type: "checkbox",
+            default: true,
+            impact: "low",
+            description: "Use bootstrap samples when building trees."
           },
         ],
       },
@@ -1273,6 +1284,28 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Subsample ratio of training instances.",
           },
+          {
+            name: "reg_lambda",
+            label: "L2 Regularization (Lambda)",
+            type: "slider",
+            min: 0,
+            max: 10,
+            step: 0.1,
+            default: 1.0,
+            impact: "medium",
+            description: "Controls model complexity using L2 regularization."
+          },
+          {
+            name: "reg_alpha",
+            label: "L1 Regularization (Alpha)",
+            type: "slider",
+            min: 0,
+            max: 10,
+            step: 0.1,
+            default: 0.0,
+            impact: "medium",
+            description: "Encourages sparsity in features."
+          }
         ],
       },
     ],
@@ -1294,6 +1327,19 @@ const getKeyParameters = (algorithmName) => {
             description: "Inverse of regularization strength. Smaller values = stronger regularization.",
           },
           {
+            name: "solver",
+            label: "Optimization Solver",
+            type: "select",
+            options: [
+              { value: "lbfgs", label: "LBFGS (default, fast)" },
+              { value: "liblinear", label: "Liblinear (small datasets)" },
+              { value: "saga", label: "SAGA (supports L1 & ElasticNet)" }
+            ],
+            default: "lbfgs",
+            impact: "high",
+            description: "Solver determines which penalties are supported and affects convergence speed."
+          },
+          {
             name: "penalty",
             label: "Penalty Type",
             type: "select",
@@ -1305,6 +1351,18 @@ const getKeyParameters = (algorithmName) => {
             default: "l2",
             impact: "medium",
             description: "Type of penalty to apply.",
+          },
+          {
+            name: "l1_ratio",
+            label: "Elastic Net L1 Ratio",
+            type: "slider",
+            min: 0.0,
+            max: 1.0,
+            step: 0.01,
+            default: 0.5,
+            impact: "medium",
+            description: "The Elastic Net mixing parameter, with 0 <= l1_ratio <= 1.",
+            condition: "penalty === 'elasticnet'"
           },
           {
             name: "max_iter",
@@ -1333,6 +1391,14 @@ const getKeyParameters = (algorithmName) => {
             default: true,
             impact: "low",
             description: "Whether to calculate the intercept.",
+          },
+          {
+            name: "positive",
+            label: "Positive Coefficients Only",
+            type: "checkbox",
+            default: false,
+            impact: "low",
+            description: "Forces coefficients to be non-negative (useful in some domains)."
           },
         ],
       },
@@ -1367,6 +1433,18 @@ const getKeyParameters = (algorithmName) => {
             default: "rbf",
             impact: "high",
             description: "Kernel function to use.",
+          },
+          {
+            name: "degree",
+            label: "Polynomial Degree",
+            type: "slider",
+            min: 1,
+            max: 10,
+            step: 1,
+            default: 3,
+            impact: "medium",
+            description: "Degree of the polynomial kernel function ('poly').",
+            condition: "kernel === 'poly'"
           },
           {
             name: "gamma",
@@ -1425,6 +1503,20 @@ const getKeyParameters = (algorithmName) => {
             impact: "medium",
             description: "Distance metric for finding neighbors.",
           },
+          {
+            name: "algorithm",
+            label: "Neighbor Search Algorithm",
+            type: "select",
+            options: [
+              { value: "auto", label: "Auto" },
+              { value: "ball_tree", label: "Ball Tree" },
+              { value: "kd_tree", label: "KD Tree" },
+              { value: "brute", label: "Brute Force" }
+            ],
+            default: "auto",
+            impact: "low",
+            description: "Algorithm used to compute nearest neighbors."
+          }
         ],
       },
     ],
@@ -1492,6 +1584,18 @@ const getKeyParameters = (algorithmName) => {
             description: "Kernel type for non-linear transformation.",
           },
           {
+            name: "degree",
+            label: "Polynomial Degree",
+            type: "slider",
+            min: 1,
+            max: 10,
+            step: 1,
+            default: 3,
+            impact: "medium",
+            description: "Degree of the polynomial kernel function ('poly').",
+            condition: "kernel === 'poly'"
+          },
+          {
             name: "C",
             label: "Regularization Parameter",
             type: "slider",
@@ -1540,12 +1644,35 @@ const getKeyParameters = (algorithmName) => {
             type: "select",
             options: [
               { value: "gaussian", label: "Gaussian (Continuous features)" },
-              
               { value: "bernoulli", label: "Bernoulli (Binary features)" },
             ],
             default: "gaussian",
             impact: "high",
             description: "Variant based on feature distribution.",
+          },
+          {
+            name: "alpha",
+            label: "Smoothing Parameter (α)",
+            type: "slider",
+            min: 0.0,
+            max: 10.0,
+            step: 0.1,
+            default: 1.0,
+            impact: "medium",
+            description: "Laplace/Lidstone smoothing (0 = no smoothing). For multinomial/bernoulli only.",
+            condition: "variant !== 'gaussian'"
+          },
+          {
+            name: "var_smoothing",
+            label: "Variance Smoothing",
+            type: "slider",
+            min: 1e-11,
+            max: 1e-5,
+            step: 1e-11,
+            default: 1e-9,
+            impact: "low",
+            description: "Portion of largest variance added for stability. For Gaussian only.",
+            condition: "variant === 'gaussian'"
           },
           {
             name: "fit_prior",
@@ -1644,6 +1771,35 @@ const getKeyParameters = (algorithmName) => {
   };
 
   return parameterSets[algorithmName] || [];
+};
+
+const shouldShowParam = (param) => {
+  if (!param || !param.condition) return true;
+  
+  try {
+    // Simple expression evaluator for conditions like "penalty === 'elasticnet'"
+    const context = hyperparameters;
+    
+    // Support "key === 'value'" patterns
+    const matchEq = param.condition.match(/(\w+)\s*===\s*'([^']+)'/);
+    if (matchEq) {
+      const [_, key, value] = matchEq;
+      return context[key] === value;
+    }
+
+    // Support "key !== 'value'" patterns
+    const matchNotEq = param.condition.match(/(\w+)\s*!==\s*'([^']+)'/);
+    if (matchNotEq) {
+      const [_, key, value] = matchNotEq;
+      return context[key] !== value;
+    }
+    
+    // Fallback or more complex logic if needed
+    return true;
+  } catch (e) {
+    console.warn("Condition evaluation failed:", e);
+    return true;
+  }
 };
 
 const formatParameterValue = (paramName, value) => {
@@ -1877,11 +2033,21 @@ const startTraining = async () => {
 
   try {
     // Prepare training configuration
-    const targetColumn = localStorage.getItem('selectedTarget');
+    const storedTarget = localStorage.getItem('selectedTarget');
+    let targetName = "target";
+    
+    if (storedTarget) {
+      try {
+        const targetObj = JSON.parse(storedTarget);
+        targetName = targetObj.name || targetObj; 
+      } catch (e) {
+        targetName = storedTarget; // Fallback if not JSON
+      }
+    }
     
     const trainingConfig = {
       dataset_id: datasetId.value,
-      target_column: targetColumn,
+      target_column: targetName,
       algorithm_name: modelConfig.value.algorithm.name,
       test_size: 1 - splitRatio.value,
       validation_method: validationStrategy.value,
@@ -2319,8 +2485,23 @@ const initializeTrainingEnvironment = async () => {
 onMounted(async () => {
   console.log("Initializing Model Training...");
 
-  //await checkBackendConnection();
   await loadConfiguration();  
+  
+  // Proactively validate dataset with backend to trigger re-hydration if needed
+  if (datasetId.value) {
+    try {
+      console.log(`🔍 Proactively validating dataset ${datasetId.value}...`);
+      const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}`);
+      if (response.ok) {
+        console.log("✅ Dataset validated and hydrated in backend memory");
+      } else {
+        console.warn("⚠️ Dataset validation failed on backend");
+      }
+    } catch (err) {
+      console.warn("⚠️ Error pinging backend for dataset validation:", err);
+    }
+  }
+
   await initializeTrainingEnvironment();
   
   // Initialize hyperparameters with defaults
