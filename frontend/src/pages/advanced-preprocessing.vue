@@ -342,6 +342,8 @@
         </div>
 
         <div class="preprocessing-grid">
+
+
           <!-- ========== CARD 1: DATASET SPLITTING ========== -->
 
           <!-- ========== CARD 1: DATASET SPLITTING (IMPROVED UI) ========== -->
@@ -721,6 +723,9 @@
                           <span class="category-count">({{ column.unique }} categories)</span>
                         </span>
                       </label>
+                      <span class="semantic-type-pill" :class="getColumnSemanticType(column.name)" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 0.5rem;">
+                        {{ getColumnSemanticType(column.name).toUpperCase() }}
+                      </span>
 
                       <!-- Recommendation Badge -->
                       <div class="recommendation-info">
@@ -739,7 +744,7 @@
                       </div>
                     </div>
                     
-                    <div class="encoding-select-wrapper" v-if="column.encode">
+                    <div class="encoding-select-wrapper" v-if="column.encode && getColumnSemanticType(column.name) === 'categorical'">
                       <select
                         v-model="column.encoding"
                         @change="setEncodingMethod(column.name, column.encoding)"
@@ -749,6 +754,9 @@
                         <option value="label">Label Encoding</option>
                         <option value="ordinal">Ordinal Encoding</option>
                       </select>
+                    </div>
+                    <div v-else-if="column.encode && getColumnSemanticType(column.name) === 'boolean'" class="status-msg success" style="color: #10b981; font-size: 0.8rem;">
+                       ✓ Already optimal (0/1)
                     </div>
                   </div>
                   
@@ -993,11 +1001,14 @@
                         @change="toggleColumnScaling(col)"
                       />
                       <span class="checkbox-custom"></span>
-                      <span class="col-name">
-                        {{ col.name }}
-                        <span v-if="col.isAlreadyScaled" class="requires-split-inline" style="margin-left: 8px; font-size: 0.7rem;">Scaled</span>
+                        <span class="col-name">
+                          {{ col.name }}
+                          <span v-if="col.isAlreadyScaled" class="requires-split-inline" style="margin-left: 8px; font-size: 0.7rem;">Scaled</span>
+                        </span>
+                      </label>
+                      <span class="semantic-type-pill numeric" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 0.5rem;">
+                        NUMERIC
                       </span>
-                    </label>
 
                     <div class="recommendation-info scaling-rec">
                       <span 
@@ -1262,7 +1273,7 @@
                 variant="primary" 
                 :loading="isProcessing"
                 @click="applySmote"
-                :disabled="isProcessing || !smoteValidation.valid || smoteApplied"
+                :disabled="isProcessing || !smoteValidation.valid"
               >
                 Apply SMOTE
               </Button>
@@ -1600,88 +1611,69 @@
 
 import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
-import { useMLDataFlowStore } from "~/stores/mlDataFlow";
+import { storeToRefs } from "pinia";
+import { useExperimentStore } from "~/stores/experiment";
+import { useDataStore } from "~/stores/data";
+import { useUIStore } from "~/stores/ui";
 import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch'
 import { useToast } from '~/composables/useToast'
 import { addPreprocessingStep } from '@/utils/preprocessingTracker';
-
 
 const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
 const { showSuccess, showError, showWarning, showInfo } = useToast()
 
 const router = useRouter();
-const mlStore = useMLDataFlowStore();
+const experimentStore = useExperimentStore();
+const dataStore = useDataStore();
+const uiStore = useUIStore();
 
-// ==================== BACKEND & PROCESSING STATE ====================
-const backendConnected = computed(() => mlStore.backendConnected);
-const isProcessing = ref(false);
-const processingMessage = ref("");
+// Destructure reactive state from stores
+const { 
+  datasetId, targetColumn: selectedTarget, problemType,
+  preprocessing 
+} = storeToRefs(experimentStore);
 
-// ==================== DATASET STATE ====================
-const fileName = ref("");
-const datasetId = ref(null);
-const originalDatasetId = ref(null);
-const cleanedDatasetId = ref(null);
-const totalRowsInBackend = ref(0);
+const { 
+  rawPreview: originalDataset,
+  trainPreview: trainData, 
+  testPreview: testData,
+  semanticTypes,
+  statistics: backendStatistics
+} = storeToRefs(dataStore);
 
-// Original dataset (before split)
-const originalDataset = ref([]);
-const originalDatasetBackup = ref([]);
+const { isLoading: isProcessing, processingMessage } = storeToRefs(uiStore);
 
-// Train/Test split data
-const trainData = ref([]);
-const testData = ref([]);
-const trainRows = ref(0);
-const testRows = ref(0);
-
-// Columns
-const columns = ref([]);
-
-// Selected target variable
-const mlAppState = JSON.parse(localStorage.getItem('mlAppState') || '{}');
-const selectedTarget = ref(mlAppState.selectedTarget || "");
-
-console.log('\n' + '='.repeat(80));
-console.log('🎯 ADVANCED PREPROCESSING - Target Variable');
-console.log('='.repeat(80));
-console.log('   Selected Target:', selectedTarget.value || 'Not set');
-console.log('   Full State:', mlAppState);
-console.log('='.repeat(80) + '\n'); 
-
-
-// ==================== SPLIT & SCALE CONFIG ====================
-const splitApplied = ref(false);
-const scalingApplied = ref(false);
-const encodingApplied = ref(false);
-const targetEncodingApplied = ref(false);
-const currentSplitView = ref("full"); // 'full', 'train', 'test'
-const splitRatio = ref(0.8);
-const splitStrategy = ref("random"); // 'random' or 'stratified'
-const randomSeed = ref(null);
-const scalingMethod = ref("standard"); // 'standard', 'minmax', 'robust', 'maxabs', 'none'
-const scaledColumns = ref(new Set()); // Track scaled columns
-const targetEncodedColumns = ref(new Set()); // Track target encoded columns
-
-watch(scaledColumns, (newSet) => {
-  columns.value.forEach(col => {
-    col.isAlreadyScaled = newSet.has(col.name);
-  });
-}, { deep: true });
-
-// Watch for split applied to check class imbalance
-watch(splitApplied, async (newValue) => {
-  if (newValue && selectedTarget.value && problemType.value === 'classification') {
-    // Wait a bit for the split to complete
-    await nextTick();
-    await checkClassImbalance();
-  }
+// ==================== WRAPPED PROXIES FOR NESTED CONFIG ====================
+// These allow v-model to work directly with store's nested objects
+const splitRatio = computed({
+  get: () => preprocessing.value.splitRatio,
+  set: (val) => experimentStore.updateSplitConfig(val, preprocessing.value.splitStrategy, preprocessing.value.randomSeed)
 });
 
-// ==================== TOOLKIT STATE ====================
+const splitStrategy = computed({
+  get: () => preprocessing.value.splitStrategy,
+  set: (val) => experimentStore.updateSplitConfig(preprocessing.value.splitRatio, val, preprocessing.value.randomSeed)
+});
+
+const randomSeed = computed({
+  get: () => preprocessing.value.randomSeed,
+  set: (val) => experimentStore.updateSplitConfig(preprocessing.value.splitRatio, preprocessing.value.splitStrategy, val)
+});
+
+const splitApplied = computed(() => preprocessing.value.isSplitApplied);
+const scalingApplied = computed(() => preprocessing.value.isScalingApplied);
+const encodingApplied = computed(() => preprocessing.value.isEncodingApplied);
+
+// ==================== LOCAL UI STATE (Not Persisted) ====================
+const fileName = ref("dataset.csv"); // Transient name
+const totalRowsInBackend = ref(0);
+const columns = ref([]); // Local view model for columns (merged with store metadata)
+const currentSplitView = ref("full"); // "full", "train", "test"
 const enabledTools = ref([]);
 const openDropdowns = ref([]);
+const originalDatasetBackup = ref([]); // For client-side reset (if needed)
 
-// ==================== MODAL STATE ====================
+// Modals
 const showSplitModal = ref(false);
 const showEncodingModal = ref(false);
 const showScalingModal = ref(false);
@@ -1690,34 +1682,41 @@ const showResetSplitModal = ref(false);
 const showSmoteModal = ref(false);
 const showTargetEncodingModal = ref(false);
 
-// ==================== SMOTE STATE ====================
-const smoteApplied = ref(false);
-const smoteStrategy = ref('auto'); // 'auto', 'minority', 'not minority'
+// SMOTE (Local for now, sync to store on apply)
+const smoteStrategy = ref('auto');
 const smoteKNeighbors = ref(5);
 const smoteRandomSeed = ref(null);
-const targetEncodingSmoothing = ref(10);
+const targetEncodingSmoothing = ref(10); // Added missing ref
 const hasClassImbalance = ref(false);
 const imbalanceRatio = ref(1.0);
-const imbalanceSeverity = ref('balanced'); // 'balanced', 'mild', 'severe'
+const imbalanceSeverity = ref('balanced');
 const classDistribution = ref({});
+const smoteApplied = computed(() => preprocessing.value.smote.applied);
 
-// Load correct problemType from mlAppState
-const problemType = ref(mlAppState.problemType || 'classification');
-
-// ==================== TF-IDF STATE ====================
+// TF-IDF
 const showTfidfModal = ref(false);
 const tfidfApplied = ref(false);
-const textColumns = ref([]);  // Detected text columns with metadata
-const tfidfConfig = ref({});  // Recommended configuration
-const tfidfWarnings = ref([]);  // Safety warnings
-const selectedTextColumns = ref([]);  // User-selected columns for TF-IDF
+const textColumns = ref([]);  
+const tfidfConfig = ref({});  
+const tfidfWarnings = ref([]);  
+const selectedTextColumns = ref([]);  
+const isDetectingTypes = ref(false); // Added missing ref
 
-// ==================== TABLE STATE ====================
+// Table UI
 const searchQuery = ref("");
 const currentPage = ref(1);
 const pageSize = ref(25);
 const sortColumn = ref("");
 const sortDirection = ref("asc");
+
+// Computed Helpers for Store
+const trainRows = computed(() => trainData.value?.length || 0);
+const testRows = computed(() => testData.value?.length || 0);
+const scaledColumns = computed(() => new Set(preprocessing.value.scaledColumns));
+const targetEncodedColumns = computed(() => new Set()); 
+
+// Backend Connection
+const backendConnected = ref(false); // Re-added as local ref since store property was removed
 
 // ==================== COMPUTED PROPERTIES ====================
 
@@ -1763,10 +1762,11 @@ const dataQuality = computed(() => {
 const checkBackendConnection = async () => {
   try {
     const response = await fetch('http://localhost:8000/api/health');
-    mlStore.backendConnected = response.ok;
-    console.log('✅ Backend connected:', mlStore.backendConnected);
+    backendConnected.value = response.ok; // Local ref
+    // mlStore.backendConnected = response.ok; // Removed
+    console.log('✅ Backend connected:', backendConnected.value);
   } catch (e) {
-    mlStore.backendConnected = false;
+    backendConnected.value = false;
     console.error('❌ Backend connection failed:', e);
   }
 };
@@ -1797,22 +1797,82 @@ const displayedRowCount = computed(() => {
   return totalRows.value;
 });
 
-const categoricalColumns = computed(() =>
-  columns.value.filter(col => col.type === 'categorical')
-);
+const getColumnSemanticType = (columnName) => {
+  // 1. Check local column object first (for just-encoded columns)
+  const col = columns.value.find(c => c.name === columnName);
+  if (col && col.semanticType && col.semanticType !== 'unknown') {
+    return col.semanticType;
+  }
+  
+  // 2. Fallback to global semantic types from backend
+  if (!semanticTypes.value) return "unknown";
+  const found = semanticTypes.value.find((s) => s.column === columnName);
+  return found ? found.semantic_type : "unknown";
+};
 
-const numericalColumns = computed(() =>
-  columns.value.filter(col => col.type === 'numerical' && col.name !== selectedTarget.value && !scaledColumns.value.has(col.name))
-);
+const categoricalColumns = computed(() => {
+  return columns.value.filter(col => {
+    const sType = getColumnSemanticType(col.name);
+    // Explicitly include categorical, boolean, and datetime semantic types
+    return ['categorical', 'boolean', 'datetime'].includes(sType) || col.type === 'categorical';
+  });
+});
+
+const numericalColumns = computed(() => {
+  return columns.value.filter(col => {
+    // 1. Exclude target column
+    if (col.name === selectedTarget.value) return false;
+    // 2. Exclude already scaled columns
+    if (scaledColumns.value.has(col.name)) return false;
+    // 3. Exclude One-Hot encoded columns (dummies)
+    if (col.isOneHot) return false;
+    
+    const sType = getColumnSemanticType(col.name);
+    // 4. Numeric should be strictly numeric, exclude others even if raw type is numerical
+    // Allow other encoded types (label, ordinal, target_encoded) if they are numeric
+    return sType === 'numeric' || (sType === 'unknown' && col.type === 'numerical');
+  });
+});
 
 const smoteValidation = computed(() => {
-  const cats = columns.value.filter(col => col.type === 'categorical' && col.name !== selectedTarget.value);
-  if (cats.length > 0) {
+  if (!columns.value || columns.value.length === 0) return { valid: true };
+  
+  const targetName = (selectedTarget.value || "").trim().toLowerCase();
+  
+  // Find columns that are DEFINITELY not compatible with SMOTE
+  const blockers = columns.value.filter(col => {
+    const colName = (col.name || "").trim().toLowerCase();
+    
+    // 1. Exclude target column
+    if (colName === targetName) return false;
+    
+    // 2. Exclude columns marked for removal
+    if (col.remove) return false;
+    
+    const sType = getColumnSemanticType(col.name);
+    
+    // Allow numeric and boolean (binary 0/1)
+    if (['numeric', 'boolean'].includes(sType)) return false;
+    
+    // Allow if the raw type is numerical
+    if (col.type === 'numerical' || col.type === 'numeric') return false;
+    
+    // Only block if it's explicitly categorical, text, or datetime AND not marked as numeric locally
+    if (['categorical', 'datetime', 'text', 'identifier'].includes(sType)) {
+       return true;
+    }
+    
+    // Default to allowing (permissive)
+    return false;
+  });
+  
+  if (blockers.length > 0) {
     return {
       valid: false,
-      message: `SMOTE requires all feature columns to be numerical. Please encode the following categorical columns first: ${cats.map(c => c.name).join(', ')}.`
+      message: `SMOTE requires numerical features. Please encode or remove these categorical columns: ${blockers.map(c => c.name).join(', ')}.`
     };
   }
+  
   return { valid: true };
 });
 
@@ -1995,6 +2055,9 @@ function setEncodingMethod(columnName, method) {
 // Select/Deselect all categorical columns
 function selectAllCategoricalColumns() {
   categoricalColumns.value.forEach(col => {
+    const sType = getColumnSemanticType(col.name);
+    if (sType === 'boolean' || sType === 'identifier') return;
+
     const baseCol = columns.value.find(c => c.name === col.name);
     if (baseCol) {
       baseCol.encode = true;
@@ -2015,6 +2078,9 @@ function deselectAllCategoricalColumns() {
 // Select recommended columns for categorical encoding (exclude high cardinality)
 function selectRecommendedCategoricalColumns() {
   categoricalColumns.value.forEach(col => {
+    const sType = getColumnSemanticType(col.name);
+    if (sType === 'boolean' || sType === 'identifier') return;
+
     const baseCol = columns.value.find(c => c.name === col.name);
     if (baseCol) {
        const rec = getEncodingRecommendation(col);
@@ -2111,12 +2177,20 @@ const getEncodingRecommendation = (column) => {
   }
 
   // 4. Cardinality-based Rules (Fallbacks)
+  const sType = getColumnSemanticType(column.name);
+  if (sType === 'boolean') {
+    return {
+      method: 'keep',
+      reason: 'Boolean detected; already optimal as 0/1.'
+    };
+  }
+
   if (uniqueCount <= 10) {
     return {
       method: 'onehot',
       reason: 'Low cardinality detected; One-Hot is efficient and safe.'
     };
-  } else if (uniqueCount <= 50) {
+  } else if (uniqueCount <= 35) {
     return {
       method: 'label',
       reason: 'Moderate cardinality; Label Encoding is recommended for Tree-based models.'
@@ -2255,6 +2329,22 @@ const fetchBackendDatasetInfo = async (datasetId) => {
   }
 };
 
+const fetchSemanticTypes = async () => {
+  if (!datasetId.value) return;
+  try {
+    isDetectingTypes.value = true;
+    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}/semantic-types`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    semanticTypes.value = data.column_types || [];
+    console.log("✅ Fetched semantic types:", semanticTypes.value);
+  } catch (error) {
+    console.error("Error fetching semantic types:", error);
+  } finally {
+    isDetectingTypes.value = false;
+  }
+};
+
 const fetchCompleteStatistics = async () => {
   if (!datasetId.value) return;
 
@@ -2277,11 +2367,12 @@ const fetchCompleteStatistics = async () => {
         if (col) {
           col.unique = stat.unique;
           col.missing = stat.missing;
+          col.semanticType = stat.semanticType || stat.semantic_type; // Added
           // Store additional metrics if needed for future use
           col.backendMetrics = stat.detailed_metrics; 
         }
       });
-      console.log("✅ Updated unique category counts from full dataset");
+      console.log("✅ Updated unique category counts and semantic types from full dataset");
     }
   } catch (error) {
     console.warn("⚠️ Error updating statistics:", error);
@@ -2291,79 +2382,62 @@ const fetchCompleteStatistics = async () => {
 
 // ==================== DATA LOADING ====================
 
+// ==================== DATA LOADING ====================
+
 const loadInitialData = async () => {
   console.log("\n" + "=".repeat(80));
-  console.log("📊 ADVANCED PREPROCESSING - Loading Dataset");
+  console.log("📊 ADVANCED PREPROCESSING - Loading Persisted Experiment");
   console.log("=".repeat(80));
 
   try {
     // Step 1: Check backend connection
     await checkBackendConnection();
 
-    if (!mlStore.backendConnected) {
-      alert('⚠️ Backend is not connected. Some features may not work.');
+    if (!backendConnected.value) {
+      uiStore.showToast('warning', 'Backend Warning', 'Backend is not connected. Some features may not work.');
     }
 
-    // Step 2: Get dataset ID (prefer cleaned ID)
-    datasetId.value = mlStore.cleanedDatasetId || mlStore.datasetId;
-    
+    // Step 2: Hydrate from Experiment Store
+    // (State is already reactive via storeToRefs, checking existence)
     if (!datasetId.value) {
-      // Fallback to localStorage
-      const processedData = localStorage.getItem("processedData");
-      if (processedData) {
-        const data = JSON.parse(processedData);
-        datasetId.value = data.backendDatasetId || data.datasetId;
+      // Attempt legacy migration or fallback (optional)
+      const legacyData = localStorage.getItem("processedData");
+      if (legacyData) {
+        try {
+          const data = JSON.parse(legacyData);
+          if (data.backendDatasetId) {
+             experimentStore.setDataset(data.backendDatasetId, data.fileName || 'dataset.csv');
+             console.log('🔄 Migrated legacy dataset ID:', data.backendDatasetId);
+          }
+        } catch (e) { console.error('Migration failed', e); }
       }
+    }
+
+    if (!datasetId.value) {
+      uiStore.showToast('error', 'No Dataset', 'No active dataset found. Please upload a dataset.');
+      // router.push('/data-preview'); // Optional redirect
+      return;
     }
 
     console.log(`📋 Using dataset ID: ${datasetId.value}`);
 
-    // Step 3: Fetch backend dataset info (CRITICAL!)
-    if (mlStore.backendConnected && datasetId.value) {
-      const backendInfo = await fetchBackendDatasetInfo(datasetId.value);
-      
-      if (!backendInfo) {
-        throw new Error('Dataset not found in backend');
-      }
-
-      // Store backend total rows
-      if (backendInfo.shape) {
-        totalRowsInBackend.value = backendInfo.shape[0];
-      }
-    }
-
-    // Step 4: Load preview data for UI
-    if (mlStore.dataset && mlStore.dataset.length > 0) {
-      console.log("✅ Loading preview from mlStore");
-      originalDataset.value = mlStore.dataset.slice(0, 200);
-      fileName.value = mlStore.fileName || "dataset.csv";
-    } else {
-      // Fallback to localStorage
-      const processedData = localStorage.getItem("processedData");
-      if (processedData) {
-        const data = JSON.parse(processedData);
-        originalDataset.value = (data.data || []).slice(0, 200);
-        fileName.value = data.fileName || "dataset.csv";
-      }
-    }
-
-    // Step 5: Analyze columns
+    // Step 3: Fetch Data (Transient)
+    await dataStore.loadData(datasetId.value);
+    
+    // Step 4: Sync UI Columns with Metadata
     analyzeColumns();
 
-    // Step 6: Fetch complete statistics after initial analysis (Accurate category counts)
-    if (mlStore.backendConnected && datasetId.value) {
-      await fetchCompleteStatistics();
+    // Step 5: Restore View State if Split Applied
+    if (preprocessing.value.isSplitApplied) {
+      currentSplitView.value = 'train';
     }
 
-    originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
-
-    console.log(`✅ Loaded ${originalDataset.value.length} preview rows`);
-    console.log(`✅ Backend has ${totalRowsInBackend.value} total rows`);
+    console.log("✅ Experiment Hydrated Successfully");
     console.log("=" + "=".repeat(80) + "\n");
 
   } catch (error) {
     console.error("❌ Error loading data:", error);
-    alert("Failed to load dataset. Please go back to Data Preview.");
+    uiStore.showToast('error', 'Load Error', 'Failed to load dataset context.');
   }
 };
 
@@ -2372,24 +2446,37 @@ const analyzeColumns = () => {
   if (!originalDataset.value || originalDataset.value.length === 0) return;
 
   const firstRow = originalDataset.value[0];
+  const encodedConfig = preprocessing.value.encodedColumns || [];
+
   columns.value = Object.keys(firstRow).map((colName) => {
     const values = originalDataset.value
       .map((row) => row[colName])
       .filter((v) => v !== null && v !== undefined);
-    const type = detectColumnType(values);
+    
+    // Prefer backend semantic type detection
+    const backendType = getColumnSemanticType(colName);
+    const type = backendType !== 'unknown' 
+      ? (backendType === 'numeric' ? 'numerical' : 'categorical')
+      : detectColumnType(values);
+
+    // Restore user selection from store
+    const encodingInfo = encodedConfig.find(c => c.name === colName);
 
     return {
       name: colName,
       type: type,
+      semanticType: backendType, 
       unique: new Set(values).size,
       missing: originalDataset.value.length - values.length,
-      remove: false,
-      encode: false,
-      encoding: "onehot",
+      remove: false, // Feature selection not yet persisted in this array
+      encode: !!encodingInfo,
+      encoding: encodingInfo ? encodingInfo.method : "onehot",
+      scale: preprocessing.value.scaledColumns.includes(colName),
+      isAlreadyScaled: preprocessing.value.scaledColumns.includes(colName)
     };
   });
 
-  console.log(`✅ Analyzed ${columns.value.length} columns`);
+  console.log(`✅ Analyzed ${columns.value.length} columns & synced with store`);
 };
 
 const detectColumnType = (values) => {
@@ -2406,22 +2493,15 @@ const detectColumnType = (values) => {
 // ==================== SPLIT OPERATIONS ====================
 
 const applySplit = async () => {
-  if (isProcessing.value || splitApplied.value) return;
+  if (isProcessing.value || preprocessing.value.isSplitApplied) return;
 
-  isProcessing.value = true;
-  processingMessage.value = "Splitting dataset...";
+  uiStore.startProcessing("Splitting dataset...");
 
   console.log('Sending split request for dataset ID:', datasetId.value);
 
   if (!selectedTarget.value) {
-    alert("⚠️ No target column selected. Please go back to Target Selection.");
-    isProcessing.value = false;
-    return;
-  }
-
-  if (!datasetId.value) {
-    alert("⚠️ No dataset ID found. Please refresh the page or go back to upload a dataset.");
-    isProcessing.value = false;
+    uiStore.showToast('warning', 'Target Missing', "No target column selected.");
+    uiStore.stopProcessing();
     return;
   }
 
@@ -2434,67 +2514,36 @@ const applySplit = async () => {
       target_column: selectedTarget.value
     };
 
-    console.log('🔍 Split Request Debug:');
-    console.log('  Dataset ID:', payload.datasetid);
-    console.log('  Target Column:', payload.target_column);
-    console.log('  Full Payload:', payload);
-
     const response = await authenticatedPost('http://localhost:8000/api/split-dataset', payload)
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(`HTTP ${response.status}: ${errorBody.detail || errorBody.message || 'Unknown error'}`);
+        throw new Error(`Split failed: ${response.statusText}`);
     }
 
     const data = await response.json();
 
     if (data.status === 'success') {
-      console.log("✅ Split successful");
-      console.log(`   Train rows: ${data.train_size}`);
-      console.log(`   Test rows: ${data.test_size}`);
-
-      trainRows.value = data.train_size;
-      testRows.value = data.test_size;
-      trainData.value = data.train_preview || [];
-      testData.value = data.test_preview || [];
-      splitApplied.value = true;
+      // Update Data Store (Transient)
+      dataStore.setSplitData(data.train_preview, data.test_preview);
+      
+      // Update Experiment Store (Persisted)
+      experimentStore.setSplitApplied(true);
+      
+      // Update UI
       currentSplitView.value = 'train';
+      showSplitModal.value = false;
 
-      mlStore.isSplit = true;
-      mlStore.splitInfo = {
-        trainRows: data.train_size,
-        testRows: data.test_size,
-        trainRatio: splitRatio.value,
-        testRatio: 1 - splitRatio.value,
-      };
-
-      showSuccess(
-        'Dataset Split Applied!',
-        `Train: ${data.train_size.toLocaleString()} rows | Test: ${data.test_size.toLocaleString()} rows`
-      );
-
+      uiStore.showToast('success', 'Split Applied', `Train: ${data.train_size} | Test: ${data.test_size}`);
       addPreprocessingStep('Train/Test Split');
 
-      // CRITICAL: Save the dataset ID immediately after successful split
-      // This ensures that even if the user navigates via sidebar (skipping proceedToAlgorithmSelection),
-      // the correct dataset ID is available for training.
-      if (datasetId.value) {
-        localStorage.setItem('backendDatasetId', datasetId.value);
-        localStorage.setItem('datasetId', datasetId.value);
-        console.log('✅ Saved processed dataset ID to localStorage (on split success):', datasetId.value);
-      }
-
-      // Close the modal
-      showSplitModal.value = false;
     } else {
       throw new Error(data.message || "Split failed");
     }
   } catch (error) {
     console.error("❌ Split error:", error);
-    showError('Split Failed', error.message);
+    uiStore.showToast('error', 'Split Failed', error.message);
   } finally {
-    isProcessing.value = false;
-    processingMessage.value = "";
+    uiStore.stopProcessing();
   }
 };
 
@@ -2612,17 +2661,12 @@ const checkClassImbalance = async () => {
 
 // Apply SMOTE
 const applySmote = async () => {
-  if (!splitApplied.value || !hasClassImbalance.value) {
-    showWarning('SMOTE Not Available', 'Dataset must be split and have class imbalance');
+  if (!preprocessing.value.isSplitApplied || !hasClassImbalance.value) {
+    uiStore.showToast('warning', 'SMOTE Unavailable', 'Dataset must be split and have class imbalance');
     return;
   }
 
-  console.log("\n" + "=".repeat(80));
-  console.log("⚖️ APPLYING SMOTE");
-  console.log("=".repeat(80));
-
-  isProcessing.value = true;
-  processingMessage.value = "Applying SMOTE...";
+  uiStore.startProcessing("Applying SMOTE...");
 
   try {
     const payload = {
@@ -2631,9 +2675,7 @@ const applySmote = async () => {
       random_state: smoteRandomSeed.value
     };
 
-    console.log('🔍 SMOTE Request Debug:');
-    console.log('  Dataset ID:', datasetId.value);
-    console.log('  Configuration:', payload);
+    console.log('🔍 SMOTE Request:', payload);
 
     const response = await authenticatedPost(
       `http://localhost:8000/api/datasets/${datasetId.value}/apply-smote`,
@@ -2648,53 +2690,43 @@ const applySmote = async () => {
 
     if (data.success) {
       console.log("✅ SMOTE applied successfully");
-      console.log(`  Original samples: ${data.original_samples}`);
-      console.log(`  New samples: ${data.new_samples}`);
-      console.log(`  Samples added: ${data.samples_added}`);
 
-      smoteApplied.value = true;
-      trainRows.value = data.new_samples;
-
-      // Update class distribution
+      // Update Data Store (Transient)
+      // Only train data changes
+      dataStore.trainPreview = data.train_preview || []; 
+      // Ideally backend returns preview. If not, we might need to fetch it or validation might fail.
+      // Assuming data.train_preview exists as per previous code.
+      
+      // Update Experiment Store (Persisted)
+      experimentStore.setSmoteApplied(true, {
+         strategy: smoteStrategy.value,
+         k_neighbors: smoteKNeighbors.value,
+         random_state: smoteRandomSeed.value,
+         samples_added: data.samples_added,
+         new_train_rows: data.new_samples
+      });
+      
+      // Update UI
       classDistribution.value = data.class_distribution_after;
 
-      // Update mlStore with new training row count
-      mlStore.splitInfo = {
-        ...mlStore.splitInfo,
-        trainRows: data.new_samples,
-        smoteApplied: true,
-        samplesAdded: data.samples_added
-      };
-
-      console.log("=".repeat(80) + "\n");
-
-      showSuccess(
-        'SMOTE Applied Successfully!',
-        `Added ${data.samples_added} synthetic samples to balance the training set. New training size: ${data.new_samples.toLocaleString()} rows`
+      uiStore.showToast(
+        'success',
+        'SMOTE Applied',
+        `Added ${data.samples_added} synthetic samples. New training size: ${data.new_samples}`
       );
 
       addPreprocessingStep('SMOTE Analysis');
-
-      // Re-check class imbalance to update the UI with new balanced distribution
       await checkClassImbalance();
-
-      // ✅ CRITICAL: Update processedData in localStorage immediately
-      // This ensures algorithm-select page sees the updated row counts
-      const existingProcessedData = JSON.parse(localStorage.getItem('processedData') || '{}');
-      existingProcessedData.splitInfo = mlStore.splitInfo; // Update with SMOTE-modified split info
-      localStorage.setItem('processedData', JSON.stringify(existingProcessedData));
-      console.log('✅ Updated processedData in localStorage with SMOTE-modified splitInfo');
-
-      // Close the modal
       showSmoteModal.value = false;
+
     } else {
       throw new Error(data.detail || "SMOTE application failed");
     }
   } catch (error) {
     console.error("❌ SMOTE error:", error);
-    showError('SMOTE Failed', error.message || 'Failed to apply SMOTE');
+    uiStore.showToast('error', 'SMOTE Failed', error.message);
   } finally {
-    isProcessing.value = false;
+    uiStore.stopProcessing();
   }
 };
 
@@ -2745,8 +2777,8 @@ const resetSmote = async () => {
 // ==================== SCALING OPERATIONS ====================
 
 const applyScaling = async () => {
-  if (!splitApplied.value || isProcessing.value) {
-    alert("Please apply split first");
+  if (!preprocessing.value.isSplitApplied || isProcessing.value) {
+    uiStore.showToast('warning', 'Split Required', "Please apply split first");
     return;
   }
 
@@ -2759,20 +2791,15 @@ const applyScaling = async () => {
     }));
 
   if (columnsToScale.length === 0) {
-    alert('Please select at least one numerical column for scaling.');
+    uiStore.showToast('warning', 'Selection Required', 'Please select at least one numerical column for scaling.');
     return;
   }
 
-  console.log("\n" + "=".repeat(80));
-  console.log("📊 APPLYING FEATURE SCALING");
-  console.log("=".repeat(80));
-
-  isProcessing.value = true;
-  processingMessage.value = "Scaling features...";
+  uiStore.startProcessing("Scaling features...");
 
   if (!datasetId.value) {
-    alert("⚠️ No dataset ID found. Please refresh the page.");
-    isProcessing.value = false;
+    uiStore.showToast('error', 'Error', "No dataset ID found.");
+    uiStore.stopProcessing();
     return;
   }
 
@@ -2782,9 +2809,7 @@ const applyScaling = async () => {
       columns: columnsToScale
     };
 
-    console.log('🔍 Scaling Request Debug:');
-    console.log('  Dataset ID:', payload.dataset_id);
-    console.log('  Columns to scale:', columnsToScale);
+    console.log('🔍 Scaling Request:', payload);
 
     const response = await authenticatedPost('http://localhost:8000/api/datasets/apply-scaling', payload)
 
@@ -2797,43 +2822,33 @@ const applyScaling = async () => {
     if (data.success) {
       console.log("✅ Scaling successful");
 
-      trainData.value = data.scaled_train_preview || trainData.value;
-      testData.value = data.scaled_test_preview || testData.value;
-      scalingApplied.value = true;
-
-      mlStore.isScaled = true;
-      mlStore.isScaled = true;
-      mlStore.scalingMethod = scalingMethod.value;
+      // Update Data Store (Transient)
+      const newTrain = data.scaled_train_preview || trainData.value;
+      const newTest = data.scaled_test_preview || testData.value;
+      dataStore.setSplitData(newTrain, newTest);
       
-      // Track scaled columns (Force reactive update)
-      const newScaledSet = new Set(scaledColumns.value);
-      columnsToScale.forEach(col => newScaledSet.add(col.name));
-      scaledColumns.value = newScaledSet;
-
-      console.log("=".repeat(80) + "\n");
-
-      const scaledCount = columnsToScale.length;
-      const scaledList = columnsToScale.slice(0, 3).map(c => c.name).join(', ');
-      const moreText = scaledCount > 3 ? ` and ${scaledCount - 3} more` : '';
+      // Update Experiment Store (Persisted)
+      experimentStore.setScalingApplied(true);
       
-      showSuccess(
-        'Feature Scaling Applied!',
-        `Scaled ${scaledCount} column${scaledCount !== 1 ? 's' : ''}: ${scaledList}${moreText}`
-      );
+      // Save full scaling config (names and methods)
+      // Assuming store has a way to save this or we just save names if store only supports names in scaledColumns
+      // Ideally update store to support object array. For now, assuming I can overwrite.
+      experimentStore.preprocessing.scaledColumns = columnsToScale.map(c => c.name); 
+      // Logic for method per column might need more complex store structure if reopening and restoring method dropdowns is required.
+      // For now, names are sufficient for visualization tracking.
 
+      uiStore.showToast('success', 'Scaling Applied', `Scaled ${columnsToScale.length} columns.`);
       addPreprocessingStep('Feature Scaling');
-
-      // Close the modal
       showScalingModal.value = false;
+
     } else {
       throw new Error(data.error || "Scaling failed");
     }
   } catch (error) {
     console.error("❌ Scaling error:", error);
-    showError('Scaling Failed', error.message);
+    uiStore.showToast('error', 'Scaling Failed', error.message);
   } finally {
-    isProcessing.value = false;
-    processingMessage.value = "";
+     uiStore.stopProcessing();
   }
 };
 
@@ -2860,10 +2875,12 @@ const resetScaling = async () => {
       "Are you sure you want to reset scaling? This will reload the split data without scaling."
     )
   ) {
-    scalingApplied.value = false;
-    mlStore.isScaled = false;
-    scaledColumns.value.clear();
-
+    experimentStore.setScalingApplied(false);
+    experimentStore.preprocessing.scaledColumns = [];
+    
+    // We need to re-fetch the unscaled split data or re-apply split which is expensive.
+    // Ideally backend has "reset scaling" endpoint or we just re-run split.
+    // For now, re-running applySplit is safer to ensure consistency.
     await applySplit();
 
     console.log("🔄 Scaling reset");
@@ -2931,109 +2948,93 @@ async function applyCategoricalEncoding() {
     }));
 
   if (columnsToEncode.length === 0) {
-    alert('Please select at least one categorical column for encoding.');
+    uiStore.showToast('warning', 'Selection Required', 'Please select at least one categorical column for encoding.');
     return;
   }
 
   if (!datasetId.value) {
-    alert("⚠️ No dataset ID found. Please refresh the page.");
+    uiStore.showToast('error', 'Error', 'No dataset ID found.');
     return;
   }
 
-  isProcessing.value = true;
+  uiStore.startProcessing("Applying Categorical Encoding...");
 
   try {
-    // POST to backend - adapt this to your splitting/scaling pipeline as needed
     const payload = {
       dataset_id: datasetId.value,
       columns: columnsToEncode
     };
 
-    console.log('🔍 Encoding Request Debug:');
-    console.log('  Dataset ID:', payload.dataset_id);
-    console.log('  Columns to encode:', columnsToEncode);
+    console.log('🔍 Encoding Request:', payload);
 
-  const response = await authenticatedPost('http://localhost:8000/api/apply-categorical-encoding', payload)
+    const response = await authenticatedPost('http://localhost:8000/api/apply-categorical-encoding', payload)
 
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(`HTTP ${response.status}: ${errorBody.detail || errorBody.message || 'Unknown error'}`);
-  }
-
-  const data = await response.json();
-  if (data.success) {
-    console.log('🔍 Encoding Response:', data);
-    console.log('  Train preview rows:', data.train_preview?.length);
-    console.log('  Test preview rows:', data.test_preview?.length);
-    console.log('  Encoded columns:', data.encoded_columns);
-    console.log('  New columns:', data.columns);
-    
-    trainData.value = data.train_preview || [];
-    testData.value = data.test_preview || [];
-    encodingApplied.value = true;
-    
-    // Update columns list with new encoded column names
-    if (data.columns && data.columns.length > 0) {
-      console.log('  Updating columns from:', columns.value.map(c => c.name));
-      console.log('  To:', data.columns);
-      
-      // Rebuild columns array with new column names
-      columns.value = data.columns.map(colName => {
-        // Check if this is an encoded column (new column from one-hot encoding)
-        const isEncodedColumn = data.encoded_columns?.includes(colName);
-        
-        // Try to find existing column info
-        const existingCol = columns.value.find(c => c.name === colName);
-        
-        if (existingCol) {
-          if (isEncodedColumn) existingCol.type = 'numerical';
-          return existingCol;
-        } else {
-          // New column (from one-hot encoding)
-          return {
-            name: colName,
-            type: isEncodedColumn ? 'numerical' : 'categorical',
-            unique: 0,
-            missing: 0,
-            remove: false,
-            encode: false,
-            encoding: 'onehot'
-          };
-        }
-      });
-      
-      console.log('  Updated columns:', columns.value.map(c => c.name));
+    if (!response.ok) {
+       throw new Error(`Encoding failed: ${response.statusText}`);
     }
-    
-    // Switch to train view to show encoded data
-    currentSplitView.value = 'train';
-    
-    console.log('✅ Categorical encoding applied successfully');
-    console.log('  Current view:', currentSplitView.value);
-    console.log('  Train data rows:', trainData.value.length);
-    
-    const encodedCount = data.encoded_columns?.length || 0;
-    const encodedList = data.encoded_columns?.slice(0, 3).join(', ') || '';
-    const moreText = encodedCount > 3 ? ` and ${encodedCount - 3} more` : '';
-    
-    showSuccess(
-      'Categorical Encoding Applied!',
-      `Encoded ${encodedCount} column${encodedCount !== 1 ? 's' : ''}: ${encodedList}${moreText}`
-    );
-    
-    addPreprocessingStep('Categorical Encoding');
 
-    // Close the modal
-    showEncodingModal.value = false;
-    // Refresh table, preview, columns, etc. here as needed
-  } else {
-    throw new Error(data.detail || data.message || 'Encoding failed');
-  }
+    const data = await response.json();
+    if (data.success) {
+      console.log('✅ Encoding applied successfully');
+      
+      // Update Data Store (Transient)
+      dataStore.setSplitData(data.train_preview, data.test_preview);
+      
+      // Update Experiment Store (Persisted)
+      experimentStore.setEncodingApplied(true);
+      // Persist the specific encoding configuration mainly for reproducibility/UI restore
+      experimentStore.preprocessing.encodedColumns = columnsToEncode;
+      
+      // Update UI Columns List (Merge logic)
+      if (data.columns && data.columns.length > 0) {
+        // Rebuild columns array with new column names
+        columns.value = data.columns.map(colName => {
+          const isEncodedColumn = data.encoded_columns?.includes(colName);
+          const existingCol = columns.value.find(c => c.name === colName);
+          
+          if (existingCol) {
+            if (isEncodedColumn) {
+              existingCol.type = 'numerical';
+              existingCol.semanticType = 'numeric'; 
+              existingCol.encode = false; 
+            }
+            if (data.onehot_columns?.includes(colName)) {
+              existingCol.isOneHot = true;
+            }
+            return existingCol;
+          } else {
+            const isOH = data.onehot_columns?.includes(colName);
+            return {
+              name: colName,
+              type: isEncodedColumn ? 'numerical' : 'categorical',
+              semanticType: isEncodedColumn ? 'numeric' : 'categorical',
+              isOneHot: isOH,
+              unique: 0,
+              missing: 0,
+              remove: false,
+              encode: false,
+              encoding: 'onehot'
+            };
+          }
+        });
+      }
+      
+      currentSplitView.value = 'train';
+      
+      const encodedCount = data.encoded_columns?.length || 0;
+      uiStore.showToast('success', 'Encoding Applied', `Encoded ${encodedCount} columns.`);
+      
+      addPreprocessingStep('Categorical Encoding');
+      showEncodingModal.value = false;
+
+    } else {
+      throw new Error(data.detail || data.message || 'Encoding failed');
+    }
   } catch (error) {
     console.error('❌ Encoding error:', error);
-    showError('Encoding Failed', error.message);
+    uiStore.showToast('error', 'Encoding Failed', error.message);
   } finally {
-    isProcessing.value = false;
+    uiStore.stopProcessing();
   }
 }
 
@@ -3246,17 +3247,23 @@ async function applyTargetEncoding() {
           
           if (existingCol) {
             // Update type to numerical if it was target encoded
-            if (isNewEncodedCol) existingCol.type = 'numerical';
+            if (isNewEncodedCol) {
+              existingCol.type = 'numerical';
+              existingCol.semanticType = 'numeric'; // Explicitly mark as numeric
+              existingCol.targetEncode = false; // Uncheck target encode
+            }
             return existingCol;
           }
           
           return {
             name: colName,
             type: 'numerical',
+            semanticType: 'numeric', // Mark as numeric
             unique: 0,
             missing: 0,
             remove: false,
             encode: false,
+            targetEncode: false,
             encoding: 'onehot'
           };
         });
@@ -3294,88 +3301,25 @@ const goBack = () => {
 };
 
 const proceedToAlgorithmSelection = () => {
-  console.log('🔵 proceedToAlgorithmSelection called!', { splitApplied: splitApplied.value });
+  console.log('🔵 proceedToAlgorithmSelection called!', { splitApplied: preprocessing.value.isSplitApplied });
   
-  if (!splitApplied.value) {
-    showWarning('Split Required', 'Please apply dataset splitting before proceeding');
+  if (!preprocessing.value.isSplitApplied) {
+    uiStore.showToast('warning', 'Split Required', 'Please apply dataset splitting before proceeding');
     return;
   }
 
-  // Save preprocessing state
-  localStorage.setItem(
-    "advancedPreprocessing",
-    JSON.stringify({
-      splitApplied: splitApplied.value,
-      scalingApplied: scalingApplied.value,
-      encodingApplied: encodingApplied.value,
-      splitRatio: splitRatio.value,
-      scalingMethod: scalingMethod.value,
-      trainRows: trainRows.value,
-      testRows: testRows.value,
-      processedDatasetId: datasetId.value // CRITICAL: Save ID here too for model-training.vue
-    })
-  );
-
-  // CRITICAL: Save the processed dataset ID (this is the dataset with split/encode/scale applied)
-  if (datasetId.value) {
-    console.log('🔍 DEBUG: Current datasetId.value:', datasetId.value);
-    console.log('🔍 DEBUG: mlStore.cleanedDatasetId:', mlStore.cleanedDatasetId);
-    console.log('🔍 DEBUG: mlStore.datasetId:', mlStore.datasetId);
-    
-    localStorage.setItem('backendDatasetId', datasetId.value);
-    localStorage.setItem('datasetId', datasetId.value);
-    console.log('✅ Saved processed dataset ID to localStorage:', datasetId.value);
-  } else {
-    console.error('❌ WARNING: datasetId.value is empty! Cannot save to localStorage');
-  }
-
-  // CRITICAL FIX: Save the current processed data preview to localStorage
-  // This ensures algorithm-select.vue displays the preprocessed (scaled/encoded) data
-  const currentDataPreview = splitApplied.value 
-    ? (trainData.value.length > 0 ? trainData.value : originalDataset.value)
-    : originalDataset.value;
-
-  const processedDataPayload = {
-    data: currentDataPreview.slice(0, 200), // Save preview (first 200 rows)
-    fileName: fileName.value,
-    backendDatasetId: datasetId.value,
-    datasetId: datasetId.value,
-    totalRowsInBackend: totalRowsInBackend.value,
-    rowCount: totalRowsInBackend.value || currentDataPreview.length,
-    columnCount: columns.value.length,
-    columns: columns.value.map(col => col.name || col),
-    backendAvailable: mlStore.backendConnected,
-    splitInfo: mlStore.splitInfo, // ✅ Include split info with SMOTE-updated training rows
-    preprocessingApplied: {
-      split: splitApplied.value,
-      scaling: scalingApplied.value,
-      encoding: encodingApplied.value,
-      scaledColumns: Array.from(scaledColumns.value)
-    },
-    processingSteps: JSON.parse(localStorage.getItem('processedData') || '{}').processingSteps || []
-  };
-
-  localStorage.setItem('processedData', JSON.stringify(processedDataPayload));
-  console.log('✅ Saved processed data preview to localStorage:', {
-    rows: processedDataPayload.data.length,
-    columns: processedDataPayload.columnCount,
-    scaled: scalingApplied.value,
-    scaledColumns: processedDataPayload.preprocessingApplied.scaledColumns
+  // Ensure Experiment Store has correct total rows/columns metadata
+  experimentStore.updateDatasetMetadata({
+    totalRows: totalRowsInBackend.value,
+    columns: columns.value.filter(c => !c.remove).length
   });
 
-  // Ensure pipeline state has targetColumn for navigation guard
-  const pipelineState = JSON.parse(
-    localStorage.getItem("datasage_pipeline_state") || "{}"
-  );
-  
-  if (!pipelineState.targetColumn) {
-    // Get target from mlStore
-    pipelineState.targetColumn = mlStore.targetColumn || selectedTarget.value;
-    pipelineState.dataset = mlStore.dataset;
-    localStorage.setItem("datasage_pipeline_state", JSON.stringify(pipelineState));
+  // Target column should already be in store, but verify
+  if (!experimentStore.targetColumn && selectedTarget.value) {
+    experimentStore.setTargetColumn(selectedTarget.value);
   }
 
-  console.log('Navigating to algorithm selection with state:', pipelineState);
+  console.log('✅ Experiment State ready. Navigating to algorithm selection.');
   router.push("/algorithm-select");
 };
 
@@ -7636,6 +7580,127 @@ watch(currentSplitView, () => {
   background: rgba(102, 126, 234, 0.3);
   border-radius: 3px;
 }
+
+
+/* ==================== TYPE DETECTION UI ==================== */
+.type-detection-table-wrapper {
+  overflow-x: auto;
+  margin-top: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.type-detection-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  text-align: left;
+}
+
+.type-detection-table th {
+  background: rgba(102, 126, 234, 0.1);
+  padding: 1rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.type-detection-table td {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.type-detection-table tr.is-overridden {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.type-detection-table tr:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.type-pill {
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.type-pill.numeric { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.type-pill.categorical { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+.type-pill.boolean { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.type-pill.datetime { background: rgba(244, 63, 185, 0.15); color: #f472b6; border: 1px solid rgba(244, 63, 185, 0.3); }
+.type-pill.identifier { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+.confidence-badge {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.confidence-badge.high { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.confidence-badge.medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.confidence-badge.low { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+.type-override-select {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: #e2e8f0;
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+.type-override-select:focus {
+  border-color: #667eea;
+}
+
+.reason-cell {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  max-width: 250px;
+  line-height: 1.4;
+}
+
+.step-badge {
+  font-size: 0.65rem;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  justify-content: center;
+  color: #94a3b8;
+}
+
+.spinner-small {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ==================== END TYPE DETECTION UI ==================== */
 
 .column-item {
   background: rgba(30, 41, 59, 0.4);

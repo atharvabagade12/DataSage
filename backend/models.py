@@ -31,6 +31,7 @@ class Dataset(Base):
     size_bytes = Column(Integer)
     is_processed = Column(Boolean, default=False)
     parent_dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
+    column_metadata = Column(JSON, nullable=True) # stores semantic types and overrides
     
     owner = relationship("User", back_populates="datasets")
     models = relationship("Model", back_populates="dataset")

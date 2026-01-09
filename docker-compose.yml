@@ -1,0 +1,60 @@
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:17-alpine
+    container_name: datasage_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-datasage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datasage_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-datasage_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # Expose for debugging (optional)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datasage} -d ${POSTGRES_DB:-datasage_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - datasage_network
+    restart: unless-stopped
+
+  # Backend FastAPI Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: datasage_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-datasage}:${POSTGRES_PASSWORD:-datasage_dev_password}@postgres:5432/${POSTGRES_DB:-datasage_db}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      ALGORITHM: ${ALGORITHM:-HS256}
+    volumes:
+      # Mount source code for hot reload
+      - ./backend:/app
+      # Mount storage for uploaded datasets
+      - ./storage:/app/storage
+      # Preserve Python cache (optional, for faster reloads)
+      - backend_pycache:/app/__pycache__
+    ports:
+      - "8000:8000"
+    networks:
+      - datasage_network
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+  backend_pycache:
+    driver: local
+
+# Custom network for service communication
+networks:
+  datasage_network:
+    driver: bridge

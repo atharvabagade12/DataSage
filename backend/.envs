@@ -1,0 +1,15 @@
+# Database Configuration
+DATABASE_URL=postgresql://atharva:ilikec%40123@localhost:5432/DataSage_DataBase
+
+# Security
+SECRET_KEY=6253434262524328352838362
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# API Configuration
+API_HOST=127.0.0.1
+API_PORT=8000
+DEBUG=True
+
+# Frontend URL
+FRONTEND_URL=http://localhost:3000

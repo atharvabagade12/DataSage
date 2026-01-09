@@ -864,13 +864,23 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { Chart, registerables } from "chart.js";
-import { useMLDataFlowStore } from '~/stores/mlDataFlow';
+import { storeToRefs } from "pinia";
+import { useExperimentStore } from "@/stores/experiment";
 import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch';
 Chart.register(...registerables);
 
 const router = useRouter();
 const route = useRoute();
 const { authenticatedGet } = useAuthenticatedFetch();
+const experimentStore = useExperimentStore();
+
+const { 
+  datasetId: storeDatasetId, 
+  targetColumn: storeTargetColumn, 
+  problemType: storeProblemType, 
+  selectedAlgorithm: storeAlgorithm,
+  datasetMetadata
+} = storeToRefs(experimentStore);
 
 // State
 const isInitializing = ref(true);
@@ -880,7 +890,6 @@ const backendConnected = ref(null);
 const currentStageTitle = ref('Ready to Start Training');
 const currentStageMessage = ref('Click Start Training to begin');
 const currentProcessingStep = ref('Initializing...');
-const mlDataFlow = useMLDataFlowStore();
 const trainingPhase = ref('configuration');
 
 // Config
@@ -2333,95 +2342,82 @@ const goBack = () => {
 
 const loadConfiguration = async () => {
   try {
-    console.log("Loading configuration from localStorage...");
+    // 1. Get Dataset ID (Priority: URL > Store > LocalStorage Legacy)
+    const queryDatasetId = route.query.datasetId || route.query.backendDatasetId;
+    
+    if (queryDatasetId) {
+      datasetId.value = queryDatasetId;
+    } else if (storeDatasetId.value) {
+      datasetId.value = storeDatasetId.value;
+    } else {
+      // Fallback
+      datasetId.value = localStorage.getItem("datasetId") || localStorage.getItem("backendDatasetId");
+    }
 
-    // Load all configuration items
-    const storedAlgorithm = localStorage.getItem("selectedAlgorithm");
-    const storedProblemType = localStorage.getItem("problemType");
-    const storedDatasetStats = localStorage.getItem("datasetStats");
-    const storedBackendDatasetId = localStorage.getItem("backendDatasetId");
-    const storedDatasetId = localStorage.getItem("datasetId");
-    const storedPreprocessing = localStorage.getItem("preprocessingState");
-    const storedTarget = localStorage.getItem("selectedTarget");
+    if (!datasetId.value) {
+      addLog("error", "No Dataset ID found. Please go back and select a dataset.");
+    }
 
-    if (!storedAlgorithm) {
-      console.warn("No algorithm found in localStorage");
-      
-      
-      // Set default for testing if missing
+    // 2. Algorithm Configuration
+    if (storeAlgorithm.value) {
       modelConfig.value = {
-        algorithm: { name: "Random Forest", type: "ensemble" }
+        algorithm: storeAlgorithm.value
       };
     } else {
-      const algorithm = JSON.parse(storedAlgorithm);
-      modelConfig.value = {
-        algorithm: algorithm
-      };
+      // Fallback
+      const storedAlgo = localStorage.getItem("selectedAlgorithm");
+      if (storedAlgo) {
+         modelConfig.value = { algorithm: JSON.parse(storedAlgo) };
+         // Sync back to store
+         experimentStore.setAlgorithm(modelConfig.value.algorithm);
+      } else {
+         modelConfig.value = { algorithm: { name: "Random Forest", type: "ensemble" } }; // Default
+      }
     }
 
-    // Load other details
-    if (storedProblemType) {
-      const pt = JSON.parse(storedProblemType);
-      problemType.value = pt.type || "classification";
-      modelConfig.value.problemType = pt;
+    // 3. Problem Type
+    if (storeProblemType.value && storeProblemType.value.type) {
+      problemType.value = storeProblemType.value.type;
+      modelConfig.value.problemType = storeProblemType.value;
+    } else {
+       const storedPT = localStorage.getItem("problemType");
+       if (storedPT) {
+         const pt = JSON.parse(storedPT);
+         problemType.value = pt.type || "classification";
+         modelConfig.value.problemType = pt;
+       }
     }
 
-    if (storedDatasetStats) {
-      datasetStats.value = JSON.parse(storedDatasetStats);
-      modelConfig.value.datasetStats = datasetStats.value;
-    }
-
-    // CRITICAL: Check URL query parameters first (most robust)
-    const queryDatasetId = route.query.datasetId;
-    const queryBackendDatasetId = route.query.backendDatasetId;
-
-    if (queryDatasetId && queryDatasetId !== "null" && queryDatasetId !== "undefined") {
-      datasetId.value = queryDatasetId;
-    } else if (queryBackendDatasetId && queryBackendDatasetId !== "null" && queryBackendDatasetId !== "undefined") {
-      datasetId.value = queryBackendDatasetId;
+    // 4. Target Column
+    if (storeTargetColumn.value) {
+       modelConfig.value.target = storeTargetColumn.value;
+    } else {
+       const storedTarget = localStorage.getItem("selectedTarget");
+       if (storedTarget) {
+          modelConfig.value.target = JSON.parse(storedTarget);
+       }
     }
     
-    if (datasetId.value) {
-      modelConfig.value.backendDatasetId = datasetId.value;
-      console.log("✅ Using dataset ID from URL query:", datasetId.value);
+    // 5. Statistics
+    if (datasetMetadata.value) {
+      datasetStats.value = {
+        rows: datasetMetadata.value.totalRows || 0,
+        features: datasetMetadata.value.columns || 0
+      };
+      modelConfig.value.datasetStats = datasetStats.value;
+    } else {
+       const storedStats = localStorage.getItem("datasetStats");
+       if (storedStats) {
+         datasetStats.value = JSON.parse(storedStats);
+         modelConfig.value.datasetStats = datasetStats.value;
+       }
     }
-    // If not in URL, check preprocessing state
-    else if (storedPreprocessing) {
-      const prep = JSON.parse(storedPreprocessing);
-      if (prep.scaling) selectedScaling.value = prep.scaling;
-      
-      // Use processed dataset ID if available (this is the split/encoded/scaled dataset)
-      if (prep.processedDatasetId) {
-        datasetId.value = prep.processedDatasetId;
-        modelConfig.value.backendDatasetId = prep.processedDatasetId;
-        console.log("✅ Using processed dataset ID from localStorage:", prep.processedDatasetId);
-      }
-    }
-
-    // Fallback to stored dataset IDs if not found in URL or preprocessing state
-    if (!datasetId.value) {
-      if (storedBackendDatasetId) {
-        datasetId.value = storedBackendDatasetId;
-        modelConfig.value.backendDatasetId = storedBackendDatasetId;
-        console.log("falling back to backend dataset ID:", storedBackendDatasetId);
-      } else if (storedDatasetId) {
-        datasetId.value = storedDatasetId;
-        modelConfig.value.backendDatasetId = storedDatasetId;
-        console.log("falling back to dataset ID:", storedDatasetId);
-      }
-    }
-
-    // Load target column information
-    if (storedTarget) {
-      const target = JSON.parse(storedTarget);
-      modelConfig.value.target = target;
-      console.log("✅ Target column loaded:", target.name);
-    }
-
-    console.log("✅ Configuration loaded:", modelConfig.value);
     
     // Initialize hyperparameters after loading config
     initializeHyperparameters();
+
+    // Update Store with any resolved values if they were missing
+    if (!storeDatasetId.value && datasetId.value) experimentStore.setDatasetId(datasetId.value);
 
   } catch (error) {
     console.error("Failed to load configuration:", error);

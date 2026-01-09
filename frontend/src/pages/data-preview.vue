@@ -323,6 +323,36 @@
           </Card>
 
           <div class="preprocessing-grid">
+            <!-- ========== CARD 0: DATA TYPE DETECTION & CONVERSION ========== -->
+            <Card class="preprocessing-tool-card" hover>
+              <div class="tool-header">
+                <div class="tool-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10,10-4.48,10-10S17.52,2,12,2z M13,17h-2v-2h2v2z M13,13h-2V7h2V13z"/>
+                  </svg>
+                </div>
+                <div class="tool-info">
+                  <h3>
+                    Type Detection & Conversion
+                    <span class="step-badge">Source of Truth</span>
+                  </h3>
+                  <p>Verify and override semantic data types for all downstream tools</p>
+                </div>
+                <div class="tool-badge success-badge">
+                  ✓ Active
+                </div>
+              </div>
+              
+              <div class="tool-footer">
+                <Button variant="primary" @click="openTypeDetectionModal">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,9L10,9L10,11L12,11L12,13L14,13L14,11L16,11L16,9L14,9L14,7L12,7L12,9Z M7,9L9,9L9,11L7,11L7,9Z M21,3h-18c-1.1,0-2,0.9-2,2v14c0,1.1,0.9,2,2,2h18c1.1,0,2-0.9,2-2v-14c0-1.1-0.9-2-2-2z M21,19h-18v-14h18v14z"/>
+                  </svg>
+                  Manage Types
+                </Button>
+              </div>
+            </Card>
+
             <!-- Column Selection Tool - REFACTORED WITH MODAL -->
             <Card class="preprocessing-tool-card" hover>
               <div class="tool-header">
@@ -385,6 +415,9 @@
                       <span class="column-type-badge" :class="`type-${column.type}`">
                         {{ column.type }}
                       </span>
+                      <span class="semantic-type-pill" :class="getColumnSemanticType(column.name)" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1);">
+                        {{ getColumnSemanticType(column.name).toUpperCase() }}
+                      </span>
                     </div>
                     
                     <div class="column-card-body">
@@ -410,7 +443,7 @@
                     </div>
                     
                     <div v-if="column.remove" class="column-remove-badge">
-                      Will be removed
+                      {{ getColumnSemanticType(column.name) === 'identifier' ? 'Identifier - Recommended Removal' : 'Will be removed' }}
                     </div>
                   </Card>
                 </div>
@@ -507,7 +540,6 @@
                     </div>
                   </div>
                 </Card>
-                
                 <!-- Per-Column Strategies -->
                 <div class="columns-flex-modal" v-show="missingColumnsDetailed.length > 0">
                   <Card 
@@ -529,6 +561,9 @@
                         </svg>
                         {{ col.count }} missing ({{ col.percentage }}%)
                       </span>
+                      <span class="semantic-type-pill" :class="col.semanticType" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.1);">
+                        {{ col.semanticType || 'unknown' }}
+                      </span>
                     </div>
                     
                     <select 
@@ -536,24 +571,26 @@
                       @change="updateMissingStrategy(col.name, col.strategy)"
                       class="native-select-strategy"
                     >
-                      <option value="droprows">Drop Rows</option>
-                      <option value="fillmean" :disabled="col.type !== 'numerical'">
-                        Fill with Mean {{ col.type !== 'numerical' ? '(numerical only)' : '' }}
-                      </option>
-                      <option value="fillmedian" :disabled="col.type !== 'numerical'">
-                        Fill with Median {{ col.type !== 'numerical' ? '(numerical only)' : '' }}
-                      </option>
-                      <option value="fillmode">Fill with Mode (most frequent)</option>
-                      <option value="fillzero">Fill with Zero</option>
-                      <option value="fillunknown">Fill with "Unknown"</option>
-                      <option value="keep">Keep Missing (not recommended)</option>
+                      <!-- Rule: Identifier MUST be dropped -->
+                      <option v-if="col.semanticType === 'identifier'" value="droprows">Drop Rows (Mandatory for IDs)</option>
+                      
+                      <!-- Standard options for others -->
+                      <template v-else>
+                        <option value="droprows">Drop Rows</option>
+                        <option value="fillmean" v-if="col.semanticType === 'numeric'">Fill with Mean</option>
+                        <option value="fillmedian" v-if="col.semanticType === 'numeric'">Fill with Median</option>
+                        <option value="fillmode" v-if="['categorical', 'boolean'].includes(col.semanticType)">Fill with Mode</option>
+                        <option value="fillzero" v-if="['numeric', 'boolean'].includes(col.semanticType)">Fill with Zero</option>
+                        <option value="fillunknown" v-if="['categorical', 'datetime'].includes(col.semanticType)">Fill with "Unknown"</option>
+                      </template>
+                      <option value="keep">Keep Missing (Not Recommended)</option>
                     </select>
                     
-                    <p class="strategy-hint">{{ getStrategyDescription(col.strategy, col.type) }}</p>
+                    <p class="strategy-hint" style="font-size: 0.75rem; color: #b3b3d1; margin-top: 0.5rem;">
+                      {{ getStrategyDescription(col.strategy, col.type) }}
+                    </p>
                   </Card>
                 </div>
-                
-                <!-- No Missing Values -->
                 <Card v-show="missingColumnsDetailed.length === 0">
                   <div class="no-data-message">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-success)">
@@ -791,6 +828,73 @@
                   @click="applyDuplicateRemoval"
                 >
                   Remove Duplicates
+                </Button>
+              </template>
+            </Modal>
+
+            <!-- Data Type Detection Modal -->
+            <Modal v-model="showTypeDetectionModal" title="Data Type Detection & Verification" size="xl">
+              <div class="modal-section">
+                <div class="info-alert" style="margin-bottom: 1.5rem; display: flex; gap: 1rem; background: rgba(102, 126, 234, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(102, 126, 234, 0.2);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#667eea" style="flex-shrink: 0;">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  </svg>
+                  <div>
+                    <strong style="color: #e2e8f0; display: block; margin-bottom: 0.25rem;">Why verify data types?</strong>
+                    <p style="color: #94a3b8; font-size: 0.875rem; margin: 0;">Incorrect data types lead to ML errors. Categorical data treated as numeric can skew scaling, and identifiers should never be used as features. Setting correct types here ensures all other tools (imputers, scalers, encoders) behave correctly.</p>
+                  </div>
+                </div>
+
+                <div v-if="isDetectingTypes" class="loading-inline" style="display: flex; align-items: center; justify-content: center; padding: 3rem; gap: 1rem; color: #94a3b8;">
+                  <div class="spinner-small" style="width: 24px; height: 24px; border: 2px solid rgba(102, 126, 234, 0.2); border-top: 2px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                  <span>Analyzing dataset columns...</span>
+                </div>
+
+                <div v-else class="type-detection-table-wrapper" style="overflow-x: auto; background: rgba(15, 23, 42, 0.4); border-radius: 12px; border: 1px solid rgba(102, 126, 234, 0.2);">
+                  <table class="type-detection-table" style="width: 100%; border-collapse: collapse; font-size: 0.9rem; color: #e2e8f0; text-align: left;">
+                    <thead>
+                      <tr style="background: rgba(102, 126, 234, 0.1);">
+                        <th style="padding: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;">Column</th>
+                        <th style="padding: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;">Raw Type</th>
+                        <th style="padding: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;">Detected Semantic Type</th>
+                        <th style="padding: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;">Confidence</th>
+                        <th style="padding: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;">Reasoning</th>
+                        <th style="padding: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; font-size: 0.75rem;">Action / Override</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="col in semanticTypes" :key="col.column" :class="{ 'is-overridden': col.is_override }" style="border-bottom: 1px solid rgba(102, 126, 234, 0.1);">
+                        <td style="padding: 1rem; font-weight: 500;">{{ col.column }}</td>
+                        <td style="padding: 1rem;"><code style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 4px;">{{ col.raw_dtype }}</code></td>
+                        <td style="padding: 1rem;">
+                          <span :class="['type-pill', col.semantic_type]" style="padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; display: inline-block;">
+                            {{ col.semantic_type.toUpperCase() }}
+                          </span>
+                        </td>
+                        <td style="padding: 1rem;">
+                          <span :class="['confidence-badge', col.confidence]" style="padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: capitalize;">
+                            {{ col.confidence }}
+                          </span>
+                        </td>
+                        <td style="padding: 1rem; color: #94a3b8; font-size: 0.8rem; line-height: 1.4; max-width: 250px;">{{ col.reason }}</td>
+                        <td style="padding: 1rem;">
+                          <select v-model="col.semantic_type" @change="col.is_override = true" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(102, 126, 234, 0.3); color: #e2e8f0; padding: 0.5rem; border-radius: 8px; font-size: 0.85rem; width: 100%;">
+                            <option value="numeric">Numeric</option>
+                            <option value="categorical">Categorical</option>
+                            <option value="boolean">Boolean</option>
+                            <option value="datetime">Datetime</option>
+                            <option value="identifier">Identifier (Rule Out)</option>
+                          </select>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <template #footer>
+                <Button variant="ghost" @click="showTypeDetectionModal = false">Cancel</Button>
+                <Button variant="primary" :loading="isProcessing" @click="saveSemanticOverrides">
+                  Save & Apply Globally
                 </Button>
               </template>
             </Modal>
@@ -1163,12 +1267,65 @@ const showDuplicateModal = ref(false);
 const showOutlierModal = ref(false);
 const showEncodingModal = ref(false);
 const showResetModal = ref(false);
+const showTypeDetectionModal = ref(false);
+const semanticTypes = ref([]);
+const isDetectingTypes = ref(false);
 
 const categoricalEncodingState = ref([]);
+const detectedCategoricalColumns = ref([]);
+const categoricalColumns = ref([]);
 
 
 
 
+
+
+// ===== TYPE DETECTION METHODS =====
+const openTypeDetectionModal = async () => {
+    showTypeDetectionModal.value = true;
+    if (semanticTypes.value.length === 0) {
+        await fetchSemanticTypes();
+    }
+};
+
+const fetchSemanticTypes = async () => {
+    if (!datasetId.value) return;
+    try {
+        isDetectingTypes.value = true;
+        const response = await authenticatedGet(`/api/datasets/${datasetId.value}/semantic-types`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        semanticTypes.value = data.column_types || [];
+    } catch (error) {
+        console.error("Error fetching semantic types:", error);
+        showError("Failed to detect column types");
+    } finally {
+        isDetectingTypes.value = false;
+    }
+};
+
+const saveSemanticOverrides = async () => {
+    if (!datasetId.value) return;
+    try {
+        isProcessing.value = true;
+        processingMessage.value = "Saving data type overrides...";
+        const response = await authenticatedPost(`/api/datasets/${datasetId.value}/semantic-types/override`, semanticTypes.value);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        showSuccess("Data types updated successfully. All preprocessing tools will now follow these types.");
+        showTypeDetectionModal.value = false;
+        
+        // Refresh statistics and categorical detection
+        await fetchCompleteStatisticsFromBackend();
+        detectCategoricalColumns();
+    } catch (error) {
+        console.error("Error saving overrides:", error);
+        showError("Failed to save data type overrides");
+    } finally {
+        isProcessing.value = false;
+        processingMessage.value = "";
+    }
+};
 
 
 // Helper methods for column operations
@@ -1563,9 +1720,7 @@ const dataQuality = computed(() => {
   return { score };
 });
 
-const categoricalColumns = computed(() => {
-  return columns.value.filter((col) => col.type === "categorical");
-});
+// categoricalColumns is now a ref updated by detectCategoricalColumns
 
 const duplicateStats = computed(() => {
   // Prefer backend statistics if available
@@ -1659,45 +1814,45 @@ const outlierStats = computed(() => {
   }
 
   // Fallback to frontend calculation on preview data
-  const dataset = datasetForAnalysis.value;
+  const dataset = showOriginal.value ? originalDataset.value : cleanedDataset.value;
   if (!dataset || dataset.length === 0) {
     return { count: 0 };
   }
 
   let count = 0;
-  const columnsToCheck = showOriginal.value
-    ? columns.value
-    : getCleanedColumns.value.map(
-        (name) =>
-          columns.value.find((c) => c.name === name) || {
-            name,
-            type: "categorical",
-          }
-      );
+  
+  numericalColumns.value.forEach((col) => {
+    const colName = col.name;
+    const values = dataset
+      .map((row) => parseFloat(row[colName]))
+      .filter((val) => !isNaN(val));
 
-  columnsToCheck
-    .filter((col) => col.type === "numerical")
-    .forEach((col) => {
-      const colName = typeof col === "string" ? col : col.name;
-      const values = dataset
-        .map((row) => parseFloat(row[colName]))
-        .filter((val) => !isNaN(val) && isFinite(val))
-        .sort((a, b) => a - b);
-
-      if (values.length === 0) return;
-
-      const q1 = values[Math.floor(values.length * 0.25)];
-      const q3 = values[Math.floor(values.length * 0.75)];
+    if (values.length > 5) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const q1 = sorted[Math.floor(sorted.length * 0.25)];
+      const q3 = sorted[Math.floor(sorted.length * 0.75)];
       const iqr = q3 - q1;
-      const lowerBound = q1 - 1.5 * iqr;
-      const upperBound = q3 + 1.5 * iqr;
+      const low = q1 - 1.5 * iqr;
+      const high = q3 + 1.5 * iqr;
 
-      count += values.filter(
-        (val) => val < lowerBound || val > upperBound
-      ).length;
-    });
+      count += values.filter((v) => v < low || v > high).length;
+    }
+  });
 
-  return { count };
+  return {
+    count,
+    columns: numericalColumns.value.length,
+  };
+});
+
+const numericalColumnsForScaling = computed(() => {
+  return columns.value
+    .filter(col => getColumnSemanticType(col.name) === 'numeric')
+    .map(col => ({
+      name: col.name,
+      scale: col.scale || false,
+      isAlreadyScaled: col.isAlreadyScaled || false
+    }));
 });
 
 const hasCleanedData = computed(() => {
@@ -2007,6 +2162,7 @@ const fetchCompleteStatisticsFromBackend = async () => {
     if (stats.missing_info && Array.isArray(stats.missing_info)) {
       missingColumnsDetailed.value = stats.missing_info.map(col => ({
         ...col,
+        semanticType: col.semanticType || col.semantic_type || 'unknown',
         strategy: col.strategy || (col.type === 'numerical' ? 'fillmedian' : 'fillmode')
       }));
     }
@@ -2853,7 +3009,7 @@ const handleOutliersFrontend = (data) => {
 
   let processedData = [...data];
   const numericalColumns = columns.value.filter(
-    (col) => col.type === "numerical"
+    (col) => getColumnSemanticType(col.name) === "numeric"
   );
 
   numericalColumns.forEach((col) => {
@@ -2899,7 +3055,7 @@ const handleOutliersFrontend = (data) => {
 
 const detectCategoricalColumns = () => {
   console.log("\n" + "=".repeat(80));
-  console.log("🔍 DETECTING CATEGORICAL COLUMNS");
+  console.log("🔍 DETECTING CATEGORICAL COLUMNS (Source of Truth: Semantic Types)");
   console.log("=".repeat(80));
 
   const datasetToCheck = hasCleanedData.value
@@ -2931,10 +3087,33 @@ const detectCategoricalColumns = () => {
   const categorical = [];
   let skippedCount = 0;
 
+  // Create a quick lookup for semantic types
+  const semanticMap = {};
+  if (semanticTypes.value) {
+    semanticTypes.value.forEach(st => {
+      semanticMap[st.column] = st.semantic_type;
+    });
+  }
+
   cols.forEach((col) => {
+    const colName = typeof col === "string" ? col : col.name;
+    const colObj = columns.value.find((c) => c.name === colName);
+
+    // 1. Check for identifier semantic type first
+    const semanticType = semanticMap[colName];
+    if (semanticType === 'identifier') {
+      console.log(`📌 Identified ${colName} as identifier. Recommending removal.`);
+      if (colObj) {
+        colObj.remove = true; // Suggest removal for identifiers
+        colObj.type = 'identifier'; // Update its type
+      }
+      skippedCount++;
+      return; // Skip further categorical detection for identifiers
+    }
+
     // Get column data (filter out null/undefined)
     const columnData = datasetToCheck
-      .map((row) => row[col])
+      .map((row) => row[colName])
       .filter((v) => v !== null && v !== undefined);
 
     const uniqueValues = new Set(columnData);
@@ -2942,14 +3121,14 @@ const detectCategoricalColumns = () => {
 
     // Skip if no valid data
     if (columnData.length === 0 || uniqueCount === 0) {
-      console.log(`   ⏭️  ${col}: No valid data`);
+      console.log(`   ⏭️  ${colName}: No valid data`);
       skippedCount++;
       return;
     }
 
     // Skip if constant (only 1 unique value)
     if (uniqueCount === 1) {
-      console.log(`   ⏭️  ${col}: Constant column (1 unique value)`);
+      console.log(`   ⏭️  ${colName}: Constant column (1 unique value)`);
       skippedCount++;
       return;
     }
@@ -2958,18 +3137,18 @@ const detectCategoricalColumns = () => {
     const cardinalityRatio = uniqueCount / columnData.length;
 
     // Check for underscore pattern (e.g., Category_A, Status_Active)
-    const hasUnderscore = col.includes("_");
+    const hasUnderscore = colName.includes("_");
     let isEncodedColumn = false;
     let relatedColumns = [];
 
     if (hasUnderscore) {
-      const parts = col.split("_");
+      const parts = colName.split("_");
       if (parts.length >= 2) {
         const prefix = parts.slice(0, -1).join("_");
 
         // Find other columns with same prefix
         relatedColumns = cols.filter(
-          (c) => c.startsWith(prefix + "_") && c !== col
+          (c) => c.startsWith(prefix + "_") && c !== colName
         );
 
         // If multiple columns with same prefix, likely encoded set
@@ -2988,7 +3167,7 @@ const detectCategoricalColumns = () => {
     // Skip if definitely encoded
     if (isEncodedColumn && isBinary01) {
       console.log(
-        `   ⏭️  ${col}: Encoded column (part of ${
+        `   ⏭️  ${colName}: Encoded column (part of ${
           relatedColumns.length + 1
         } column set)`
       );
@@ -2998,7 +3177,7 @@ const detectCategoricalColumns = () => {
 
     // Skip if binary 0/1 with encoded pattern
     if (isBinary01 && hasUnderscore && relatedColumns.length >= 1) {
-      console.log(`   ⏭️  ${col}: Binary encoded column`);
+      console.log(`   ⏭️  ${colName}: Binary encoded column`);
       skippedCount++;
       return;
     }
@@ -3010,7 +3189,7 @@ const detectCategoricalColumns = () => {
     const allIntegers =
       allNumeric && columnData.every((v) => Number.isInteger(Number(v)));
 
-    const colLower = col.toLowerCase();
+    const colLower = colName.toLowerCase();
     const categoricalHints = [
       "category",
       "type",
@@ -3037,7 +3216,7 @@ const detectCategoricalColumns = () => {
       colLower.includes(hint)
     );
 
-    // Check if it's an ID column (should skip)
+    // Check if it's an ID column (should skip) - this is a fallback if semantic type is not available
     const isIdColumn =
       colLower === "id" ||
       colLower.endsWith("_id") ||
@@ -3090,7 +3269,7 @@ const detectCategoricalColumns = () => {
 
     if (isIdColumn && cardinalityRatio > 0.8) {
       console.log(
-        `   ⏭️  ${col}: ID column with high cardinality (${(
+        `   ⏭️  ${colName}: ID column with high cardinality (${(
           cardinalityRatio * 100
         ).toFixed(1)}%)`
       );
@@ -3106,7 +3285,7 @@ const detectCategoricalColumns = () => {
       !hasNameHint
     ) {
       console.log(
-        `   ⏭️  ${col}: Continuous numeric (${uniqueCount} unique, ${(
+        `   ⏭️  ${colName}: Continuous numeric (${uniqueCount} unique, ${(
           cardinalityRatio * 100
         ).toFixed(1)}%)`
       );
@@ -3115,16 +3294,26 @@ const detectCategoricalColumns = () => {
     }
 
     if (isCategorical) {
-      console.log(`   ✅ ${col}: CATEGORICAL - ${reason}`);
+      console.log(`   ✅ ${colName}: CATEGORICAL - ${reason}`);
+      
+      // Better recommendation based on cardinality
+      let recommendedEncoding = "onehot";
+      if (uniqueCount > 20) {
+        recommendedEncoding = "target";
+      } else if (uniqueCount > 10) {
+        recommendedEncoding = "ordinal";
+      }
+
       categorical.push({
-        name: col,
+        name: colName,
         uniqueCount: uniqueCount,
         cardinalityRatio: cardinalityRatio,
         encode: false,
-        encoding: "onehot",
+        encoding: recommendedEncoding,
         detectionReason: reason,
       });
-    } else {
+    }
+ else {
       console.log(
         `   ❌ ${col}: Not categorical (${uniqueCount} unique, ${(
           cardinalityRatio * 100
@@ -3133,6 +3322,47 @@ const detectCategoricalColumns = () => {
       skippedCount++;
     }
   });
+
+  // ✅ INTEGRATE SEMANTIC TYPES
+  if (semanticTypes.value && semanticTypes.value.length > 0) {
+    console.log("📝 Overriding with Semantic Types from backend...");
+    
+    semanticTypes.value.forEach(sCol => {
+      const isCategorical = ['categorical', 'boolean', 'datetime'].includes(sCol.semantic_type);
+      const isIdentifier = sCol.semantic_type === 'identifier';
+      const isNumeric = sCol.semantic_type === 'numeric';
+      
+      // Update columns ref type
+      const colObj = columns.value.find(c => c.name === sCol.column);
+      if (colObj) {
+        if (isCategorical) colObj.type = 'categorical';
+        if (isNumeric) colObj.type = 'numerical';
+        if (isIdentifier) colObj.type = 'identifier';
+      }
+      
+      // Update categorical list for encoding tool
+      const existingIdx = categorical.findIndex(c => c.name === sCol.column);
+      
+      if (isCategorical) {
+        if (existingIdx === -1) {
+          categorical.push({
+            name: sCol.column,
+            uniqueCount: colObj?.unique || 0,
+            cardinalityRatio: 0,
+            encode: false,
+            encoding: "onehot",
+            detectionReason: `Semantic Type: ${sCol.semantic_type} (${sCol.reason})`,
+          });
+        } else {
+          categorical[existingIdx].detectionReason = `Semantic Override: ${sCol.semantic_type}`;
+        }
+      } else if (existingIdx !== -1) {
+        // Remove if semantic type says it's not categorical anymore
+        console.log(`   Removing ${sCol.column} from categorical list (now ${sCol.semantic_type})`);
+        categorical.splice(existingIdx, 1);
+      }
+    });
+  }
 
   // ============================================================================
   // 9. SUMMARY
@@ -3146,6 +3376,11 @@ const detectCategoricalColumns = () => {
   console.log("=".repeat(80) + "\n");
 
   categoricalColumns.value = categorical;
+};
+
+const getColumnSemanticType = (colName) => {
+  const st = semanticTypes.value.find(s => s.column === colName);
+  return st ? st.semantic_type : 'numeric'; // default to numeric if unknown
 };
 
 const recalculateMissingColumnsDetailed = () => {
@@ -3189,14 +3424,25 @@ const recalculateMissingColumnsDetailed = () => {
 
     if (missingCount > 0) {
       const col = columns.value.find((c) => c.name === colName);
-      const colType = col?.type || "categorical";
+      const colSemanticType = getColumnSemanticType(colName);
+      const colType = col?.type || colSemanticType;
+
+      let defaultStrategy = "fillmode";
+      if (colSemanticType === "numeric") {
+        defaultStrategy = "fillmedian";
+      } else if (colSemanticType === "identifier") {
+        defaultStrategy = "droprows";
+      } else if (colSemanticType === "datetime") {
+        defaultStrategy = "droprows"; // or ffill if implemented
+      }
 
       missing.push({
         name: colName,
         type: colType,
+        semanticType: colSemanticType,
         count: missingCount,
         percentage: ((missingCount / dataset.length) * 100).toFixed(1),
-        strategy: colType === "numerical" ? "fillmedian" : "fillmode",
+        strategy: defaultStrategy,
       });
     }
   });
@@ -3228,29 +3474,58 @@ const updateMissingStrategy = (columnName, strategy) => {
 
 const applyGlobalMissingStrategy = () => {
   missingColumnsDetailed.value.forEach((col) => {
-    if (
-      (globalMissingStrategy.value === "fillmean" ||
-        globalMissingStrategy.value === "fillmedian") &&
-      col.type !== "numerical"
-    ) {
-      col.strategy = "fillmode";
-    } else {
-      col.strategy = globalMissingStrategy.value;
+    const st = col.semanticType;
+    const strategy = globalMissingStrategy.value;
+
+    // VALIDATION RULES (Aligned with Backend)
+    let allowed = false;
+    
+    if (st === 'identifier') {
+      col.strategy = 'droprows'; // Identifier MUST be dropped
+      allowed = true;
+    } else if (st === 'numeric') {
+      if (['fillmean', 'fillmedian', 'fillzero', 'fillmode', 'droprows', 'keep'].includes(strategy)) {
+        col.strategy = strategy;
+        allowed = true;
+      }
+    } else if (['categorical', 'boolean', 'datetime'].includes(st)) {
+      if (['fillmode', 'fillunknown', 'fillzero', 'droprows', 'keep'].includes(strategy)) {
+        col.strategy = strategy;
+        allowed = true;
+      }
     }
+
+    if (!allowed) {
+      // Fallback: If strategy is generic apply it, otherwise keep current
+      if (['droprows', 'keep'].includes(strategy)) {
+        col.strategy = strategy;
+      }
+    }
+    
     updateMissingStrategy(col.name, col.strategy);
   });
-  console.log("Applied global strategy to all columns");
+  console.log("Applied global strategy to all columns (semantic-validated)");
 };
 
 const autoSelectMissingStrategies = () => {
   missingColumnsDetailed.value.forEach((col) => {
     let bestStrategy;
+    const missingPercentage = parseFloat(col.percentage);
 
-    if (col.type === "numerical") {
-      bestStrategy =
-        parseFloat(col.percentage) < 10 ? "fillmedian" : "droprows";
+    if (col.semanticType === "identifier" || col.semanticType === "datetime") {
+      // Identifiers and datetimes are often critical; drop rows if any missing
+      bestStrategy = missingPercentage > 0 ? "droprows" : "keep";
+    } else if (col.semanticType === "numeric") {
+      bestStrategy = missingPercentage < 10 ? "fillmedian" : "droprows";
+    } else if (col.semanticType === "categorical" || col.semanticType === "boolean") {
+      bestStrategy = missingPercentage < 15 ? "fillmode" : "droprows";
     } else {
-      bestStrategy = parseFloat(col.percentage) < 15 ? "fillmode" : "droprows";
+      // Fallback for unknown semantic types, use general type
+      if (col.type === "numerical") {
+        bestStrategy = missingPercentage < 10 ? "fillmedian" : "droprows";
+      } else {
+        bestStrategy = missingPercentage < 15 ? "fillmode" : "droprows";
+      }
     }
 
     col.strategy = bestStrategy;
@@ -3533,11 +3808,14 @@ const getToolConfig = (toolId) => {
 
 // 2. Select all categorical columns for encoding
 const selectAllCategoricalColumns = () => {
-  categoricalColumns.value.forEach((col) => {
-    const column = columns.value.find((c) => c.name === col.name);
-    if (column) column.encode = true;
-  });
-  console.log("âœ… Selected all categorical columns for encoding");
+    categoricalColumns.value.forEach((col) => {
+        // Skip identifier and boolean (boolean kept as 0/1)
+        const sType = getColumnSemanticType(col.name);
+        if (sType === 'categorical') {
+            col.encode = true;
+        }
+    });
+    console.log("✅ Selected all purely categorical columns for encoding");
 };
 
 // 3. Deselect all categorical columns
@@ -3841,6 +4119,9 @@ const selectIrrelevantColumns = () => {
 };
 
 const checkIfIrrelevant = (columnName, values) => {
+  const sType = getColumnSemanticType(columnName);
+  if (sType === 'identifier') return true;
+
   const name = columnName.toLowerCase();
 
   const irrelevantPatterns = [
@@ -4433,6 +4714,13 @@ onMounted(async () => {
     }
 
     console.log("✅ Data Preview initialized successfully!");
+    
+    // NEW: Fetch and apply semantic types as the source of truth
+    if (backendConnected.value && datasetId.value) {
+      console.log("🧬 Fetching semantic types...");
+      await fetchSemanticTypes();
+      detectCategoricalColumns(); // Refresh with semantic types
+    }
     console.log(`   - Dataset ID: ${datasetId.value}`);
     console.log(`   - Rows: ${originalDataset.value.length}`);
     console.log(`   - Columns: ${columns.value.length}`);
@@ -8215,6 +8503,38 @@ onMounted(async () => {
 
 .hero-content {
   padding: 1.5rem !important;
+}
+
+
+/* ==================== TYPE DETECTION UI ==================== */
+.type-pill.numeric { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.type-pill.categorical { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+.type-pill.boolean { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.type-pill.datetime { background: rgba(244, 63, 185, 0.15); color: #f472b6; border: 1px solid rgba(244, 63, 185, 0.3); }
+.type-pill.identifier { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+.confidence-badge.high { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.confidence-badge.medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.confidence-badge.low { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+.tr.is-overridden {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.step-badge {
+  font-size: 0.65rem;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 </style>

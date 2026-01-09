@@ -65,6 +65,7 @@ import joblib
 
 # ===== PREPROCESSING MODULE =====
 from preprocessing import DataPreprocessor, TargetEncoder
+from semantic_type_utils import detect_semantic_type
 
 # ===== DIRECTORIES =====
 # UPLOAD_DIR = "enterprise_datasets"  <-- Deprecated
@@ -98,10 +99,9 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://localhost:3002",
-        ## production URL
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -1336,6 +1336,9 @@ async def get_dataset_statistics(
         if dataset.user_id != current_user['id']:
             raise HTTPException(status_code=403, detail="Not authorized to access this dataset")
 
+        # Load semantic metadata if available
+        column_metadata = dataset.column_metadata or {}
+
         # 2. Load COMPLETE Dataframe (not just sample)
         try:
             df = file_service.load_dataframe(dataset.storage_path)
@@ -1363,10 +1366,25 @@ async def get_dataset_statistics(
             if pd.api.types.is_numeric_dtype(df[col]):
                 col_type = "numerical"
             
+            # ✅ Determine semantic type (from metadata override or auto-detect)
+            semantic_info = None
+            if str(col) in column_metadata:
+                semantic_info = column_metadata[str(col)]
+                sem_type = semantic_info.get("semantic_type", "unknown")
+            else:
+                semantic_info = detect_semantic_type(df[col])
+                sem_type = semantic_info.get("semantic_type", "unknown")
+            
+            # Normalize naming: "numerical" -> "numeric" for frontend consistency
+            if sem_type == "numerical":
+                sem_type = "numeric"
+            
             # Base stats
             stat_entry = {
                 "name": str(col),
                 "type": col_type,
+                "semanticType": sem_type,  # For frontend compatibility
+                "semantic_type": sem_type, # For backend consistency
                 "unique": unique_count,
                 "missing": missing_count,
                 "top_values": [],
@@ -1459,6 +1477,8 @@ async def get_dataset_statistics(
                 missing_info.append({
                     "name": str(col),
                     "type": col_type,
+                    "semanticType": sem_type,  # Added
+                    "semantic_type": sem_type, # Added
                     "count": missing_count,
                     "percentage": f"{(missing_count / len(df) * 100):.1f}",
                     "strategy": "fillmedian" if col_type == "numerical" else "fillmode"
@@ -1506,6 +1526,84 @@ async def get_dataset_statistics(
         raise HTTPException(status_code=500, detail=f"Error calculating statistics: {str(e)}")
 
 
+# ===== SEMANTIC DATA TYPE DETECTION & CONVERSION =====
+
+@app.get("/api/datasets/{dataset_id}/semantic-types")
+async def get_semantic_types(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Detect and return semantic data types for each column"""
+    try:
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Load data to detect types
+        df = file_service.load_dataframe(dataset.storage_path)
+        
+        # Get existing metadata for overrides
+        existing_metadata = dataset.column_metadata or {}
+        
+        results = []
+        for col in df.columns:
+            # Check if we have an override
+            if col in existing_metadata and existing_metadata[col].get("is_override"):
+                results.append(existing_metadata[col])
+            else:
+                # Auto-detect
+                detection = detect_semantic_type(df[col])
+                results.append(detection)
+                
+        return {
+            "dataset_id": dataset_id,
+            "column_types": results,
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"Error detecting semantic types: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/{dataset_id}/semantic-types/override")
+async def override_semantic_types(
+    dataset_id: str,
+    overrides: List[Dict[str, Any]],
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Save user overrides for semantic data types"""
+    try:
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+            
+        # overrides is a list of {column, semantic_type, reason, ...}
+        current_metadata = dataset.column_metadata or {}
+        
+        for item in overrides:
+            col = item.get("column")
+            if col:
+                current_metadata[col] = {
+                    **item,
+                    "is_override": True,
+                    "updated_at": datetime.now().isoformat()
+                }
+        
+        dataset.column_metadata = current_metadata
+        db.commit()
+        
+        return {
+            "message": "Semantic types updated successfully",
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"Error overriding semantic types: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/preprocess")
 async def preprocess(
     config: dict,
@@ -1532,8 +1630,10 @@ async def preprocess(
         original_rows = len(df)
         
         # 3. Apply Preprocessing
-        from preprocessing import DataPreprocessor
-        preprocessor = DataPreprocessor(df)
+        # 3. Process
+        # ✅ Load semantic metadata if available
+        column_metadata = dataset.column_metadata or {}
+        preprocessor = DataPreprocessor(df, column_metadata=column_metadata)
         
         categorical_encoded = False
         encoded_columns = []
@@ -2396,6 +2496,7 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
         
         encoders_used = {}
         encoded_columns = []
+        onehot_columns = []  # Added to track only OH dummies
         
         for col_info in columns_to_encode:
             col_name = col_info.name
@@ -2439,6 +2540,7 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                 
                 encoders_used[col_name] = {'type': 'onehot', 'encoder': encoder, 'feature_names': feature_names}
                 encoded_columns.extend(feature_names)
+                onehot_columns.extend(feature_names) # Track as OH dummies
                 
                 # Update Registry
                 if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
@@ -2449,12 +2551,11 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                         'transformation': 'one-hot',
                         'parent_count': len(feature_names)
                     }
-            
             elif method == 'ordinal':
                 # Ordinal Encoding: Preserves order
                 encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-                X_train[col_name] = encoder.fit_transform(X_train[[col_name]])
-                X_test[col_name] = encoder.transform(X_test[[col_name]])
+                X_train[col_name] = encoder.fit_transform(X_train[[col_name]]).ravel()
+                X_test[col_name] = encoder.transform(X_test[[col_name]]).ravel()
                 encoders_used[col_name] = {'type': 'ordinal', 'encoder': encoder}
                 encoded_columns.append(col_name)
                 
@@ -2465,16 +2566,6 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                     'type': 'categorical',
                     'transformation': 'ordinal'
                 }
-            
-            elif method == 'label':
-                # ... already handled in original loop, but let's ensure it's tracked if it falls through
-                if col_name not in feature_metadata.get(dataset_id, {}):
-                    if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
-                    feature_metadata[dataset_id][col_name] = {
-                        'original_column': col_name,
-                        'type': 'categorical',
-                        'transformation': 'label'
-                    }
             
             else:
                 print(f"⚠️  Unknown encoding method: {method}")
@@ -2512,6 +2603,7 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
             "train_shape": list(X_train.shape),
             "test_shape": list(X_test.shape),
             "encoded_columns": encoded_columns,
+            "onehot_columns": onehot_columns, # Added
             "train_preview": train_preview,
             "test_preview": test_preview,
             "columns": all_columns

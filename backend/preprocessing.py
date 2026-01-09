@@ -10,41 +10,53 @@ class DataPreprocessor:
     """
     
     
-    def __init__(self, df):
+    def __init__(self, df, column_metadata=None):
         print(f"DEBUG: DataPreprocessor.__init__ called")
         print(f"   DataFrame shape: {df.shape}")
         
         # ✅ FIX: Normalize missing values - convert empty strings and other representations to NaN
         print(f"   Normalizing missing values...")
-        missing_before = df.isnull().sum().sum()
-        
-        # Replace various missing value representations with NaN
+        # ... (rest of normalization logic)
         df = df.replace(['', ' ', '  ', 'null', 'NULL', 'None', 'NA', 'N/A', 'n/a', 'NaN'], np.nan)
         df = df.replace({None: np.nan})
         
-        # Also handle whitespace-only strings
         for col in df.columns:
-            if df[col].dtype == 'object':  # Only for string columns
+            if df[col].dtype == 'object':
                 df[col] = df[col].apply(lambda x: np.nan if isinstance(x, str) and x.strip() == '' else x)
-        
-        missing_after = df.isnull().sum().sum()
-        print(f"   Missing values before normalization: {missing_before}")
-        print(f"   Missing values after normalization: {missing_after}")
-        print(f"   Converted {missing_after - missing_before} empty strings/nulls to NaN")
         
         self.df = df.copy()
         self.original_df = df.copy()
         self.preprocessing_log = []
+        
+        # Use provided semantic types or auto-detect
+        self.semantic_types = {}
+        if column_metadata:
+            for col in df.columns:
+                if col in column_metadata:
+                    self.semantic_types[col] = column_metadata[col].get('semantic_type')
+        
+        # Backward compatibility for existing logic that uses self.column_types
         self.column_types = self._detect_column_types()
         
     def _detect_column_types(self):
-        """Detect numerical vs categorical columns"""
+        """Map semantic types to internal numerical/categorical labels for standard preprocessing"""
         column_types = {}
         for col in self.df.columns:
-            if pd.api.types.is_numeric_dtype(self.df[col]):
+            # If we have a semantic type, use it to decide the processing pipe
+            s_type = self.semantic_types.get(col)
+            
+            if s_type == 'numeric':
                 column_types[col] = 'numerical'
-            else:
+            elif s_type in ['categorical', 'boolean', 'datetime']:
                 column_types[col] = 'categorical'
+            elif s_type == 'identifier':
+                column_types[col] = 'identifier' # New type to handle exclusion
+            else:
+                # Fallback to basic detection
+                if pd.api.types.is_numeric_dtype(self.df[col]):
+                    column_types[col] = 'numerical'
+                else:
+                    column_types[col] = 'categorical'
         return column_types
     
     def get_missing_info(self):
@@ -134,14 +146,37 @@ class DataPreprocessor:
                 
             else:
                 # Use SimpleImputer for fill strategies
-                numerical_cols = [c for c in cols if self.column_types.get(c) == 'numerical']
-                categorical_cols = [c for c in cols if self.column_types.get(c) == 'categorical']
+                # ✅ ENFORCE SEMANTIC TYPES
+                applied_numerical = []
+                applied_categorical = []
                 
-                print(f"   Numerical columns: {numerical_cols}")
-                print(f"   Categorical columns: {categorical_cols}")
+                for col in cols:
+                    s_type = self.semantic_types.get(col)
+                    
+                    # Rule 1: Identifier MUST be dropped (if not already in droprows group)
+                    if s_type == 'identifier' and strategy != 'droprows':
+                        print(f"   ⚠️ WARNING: Column '{col}' is an Identifier but strategy is '{strategy}'. Skipping filling.")
+                        continue
+                        
+                    # Rule 2: Validate strategy against semantic type
+                    allowed = False
+                    if s_type == 'numeric':
+                        if strategy in ['fillmean', 'fillmedian', 'fillzero', 'fillmode']:
+                            allowed = True
+                            applied_numerical.append(col)
+                    elif s_type in ['categorical', 'boolean', 'datetime']:
+                        if strategy in ['fillmode', 'fillunknown', 'fillzero']:
+                            allowed = True
+                            applied_categorical.append(col)
+                    
+                    if not allowed:
+                        print(f"   ⚠️ WARNING: Strategy '{strategy}' not allowed for semantic type '{s_type}' on column '{col}'. Skipping.")
+
+                print(f"   Validated Numerical columns: {applied_numerical}")
+                print(f"   Validated Categorical columns: {applied_categorical}")
                 
                 # Handle numerical columns
-                if numerical_cols:
+                if applied_numerical:
                     if strategy == 'fillmean':
                         imputer = SimpleImputer(strategy='mean')
                         print(f"   Using SimpleImputer(strategy='mean') for numerical columns")
@@ -159,7 +194,7 @@ class DataPreprocessor:
                         print(f"   Using SimpleImputer(strategy='most_frequent') for numerical columns (default)")
                     
                     try:
-                        df_processed[numerical_cols] = imputer.fit_transform(df_processed[numerical_cols])
+                        df_processed[applied_numerical] = imputer.fit_transform(df_processed[applied_numerical])
                         print(f"   Successfully imputed numerical columns")
                     except Exception as e:
                         print(f"   Error imputing numerical columns: {e}")
@@ -167,16 +202,16 @@ class DataPreprocessor:
                     
                     self.preprocessing_log.append({
                         'action': f'impute_{strategy}',
-                        'columns': numerical_cols,
+                        'columns': applied_numerical,
                         'type': 'numerical',
                         'method': 'SimpleImputer'
                     })
                 
                 # Handle categorical columns
-                if categorical_cols:
+                if applied_categorical:
                     # Log missing counts BEFORE imputation
                     print(f"   Missing values BEFORE imputation:")
-                    for col in categorical_cols:
+                    for col in applied_categorical:
                         missing_before = df_processed[col].isnull().sum()
                         print(f"      {col}: {missing_before} missing values")
                     
@@ -191,11 +226,11 @@ class DataPreprocessor:
                         print(f"   Using SimpleImputer(strategy='most_frequent') for categorical columns (default)")
                     
                     try:
-                        df_processed[categorical_cols] = imputer.fit_transform(df_processed[categorical_cols])
+                        df_processed[applied_categorical] = imputer.fit_transform(df_processed[applied_categorical])
                         
                         # Log missing counts AFTER imputation
                         print(f"   Missing values AFTER imputation:")
-                        for col in categorical_cols:
+                        for col in applied_categorical:
                             missing_after = df_processed[col].isnull().sum()
                             print(f"      {col}: {missing_after} missing values")
                             
@@ -210,7 +245,7 @@ class DataPreprocessor:
                     
                     self.preprocessing_log.append({
                         'action': f'impute_{strategy}',
-                        'columns': categorical_cols,
+                        'columns': applied_categorical,
                         'type': 'categorical',
                         'method': 'SimpleImputer'
                     })
@@ -253,7 +288,9 @@ class DataPreprocessor:
             strategy (str): 'cap' (winsorize) or 'remove'
         """
         for col in columns:
-            if self.column_types.get(col) != 'numerical':
+            # ✅ ENFORCE SEMANTIC TYPES: Only allow outliers for numeric columns
+            if self.semantic_types.get(col) != 'numeric':
+                print(f"   ⚠️ Skipping outlier handling for '{col}' (Type: {self.semantic_types.get(col)})")
                 continue
             
             if method == 'iqr':
@@ -295,6 +332,11 @@ class DataPreprocessor:
             print(f"Column {column} not found in dataframe")
             return self.df
         
+        # ✅ ENFORCE SEMANTIC TYPES: Only allow encoding for categorical columns
+        if self.semantic_types.get(column) != 'categorical':
+            print(f"   ⚠️ Skipping encoding for '{column}' (Type: {self.semantic_types.get(column)})")
+            return self.df
+
         try:
             if method == 'label':
                 print(f"Label encoding {column}...")
@@ -365,18 +407,20 @@ class DataPreprocessor:
 
     
     def scale_features(self, columns, method='standard'):
-        """
-        Scale numerical features
-        
-        Args:
-            columns (list): Columns to scale
-            method (str): 'standard' or 'minmax'
-        """
+        """Scale numerical features"""
         from sklearn.preprocessing import MinMaxScaler
         
+        # ✅ ENFORCE SEMANTIC TYPES: Only allow scaling for numeric columns
+        valid_cols = [col for col in columns if self.semantic_types.get(col) == 'numeric']
+        
+        if not valid_cols:
+            print("   ⚠️ No valid numeric columns found for scaling")
+            return self.df
+            
+        print(f"   Scaling columns: {valid_cols}")
         scaler = StandardScaler() if method == 'standard' else MinMaxScaler()
         
-        self.df[columns] = scaler.fit_transform(self.df[columns])
+        self.df[valid_cols] = scaler.fit_transform(self.df[valid_cols])
         
         self.preprocessing_log.append({
             'action': f'{method}_scaling',

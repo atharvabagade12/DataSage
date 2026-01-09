@@ -63,7 +63,11 @@ class User(BaseModel):
 # ============================================
 def verify_password(plain_password, hashed_password):
     """Verify password against hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        print(f"⚠️ Password verification error: {e}")
+        return False
 
 def get_password_hash(password):
     """Hash password safely - handle bcrypt limitation"""

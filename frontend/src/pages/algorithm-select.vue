@@ -708,8 +708,23 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { storeToRefs } from "pinia";
+import { useExperimentStore } from "@/stores/experiment";
+import { useDataStore } from "@/stores/data";
 
 const router = useRouter();
+const experimentStore = useExperimentStore();
+const dataStore = useDataStore();
+
+const { 
+  datasetId, 
+  targetColumn: storeTargetColumn, 
+  problemType: storeProblemType,
+  preprocessing: storePreprocessing,
+  datasetMetadata
+} = storeToRefs(experimentStore);
+
+const { statistics } = storeToRefs(dataStore);
 
 // Core Data
 const isLoading = ref(true);
@@ -720,7 +735,6 @@ const preprocessingSteps = ref([]);
 const recommendedAlgorithms = ref([]);
 const selectedAlgorithm = ref(null);
 const backendConnected = ref(null);
-const datasetId = ref(null);
 const selectedAlgorithmInfo = ref(null);
 
 // UI State
@@ -746,13 +760,13 @@ const randomState = ref(42);
 const optimizationMetric = ref("accuracy");
 
 // New Validation Strategy Config
-const validationStrategy = ref("simple_train_test"); // simple_train_test | kfold_cv | grid_search | randomized_search
-const splitRatio = ref(0.8); // From preprocessing
+const validationStrategy = ref("simple_train_test"); 
+const splitRatio = ref(0.8);
 const stratifiedCV = ref(true);
 
 // GridSearchCV Config
 const gridSearchCVFolds = ref(5);
-const gridDensity = ref("normal"); // coarse | normal | fine
+const gridDensity = ref("normal"); 
 const showGridPreview = ref(false);
 
 // RandomizedSearchCV Config
@@ -796,127 +810,50 @@ const checkBackendConnection = async () => {
 // Methods
 const loadDataFromPreviousSteps = () => {
   try {
-    console.log("🔄 Loading data from previous steps...");
-
-    // Load target selection data
-    const targetData = localStorage.getItem("selectedTarget");
-    const processedData = localStorage.getItem("processedData");
-
-    if (targetData) {
-      const target = JSON.parse(targetData);
-      selectedTarget.value = target;
-      problemType.value = detectProblemType(target);
-      console.log("✅ Loaded target:", target);
-    }
-
-    if (processedData) {
-      const data = JSON.parse(processedData);
-      console.log("📊 Raw processedData:", data);
-      
-      // Extract dataset statistics - FIXED to use correct property names
-      // Priority: totalRowsInBackend (actual backend rows) > rowCount (displayed rows) > other fallbacks
-      const rows = data.totalRowsInBackend ||  // ✅ ACTUAL total rows in backend
-                   data.rowCount ||              // Displayed rows (might be sample)
-                   data.finalRows || 
-                   data.rows || 
-                   data.data?.length || 
-                   data.shape?.[0] ||
-                   0;
-      
-      // Priority: columnCount (actual column count) > other fallbacks
-      const features = data.columnCount ||       // ✅ ACTUAL column count
-                       data.finalColumns || 
-                       data.columns?.length || 
-                       data.shape?.[1] ||
-                       data.totalColumns ||
-                       (data.columns ? Object.keys(data.columns).length : 0) ||
-                       0;
-      
-      // Check if we have split info with potentially SMOTE-updated training rows
-      let actualRows = rows;
-      if (data.splitInfo && data.splitInfo.trainRows && data.splitInfo.testRows) {
-        // Use the sum of train + test rows (train rows may be updated by SMOTE)
-        actualRows = data.splitInfo.trainRows + data.splitInfo.testRows;
-        console.log(`📊 Using split info rows: ${data.splitInfo.trainRows} train + ${data.splitInfo.testRows} test = ${actualRows} total`);
-        if (data.splitInfo.smoteApplied) {
-          console.log(`✅ SMOTE applied: +${data.splitInfo.samplesAdded} synthetic samples`);
-        }
-      }
-      
-      datasetStats.value = {
-        rows: actualRows,
-        features: features
-      };
-      
-      // Load split ratio from preprocessing steps
-      if (data.splitRatio !== undefined) {
-        splitRatio.value = data.splitRatio;
-      } else if (data.trainTestSplit) {
-        splitRatio.value = data.trainTestSplit.trainRatio || 0.8;
-      }
-      
-      // Load preprocessing steps with better detection
-      let steps = [];
-      
-      // Try to get explicit processing steps
-      if (data.processingSteps && Array.isArray(data.processingSteps)) {
-        steps = data.processingSteps;
-      } else if (data.steps && Array.isArray(data.steps)) {
-        steps = data.steps;
-      } else if (data.appliedSteps && Array.isArray(data.appliedSteps)) {
-        steps = data.appliedSteps;
-      } else if (data.transformations && Array.isArray(data.transformations)) {
-        steps = data.transformations;
-      }
-      // If no explicit steps but preprocessed flag is true, infer steps
-      else if (data.preprocessed === true) {
-        console.log("⚠️ No explicit preprocessing steps found, but preprocessed=true. Inferring steps...");
-        
-        // Infer steps from data properties
-        if (data.splitApplied || data.trainTestSplit || data.splitRatio) {
-          steps.push("Train/Test Split");
-        }
-        if (data.encodingApplied || data.categoricalEncoding) {
-          steps.push("Categorical Encoding");
-        }
-        if (data.scalingApplied || data.featureScaling) {
-          steps.push("Feature Scaling");
-        }
-        if (data.missingValuesHandled) {
-          steps.push("Missing Value Handling");
-        }
-        if (data.outlierHandling) {
-          steps.push("Outlier Handling");
-        }
-        
-        console.log("📝 Inferred preprocessing steps:", steps);
-      }
-      
-      preprocessingSteps.value = steps;
-      
-      console.log("✅ Loaded dataset stats:", {
-        rows: datasetStats.value.rows,
-        features: datasetStats.value.features,
-        splitRatio: splitRatio.value,
-        preprocessingSteps: preprocessingSteps.value,
-        source: {
-          rows: data.totalRowsInBackend ? 'totalRowsInBackend' : 'rowCount',
-          features: data.columnCount ? 'columnCount' : 'fallback'
-        }
-      });
+    console.log("🔄 Loading data from Experiment Store...");
+    
+    // Sync Reactives from Store
+    if (storeTargetColumn.value) {
+      selectedTarget.value = storeTargetColumn.value;
     }
     
-
-    // Validate that we have meaningful data
-    if (datasetStats.value.rows === 0 || datasetStats.value.features === 0) {
-      console.warn("⚠️ Invalid dataset stats detected:", datasetStats.value);
-      console.warn("💡 This might indicate a data loading issue from previous steps");
+    if (storeProblemType.value && storeProblemType.value.type) {
+      problemType.value = storeProblemType.value;
+    } else if (selectedTarget.value) {
+      problemType.value = detectProblemType(selectedTarget.value);
     }
+    
+    // Dataset Stats
+    if (datasetMetadata.value) {
+       datasetStats.value = {
+         rows: datasetMetadata.value.totalRows || 0,
+         features: datasetMetadata.value.columns || 0
+       };
+    }
+    
+    // Preprocessing Steps Visualization
+    const steps = [];
+    if (storePreprocessing.value.isSplitApplied) steps.push("Train/Test Split");
+    if (storePreprocessing.value.encodingApplied) steps.push(`Categorical Encoding (${storePreprocessing.value.encodedColumns?.length || 0})`);
+    if (storePreprocessing.value.scalingApplied) steps.push(`Feature Scaling`); // Can add details if needed
+    if (storePreprocessing.value.smoteApplied) steps.push(`SMOTE (${storePreprocessing.value.smoteInfo?.samples_added || 0} samples)`);
+    
+    preprocessingSteps.value = steps;
+
+    if (storePreprocessing.value.splitInfo) {
+      splitRatio.value = storePreprocessing.value.splitInfo.testRatio ? (1 - storePreprocessing.value.splitInfo.testRatio) : 0.8;
+    }
+
+    console.log("✅ Loaded from Store:", {
+      target: selectedTarget.value,
+      problem: problemType.value,
+      stats: datasetStats.value,
+      steps: steps
+    });
 
     return true;
   } catch (error) {
     console.error("❌ Error loading data:", error);
-    // router.push("/target-selection");
     return false;
   }
 };
@@ -2415,84 +2352,25 @@ const startTraining = async () => {
   }
 
   try {
-    // Get data from previous steps
-    const processedData = JSON.parse(
-      localStorage.getItem("processedData") || "{}"
-    );
-    const selectedTargetData = JSON.parse(
-      localStorage.getItem("selectedTarget") || "{}"
-    );
-
-    // CRITICAL: Prefer the most recent dataset ID from localStorage (saved by advanced-preprocessing)
-    // processedData might be stale if the user uploaded a new dataset but processedData wasn't fully updated
-    const currentBackendDatasetId = localStorage.getItem("backendDatasetId");
-    const currentDatasetId = localStorage.getItem("datasetId");
-
-    // Save basic algorithm selection for model-training page
-    const algorithmSelection = {
-      // ALGORITHM INFO
-      algorithm: {
-        name: selectedAlgorithm.value.name,
-        icon: selectedAlgorithm.value.icon,
-        complexity: selectedAlgorithm.value.complexity,
-        needsScaling: selectedAlgorithm.value.needsScaling,
-      },
-
-      // PROBLEM TYPE
-      problemType: {
-        type: problemType.value.type,
-        confidence: problemType.value.confidence,
-      },
-
-      // TARGET INFO
-      target: {
-        name: selectedTargetData.name || selectedTarget.value?.name,
-        type: selectedTargetData.type || selectedTarget.value?.type,
-      },
-
-      // DATASET STATS
-      datasetStats: {
-        rows: processedData.totalRowsInBackend || processedData.rowCount || 0,
-        features: processedData.columnCount || 0,
-      },
-
-      // BACKEND DATASET INFO (if available)
-      // Use current localStorage values if available, otherwise fallback to processedData
-      backendDatasetId: currentBackendDatasetId || processedData.backendDatasetId || null,
-      datasetId: currentDatasetId || processedData.datasetId || null,
-      backendAvailable: processedData.backendAvailable || false,
-
-      // METADATA
-      timestamp: new Date().toISOString(),
-    };
-
-    localStorage.setItem("mlConfiguration", JSON.stringify(algorithmSelection));
-
-    // ALSO save with the key that model-training.vue expects
-    localStorage.setItem("selectedAlgorithm", JSON.stringify(algorithmSelection.algorithm));
-    localStorage.setItem("problemType", JSON.stringify(algorithmSelection.problemType));
-    localStorage.setItem("datasetStats", JSON.stringify(algorithmSelection.datasetStats));
-    if (algorithmSelection.backendDatasetId) {
-      localStorage.setItem("backendDatasetId", algorithmSelection.backendDatasetId);
-    }
-    if (algorithmSelection.datasetId) {
-      localStorage.setItem("datasetId", algorithmSelection.datasetId);
-    }
+    // Save selection to Experiment Store
+    experimentStore.setAlgorithm({
+      name: selectedAlgorithm.value.name,
+      type: selectedAlgorithm.value.type || 'classification', // Fallback or derive from logic
+      params: hyperparameters // Save initial params if needed, or let model-training init defaults
+    });
+    
+    // Also save simple ref for convenience if model-training needs specific object
+    experimentStore.selectedAlgorithm = selectedAlgorithm.value;
 
     console.log("✅ Algorithm selected, navigating to model-training:", {
-      algorithm: algorithmSelection.algorithm.name,
-      problemType: algorithmSelection.problemType.type,
-      datasetRows: algorithmSelection.datasetStats.rows,
-      datasetId: algorithmSelection.datasetId
+      algorithm: selectedAlgorithm.value.name,
+      datasetId: datasetId.value
     });
 
-    // Navigate to model-training page where user will configure hyperparameters and validation
-    // Pass dataset IDs in query to ensure robustness against localStorage issues
     router.push({
       path: "/model-training",
       query: {
-        datasetId: algorithmSelection.datasetId,
-        backendDatasetId: algorithmSelection.backendDatasetId
+        datasetId: datasetId.value
       }
     });
   } catch (error) {
@@ -2727,10 +2605,7 @@ const formatDistributionsPreview = () => {
 
 // Lifecycle
 onMounted(async () => {
-  // Debug: Log what's in localStorage
-  console.log("🔍 Debugging localStorage contents:");
-  console.log("selectedTarget:", localStorage.getItem("selectedTarget"));
-  console.log("processedData:", localStorage.getItem("processedData"));
+
   
   if (loadDataFromPreviousSteps()) {
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate loading
