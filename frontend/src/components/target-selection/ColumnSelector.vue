@@ -96,7 +96,7 @@
 
             <!-- Column Meta Information -->
             <div class="column-meta">
-              <span class="type-badge" :class="column.type">
+              <span class="type-badge" :class="column.originalType">
                 {{ getColumnTypeIcon(column.type) }}
                 {{ column.type.toUpperCase() }}
               </span>
@@ -207,7 +207,22 @@ const clearFilters = () => {
 };
 
 const getColumnTypeIcon = (type) => {
-  const icons = { number: "🔢", string: "📝", date: "📅", boolean: "✅" };
+  const icons = { 
+    number: "🔢", 
+    numeric: "🔢",
+    identifier: "🆔",
+    string: "📝", 
+    categorical: "📊",
+    date: "📅", 
+    datetime: "📅",
+    boolean: "✅",
+    email: "📧",
+    phone: "📞",
+    url: "🔗",
+    ip_address: "🖥️",
+    uuid: "🔑",
+    text: "📄"
+  };
   return icons[type] || "📄";
 };
 

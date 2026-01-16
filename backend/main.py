@@ -1249,24 +1249,25 @@ async def get_dataset_info(
         if dataset.user_id != current_user['id']:
              raise HTTPException(status_code=403, detail="Not authorized to access this dataset")
 
-        # 2. Load Dataframe
-        try:
-            df = file_service.load_dataframe(dataset.storage_path)
-            
-            # 2.5 Populate Global Storage if missing
-            if dataset_id not in datasets:
+        # 2. Load Dataframe (Memory First)
+        if dataset_id in datasets:
+            df = datasets[dataset_id]['dataframe']
+            print(f"✅ Using in-memory dataset {dataset_id}")
+        else:
+            try:
+                df = file_service.load_dataframe(dataset.storage_path)
+                
+                # 2.5 Populate Global Storage if missing
                 print(f"🔄 Restoring dataset {dataset_id} to memory")
                 datasets[dataset_id] = {
                     'dataframe': df,
                     'filename': dataset.name,
                     'upload_time': dataset.upload_date,
                     'is_processed': dataset.is_processed,
-                    # Restore target info if available (would need DB field for this)
-                    # 'target_column': dataset.target_column 
                 }
-                
-        except FileNotFoundError:
-             raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+                    
+            except FileNotFoundError:
+                 raise HTTPException(status_code=404, detail="Dataset file not found on disk")
 
         # 3. Prepare Sample
         sample_size = min(200, len(df))
@@ -1292,6 +1293,30 @@ async def get_dataset_info(
                     row_dict[str(col)] = str(value)
             sample_data.append(row_dict)
 
+        # 4. Check for Split/Scaling state in memory
+        is_split = False
+        is_scaled = False
+        split_info = None
+        train_preview = []
+        test_preview = []
+        
+        if dataset_id in datasets:
+            meta = datasets[dataset_id]
+            is_split = meta.get('is_split', False)
+            is_scaled = meta.get('is_scaled', False)
+            split_info = meta.get('split_info')
+            
+            # If split, get previews
+            if is_split and dataset_id in X_train_storage and dataset_id in y_train_storage:
+                X_tr = X_train_storage[dataset_id]
+                y_tr = y_train_storage[dataset_id]
+                train_preview = pd.concat([X_tr.head(200), y_tr.head(200)], axis=1).to_dict('records')
+                
+                if dataset_id in X_test_storage and dataset_id in y_test_storage:
+                    X_te = X_test_storage[dataset_id]
+                    y_te = y_test_storage[dataset_id]
+                    test_preview = pd.concat([X_te.head(200), y_te.head(200)], axis=1).to_dict('records')
+
         return {
             'dataset_id': str(dataset.id),
             'filename': dataset.name,
@@ -1304,10 +1329,11 @@ async def get_dataset_info(
             'uploaded_at': dataset.upload_date.isoformat(),
             'sample_data': sample_data,
             'status': 'success',
-            # TODO: Store split/scaling info in DB or separate table
-            'is_split': False, 
-            'is_scaled': False,
-            'split_info': None
+            'is_split': is_split, 
+            'is_scaled': is_scaled,
+            'split_info': split_info,
+            'train_preview': train_preview,
+            'test_preview': test_preview
         }
         
     except HTTPException:
@@ -1339,11 +1365,14 @@ async def get_dataset_statistics(
         # Load semantic metadata if available
         column_metadata = dataset.column_metadata or {}
 
-        # 2. Load COMPLETE Dataframe (not just sample)
-        try:
-            df = file_service.load_dataframe(dataset.storage_path)
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+        # 2. Load COMPLETE Dataframe (Memory First)
+        if dataset_id in datasets:
+            df = datasets[dataset_id]['dataframe']
+        else:
+            try:
+                df = file_service.load_dataframe(dataset.storage_path)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="Dataset file not found on disk")
 
         print(f"\n📊 DEBUG: get_dataset_statistics called")
         print(f"   Dataset ID: {dataset_id}")
@@ -1540,8 +1569,11 @@ async def get_semantic_types(
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
-        # Load data to detect types
-        df = file_service.load_dataframe(dataset.storage_path)
+        # Load data to detect types (Memory First)
+        if dataset_id in datasets:
+            df = datasets[dataset_id]['dataframe']
+        else:
+            df = file_service.load_dataframe(dataset.storage_path)
         
         # Get existing metadata for overrides
         existing_metadata = dataset.column_metadata or {}
@@ -3828,6 +3860,183 @@ async def debug_info():
     }
 
 # ===== RUN SERVER =====
+
+# ============================================
+# PREPROCESSING ENDPOINTS
+# ============================================
+
+from pydantic import BaseModel
+from typing import List, Dict, Union, Any
+
+class DropColumnsRequest(BaseModel):
+    columns: List[str]
+
+class MissingValueRequest(BaseModel):
+    strategy: str  # 'droprows', 'fillmean', etc.
+    columns: List[str]
+
+class OutlierRequest(BaseModel):
+    method: str  # 'cap', 'remove'
+
+class DuplicateRequest(BaseModel):
+    keep: str  # 'first', 'last', 'all'
+
+# Helper to save dataset state
+def save_dataset_state(dataset_id: str, df: pd.DataFrame, log_entry: dict = None):
+    datasets[dataset_id]['dataframe'] = df
+    datasets[dataset_id]['preprocessed'] = True
+    
+    # Update shape in metadata
+    if 'metadata' not in datasets[dataset_id]:
+        datasets[dataset_id]['metadata'] = {}
+    
+    datasets[dataset_id]['metadata']['rows'] = df.shape[0]
+    datasets[dataset_id]['metadata']['columns'] = df.shape[1]
+    
+    # Add to log
+    if 'processing_log' not in datasets[dataset_id]:
+        datasets[dataset_id]['processing_log'] = []
+    
+    if log_entry:
+        datasets[dataset_id]['processing_log'].append(log_entry)
+
+@app.post("/api/datasets/{dataset_id}/preprocessing/drop-columns")
+async def drop_columns(dataset_id: str, request: DropColumnsRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Drop specified columns"""
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    try:
+        df = datasets[dataset_id]['dataframe']
+        # Load semantic types if available
+        metadata = datasets[dataset_id].get('column_metadata', {})
+        processor = DataPreprocessor(df, column_metadata=metadata)
+        
+        df_new = processor.remove_columns(request.columns)
+        
+        save_dataset_state(dataset_id, df_new, {
+            'action': 'drop_columns',
+            'columns': request.columns,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        return {
+            "success": True, 
+            "message": f"Dropped {len(request.columns)} columns",
+            "current_shape": list(df_new.shape)
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/{dataset_id}/preprocessing/missing-values")
+async def handle_missing_values_route(dataset_id: str, request: MissingValueRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Handle missing values"""
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    try:
+        df = datasets[dataset_id]['dataframe']
+        metadata = datasets[dataset_id].get('column_metadata', {})
+        processor = DataPreprocessor(df, column_metadata=metadata)
+        
+        # Convert request to expected format {col: strategy}
+        strategies = {col: request.strategy for col in request.columns}
+        
+        print(f"Applying missing value strategy: {request.strategy} for {len(strategies)} columns")
+        
+        df_new = processor.handle_missing_values(strategies)
+        
+        save_dataset_state(dataset_id, df_new, {
+            'action': 'missing_values',
+            'strategy': request.strategy,
+            'columns': request.columns,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        return {
+            "success": True,
+            "message": "Missing values processed",
+            "current_shape": list(df_new.shape)
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/{dataset_id}/preprocessing/outliers")
+async def handle_outliers_route(dataset_id: str, request: OutlierRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Handle outliers"""
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    try:
+        df = datasets[dataset_id]['dataframe']
+        metadata = datasets[dataset_id].get('column_metadata', {})
+        processor = DataPreprocessor(df, column_metadata=metadata)
+        
+        # Detect numeric columns for outlier handling
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        # Check semantic types to verify they are actually numeric
+        if metadata:
+            numeric_cols = [c for c in numeric_cols if metadata.get(c, {}).get('semantic_type') == 'numeric']
+        
+        print(f"Checking outliers in {len(numeric_cols)} numeric columns using {request.method} method")
+        
+        # Mapping: Frontend sends 'cap'/'remove' as 'method' (via OutlierRequest match to data-preview)
+        # But backend processor takes 'method' (iqr/zscore) and 'strategy' (cap/remove)
+        # The frontend seems to send { method: outlierStrategy.value } where value is 'cap' or 'remove'
+        # We'll use 'iqr' as default detection method
+        
+        strategy = request.method # 'cap' or 'remove'
+        detection_method = 'iqr'
+        
+        df_new = processor.handle_outliers(numeric_cols, method=detection_method, strategy=strategy)
+        
+        save_dataset_state(dataset_id, df_new, {
+            'action': 'outliers',
+            'strategy': strategy,
+            'method': detection_method,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        return {
+            "success": True,
+            "message": "Outliers processed",
+            "current_shape": list(df_new.shape)
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/{dataset_id}/preprocessing/remove-duplicates")
+async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Remove duplicates"""
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    try:
+        df = datasets[dataset_id]['dataframe']
+        processor = DataPreprocessor(df)
+        
+        df_new = processor.remove_duplicates(strategy=request.keep)
+        
+        save_dataset_state(dataset_id, df_new, {
+            'action': 'remove_duplicates',
+            'strategy': request.keep,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        return {
+            "success": True,
+            "message": "Duplicates removed",
+            "current_shape": list(df_new.shape)
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting DataSage ML Backend...")

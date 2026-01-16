@@ -15,8 +15,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     targetColumn: null,
     problemType: null,
 
-    // Dataset Registry (Map of all uploaded datasets)
-    registeredDatasets: new Map(),
+    // Dataset Registry (Object of all uploaded datasets)
+    registeredDatasets: {},
 
     // Preprocessing State
     preprocessed: false,
@@ -24,6 +24,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     isSplit: false,
     isScaled: false,
+    isEncoded: false,
     splitInfo: {
       trainRows: 0,
       testRows: 0,
@@ -53,12 +54,12 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     // Get current dataset info
     currentDatasetInfo: (state) => {
       if (!state.currentDataset) return null;
-      return state.registeredDatasets.get(state.currentDataset);
+      return state.registeredDatasets[state.currentDataset];
     },
 
     // Get all datasets
     allDatasets: (state) => {
-      return Array.from(state.registeredDatasets.values());
+      return Object.values(state.registeredDatasets);
     },
 
     canModifyPreprocessing: (state) => {
@@ -118,7 +119,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
           preprocessed: false,
         };
 
-        this.registeredDatasets.set(datasetInfo.dataset_id, datasetRecord);
+        this.registeredDatasets[datasetInfo.dataset_id] = datasetRecord;
         this.currentDataset = datasetInfo.dataset_id;
         this.datasetId = datasetInfo.dataset_id; // Set alias
 
@@ -174,9 +175,9 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
       // Update registered dataset
       if (
         this.currentDataset &&
-        this.registeredDatasets.has(this.currentDataset)
+        this.registeredDatasets[this.currentDataset]
       ) {
-        const dataset = this.registeredDatasets.get(this.currentDataset);
+        const dataset = this.registeredDatasets[this.currentDataset];
         dataset.preprocessed = true;
         dataset.shape = [newData.length, this.columns.length];
       }
@@ -199,20 +200,36 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     this.preprocessed = true;
     
     // Register cleaned dataset
-    this.registeredDatasets.set(cleanedDatasetId, {
+    this.registeredDatasets[cleanedDatasetId] = {
       id: cleanedDatasetId,
       data: cleanedData,
       fileName: fileName,
       columns: columns || [],
       timestamp: new Date().toISOString(),
       isPreprocessed: true
-    });
+    };
     
     console.log('✅ Preprocessing state updated in mlStore');
   },
 
   setCurrentDataset(datasetId, dataset, fileName, columns) {
     console.log('📌 Setting current dataset:', datasetId);
+
+    // Clear previous experiment flags & state
+    this.isSplit = false;
+    this.isScaled = false;
+    this.isEncoded = false;
+    this.preprocessed = false;
+    this.preprocessingSteps = [];
+    this.targetColumn = null;
+    this.selectedAlgorithm = null;
+    this.trainedModel = null;
+    this.splitInfo = {
+      trainRows: 0,
+      testRows: 0,
+      trainRatio: 0,
+      testRatio: 0,
+    };
 
     this.currentDataset = datasetId;
     this.datasetId = datasetId;
@@ -221,13 +238,13 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     this.columns = columns || [];
 
     // Register in datasets map
-    this.registeredDatasets.set(datasetId, {
+    this.registeredDatasets[datasetId] = {
       id: datasetId,
       data: dataset,
       fileName: fileName,
       columns: columns || [],
       timestamp: new Date().toISOString()
-    });
+    };
 
     console.log('✅ Dataset state updated:', {
       datasetId: this.datasetId,
@@ -389,7 +406,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     // Clear all datasets
     clearAllDatasets() {
-      this.registeredDatasets.clear();
+      this.registeredDatasets = {};
       this.reset();
       console.log("🗑️ All datasets cleared");
     },
@@ -413,6 +430,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
           // ✅ NEW: Persist split/scaling state
           "isSplit",
           "isScaled",
+          "isEncoded",
           "splitInfo",
           "scalingMethod",
         ],

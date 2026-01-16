@@ -53,7 +53,7 @@ export function useTargetAnalysis() {
    * Detect if column is a datetime/temporal column
    * These should NOT be recommended as targets
    */
-  const isDateTimeColumn = (columnName, sampleValues) => {
+  const isDateTimeColumn = (columnName, sampleValues, analysis = null) => {
     // Check column name for temporal keywords
     const temporalKeywords = [
       'date', 'time', 'datetime', 'timestamp', 'created', 'updated',
@@ -64,6 +64,9 @@ export function useTargetAnalysis() {
     const hasTemporalName = temporalKeywords.some(keyword => 
       columnName.toLowerCase().includes(keyword)
     );
+    
+    // Check if semanticType is explicitly set to datetime
+    if (analysis?.semanticType === 'datetime') return true;
     
     if (hasTemporalName) return true;
     
@@ -192,6 +195,9 @@ export function useTargetAnalysis() {
     // Check for high cardinality (>95% unique)
     const isHighCardinality = uniqueRatio > 0.95;
     
+    // Check if semanticType is explicitly set to identifier
+    if (analysis.semanticType === 'identifier') return true;
+    
     return namePattern.test(analysis.name) || hasUUIDPattern || isSequential || isHighCardinality;
   };
 
@@ -252,22 +258,25 @@ export function useTargetAnalysis() {
       criticalScore -= 80;
     }
 
-    // ❌ CRITICAL: Aggregated features
+    // ❌ CRITICAL: Email and Phone (PII/Identifiers)
+    if (analysis.semanticType === 'email' || analysis.semanticType === 'phone') {
+      criticalScore -= 85;
+    }
+
+    //   Aggregated features
     if (isAggregatedFeature(analysis.name)) {
       criticalScore -= 70;
     }
 
-    // ============================================================================
-    // IMPORTANT FACTORS (30% weight) - Strong indicators
-    // ============================================================================
-
-    // ❌ IMPORTANT: High missing data
+ 
+    
+    //  High missing data
     if (analysis.missingPercent > 10) {
       const penalty = Math.min(analysis.missingPercent * 2, 80);
       importantScore -= penalty;
     }
 
-    // ❌ IMPORTANT: Class imbalance (using Gini coefficient)
+    //  Class imbalance (using Gini coefficient)
     if (analysis.giniImpurity !== undefined) {
       // Gini close to 0 = severe imbalance
       // Gini close to max = good balance
@@ -411,6 +420,22 @@ export function useTargetAnalysis() {
       let currentType = column.type || "categorical";
       let originalType = column.originalType || column.type || "categorical";
 
+      // Map semanticType back to UI types for Target Selection components
+      if (column.semanticType && column.semanticType !== 'unknown') {
+        currentType = column.semanticType; // Preserve specific type for display
+        
+        // Map to generalized categories for filters and logic
+        if (['numeric', 'identifier'].includes(column.semanticType)) {
+          originalType = "number";
+        } else if (column.semanticType === 'datetime') {
+          originalType = "date";
+        } else if (column.semanticType === 'boolean') {
+          originalType = "boolean";
+        } else {
+          originalType = "string"; // categorical, email, phone, text, url, etc.
+        }
+      }
+
       const isEncodedColumn = Boolean(
         column.isEncoded ||
           column.encoding ||
@@ -443,10 +468,11 @@ export function useTargetAnalysis() {
         cardinalityScore: 0,
         isDateTime: false,
         isTextColumn: false,
+        semanticType: column.semanticType || 'unknown',
       };
 
       // Detect datetime columns
-      analysis.isDateTime = isDateTimeColumn(columnName, cleanData);
+      analysis.isDateTime = isDateTimeColumn(columnName, cleanData, analysis);
 
       // Detect text columns
       analysis.isTextColumn = isTextColumn(cleanData);
@@ -463,7 +489,16 @@ export function useTargetAnalysis() {
           .map((val) => parseFloat(String(val).replace(/,/g, "")))
           .filter((n) => !isNaN(n) && isFinite(n));
 
-        if (numbers.length > 0) {
+        if (analysis.metrics && analysis.metrics.mean !== undefined) {
+          analysis.statistics = {
+            min: analysis.metrics.min ?? Math.min(...numbers),
+            max: analysis.metrics.max ?? Math.max(...numbers),
+            mean: analysis.metrics.mean,
+            median: analysis.metrics.median,
+            std: analysis.metrics.std || analysis.metrics.std_dev || 0,
+          };
+          analysis.outliers = analysis.metrics.outliers_count || detectOutliers(numbers).length;
+        } else if (numbers.length > 0) {
           const mean = numbers.reduce((sum, n) => sum + n, 0) / numbers.length;
           const sorted = [...numbers].sort((a, b) => a - b);
           const median =
@@ -488,16 +523,25 @@ export function useTargetAnalysis() {
 
       // Calculate class distribution and Gini for categorical columns
       if (currentType === "string" || currentType === "categorical") {
-        const classCounts = {};
-        cleanData.forEach(val => {
-          classCounts[val] = (classCounts[val] || 0) + 1;
-        });
-        
-        // Convert to ratios
-        analysis.classDistribution = {};
-        Object.keys(classCounts).forEach(key => {
-          analysis.classDistribution[key] = classCounts[key] / cleanData.length;
-        });
+        if (analysis.distribution && analysis.distribution.value_counts) {
+           const counts = analysis.distribution.value_counts;
+           const total = Object.values(counts).reduce((a, b) => a + b, 0);
+           analysis.classDistribution = {};
+           Object.keys(counts).forEach(key => {
+             analysis.classDistribution[key] = counts[key] / total;
+           });
+        } else {
+          const classCounts = {};
+          cleanData.forEach(val => {
+            classCounts[val] = (classCounts[val] || 0) + 1;
+          });
+          
+          // Convert to ratios
+          analysis.classDistribution = {};
+          Object.keys(classCounts).forEach(key => {
+            analysis.classDistribution[key] = classCounts[key] / cleanData.length;
+          });
+        }
         
         // Calculate Gini impurity
         analysis.giniImpurity = calculateGiniImpurity(analysis.classDistribution);

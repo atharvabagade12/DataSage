@@ -134,9 +134,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
+
+
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import { useMLDataFlowStore } from '../stores/mlDataFlow';
+import { useDataStore } from '../stores/data';
+import { useExperimentStore } from '../stores/experiment';
 import { useAuthenticatedFetch } from '../composables/useAuthenticatedFetch';
 import { useTargetAnalysis } from '../composables/useTargetAnalysis';
 
@@ -147,17 +152,20 @@ import TargetInsights from '../components/target-selection/TargetInsights.vue';
 
 const router = useRouter();
 const mlStore = useMLDataFlowStore();
-const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch();
+const dataStore = useDataStore();
+const experimentStore = useExperimentStore();
+const { authenticatedPost } = useAuthenticatedFetch();
 const { processColumns } = useTargetAnalysis();
 
-// State
+// Store Refs
+const { backendConnected } = storeToRefs(mlStore);
+const { rawPreview: dataset, statistics: dataStats, semanticTypes } = storeToRefs(dataStore);
+const { datasetId } = storeToRefs(experimentStore);
+
+// Local State
 const isLoading = ref(true);
-const dataset = ref([]);
-const columns = ref([]);
-const availableColumns = ref([]);
 const selectedColumn = ref(null);
-const datasetId = ref(null);
-const fileName = ref("");
+const availableColumns = ref([]);
 const datasetInfo = ref({ rowCount: 0, columnCount: 0 });
 
 // Methods
@@ -165,267 +173,121 @@ const handleColumnSelect = (column) => {
   selectedColumn.value = column;
 };
 
-const detectColumnType = (data) => {
-  const nonNullData = data.filter(
-    (val) => val !== null && val !== undefined && val !== ""
-  );
-  if (nonNullData.length === 0) return "string";
+const goBack = () => router.push("/data-preview");
 
-  const isNumber = nonNullData.every((val) => !isNaN(parseFloat(val)) && isFinite(val));
-  if (isNumber) return "number";
-
-  const isDate = nonNullData.every((val) => !isNaN(Date.parse(val)));
-  if (isDate) return "date";
-
-  return "string";
-};
-
-// Methods
-const detectProblemType = (target) => {
-  if (!target) return "classification";
-  const uniqueValues = target.uniqueValues || 0;
-  const dataType = target.type?.toLowerCase() || "";
-
-  console.log("🔍 Running Problem Type Detection:", {
-    target: target.name,
-    dataType,
-    uniqueValues
-  });
-
-  // Priority 1: Check uniqueValues first
-  if (uniqueValues === 2) {
-    return "classification";
-  } 
-  else if (uniqueValues > 2 && uniqueValues <= 20) {
-    return "classification";
-  }
-
-  // Priority 2: Check dataType for continuous/numerical data
-  if (dataType === "numerical" || 
-      dataType === "numeric" || 
-      dataType === "number" ||
-      dataType === "float") {
-    return "regression";
-  }
-
-  // Priority 3: Check for high cardinality
-  if (uniqueValues > 20) {
-    return "regression";
-  }
-
-  return "classification";
-};
-
-const loadPreviousData = async () => {
+const loadData = async () => {
+  isLoading.value = true;
   try {
-    isLoading.value = true;
-
-    // Priority 1: mlStore
-    if (mlStore.dataset && mlStore.dataset.length > 0) {
-      console.log("✅ Using mlStore data");
-      dataset.value = mlStore.dataset;
-      datasetId.value = mlStore.datasetId;
-      fileName.value = mlStore.fileName;
-      setupColumnsFromDataset();
-      return;
+    // 1. Recovery Check
+    if (!datasetId.value) {
+       if (mlStore.datasetId) {
+         experimentStore.setDataset(mlStore.datasetId, mlStore.fileName);
+       } else {
+         // Try legacy localStorage
+         const stored = localStorage.getItem('processedData');
+         if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.datasetId) {
+               experimentStore.setDataset(parsed.datasetId, parsed.fileName || "Dataset");
+            }
+         }
+       }
     }
 
-    // Priority 2: localStorage
-    const processedDataStr = localStorage.getItem("processedData");
-    if (processedDataStr) {
-      const processedData = JSON.parse(processedDataStr);
-      if (processedData.data && processedData.data.length > 0) {
-        console.log("✅ Using localStorage data");
-        dataset.value = processedData.data;
-        datasetId.value = processedData.datasetId;
-        fileName.value = processedData.fileName;
-        setupColumnsFromDataset();
+    if (!datasetId.value) {
+        router.push("/data-preview");
         return;
-      }
     }
 
-    // Priority 3: Backend
-    console.log("⚠️ Fetching from backend...");
-    let idToFetch = mlStore.datasetId;
-    if (!idToFetch && processedDataStr) {
-      idToFetch = JSON.parse(processedDataStr).datasetId;
-    }
-
-    if (!idToFetch) {
-      throw new Error("No dataset ID found.");
-    }
-
-    const response = await fetch(`http://localhost:8000/api/datasets/${idToFetch}/preview`);
-    if (!response.ok) throw new Error("Failed to fetch dataset");
+    // 2. dataStore Load
+    await dataStore.loadData(datasetId.value);
     
-    const data = await response.json();
-    dataset.value = data.data || [];
-    datasetId.value = idToFetch;
-    fileName.value = data.filename || "Unknown";
-    setupColumnsFromDataset();
+    // 3. Process Columns for UI
+    processAvailableColumns();
 
   } catch (error) {
-    console.error("Error loading data:", error);
-    alert("Failed to load dataset. Redirecting to preview.");
-    router.push("/data-preview");
+    console.error("Target Selection Load Error:", error);
   } finally {
     isLoading.value = false;
   }
 };
 
-const setupColumnsFromDataset = () => {
-  if (dataset.value.length > 0) {
-    columns.value = Object.keys(dataset.value[0]).map((colName) => ({
-      name: colName,
-      type: detectColumnType(dataset.value.map((row) => row[colName])),
-      originalType: detectColumnType(dataset.value.map((row) => row[colName])),
-      unique: 0,
-      missing: 0,
-    }));
+const processAvailableColumns = () => {
+    // Logic adapted from original setupColumnsFromDataset
+    if (!dataset.value.length) return;
 
     datasetInfo.value = {
-      rowCount: dataset.value.length,
-      columnCount: columns.value.length,
+        rowCount: dataset.value.length,
+        columnCount: Object.keys(dataset.value[0]).length
     };
 
-    // Use composable to process columns
-    availableColumns.value = processColumns(dataset.value, columns.value);
-  }
+    // 1. Prepare raw columns with backend metadata merged in
+    const rawCols = Object.keys(dataset.value[0]).map(k => {
+        const backendStat = dataStats.value?.column_stats?.find(s => s.name === k);
+        const backendType = semanticTypes.value?.find(t => t.column === k)?.semantic_type;
+        
+        return { 
+            name: k,
+            unique: backendStat?.unique || 0,
+            missing: backendStat?.missing || 0,
+            semanticType: backendType || backendStat?.semanticType || backendStat?.semantic_type || 'unknown',
+            distribution: backendStat?.distribution || null,
+            metrics: backendStat?.detailed_metrics || backendStat?.metrics || null
+        };
+    });
+    
+    // 2. Process via composable (which now respects semanticType for UI mapping)
+    availableColumns.value = processColumns(dataset.value, rawCols);
 };
 
-const goBack = () => router.push("/data-preview");
-
 const saveDraft = () => {
-  if (selectedColumn.value) {
-    const draftState = {
-      selectedTarget: selectedColumn.value.name,
-      targetColumn: selectedColumn.value,
-      savedAt: Date.now(),
-    };
-    localStorage.setItem("mlAppDraft", JSON.stringify(draftState));
-    console.log("💾 Draft saved");
-    alert("Draft saved successfully!");
-  }
+    // Optional: could persist to experimentStore or just log
+    console.log("Draft saving not fully implemented in verify-only mode");
 };
 
 const continueToAdvancedPreprocessing = async () => {
   if (!selectedColumn.value) return;
 
   try {
-    const processedData = JSON.parse(localStorage.getItem('processedData'));
-    const backendDatasetId = processedData?.backendDatasetId || processedData?.datasetId; // Fallback
+    // 1. Update Experiment Store
+    experimentStore.setTargetColumn(selectedColumn.value.name);
+    
+    // Set problem type based on column properties (simplistic detection)
+    // Real detection should happen on backend or via robust logic
+    let probType = "classification";
+    if (selectedColumn.value.type === 'number' && selectedColumn.value.uniqueValues > 20) {
+        probType = "regression";
+    }
+    experimentStore.setProblemType(probType);
 
-    const targetData = {
-      name: selectedColumn.value.name,
-      type: selectedColumn.value.type,
-      originalType: selectedColumn.value.originalType || selectedColumn.value.type,
-      uniqueValues: selectedColumn.value.uniqueValues,
-      suitabilityScore: selectedColumn.value.suitabilityScore,
-      statistics: selectedColumn.value.statistics,
-      missingPercent: selectedColumn.value.missingPercent || 0,
-      backendDatasetId: backendDatasetId,
-      datasetId: datasetId.value,
-    };
-
-    // Store target data
-    localStorage.setItem('selectedTarget', JSON.stringify(targetData));
-
-    // Detect problem type
-    const detectedProblemType = detectProblemType(targetData);
-
-    // Update global state
-    const currentState = JSON.parse(localStorage.getItem('mlAppState')) || {};
-    currentState.selectedTarget = selectedColumn.value.name;
-    currentState.targetColumn = selectedColumn.value;
-    currentState.backendDatasetId = backendDatasetId;
-    currentState.datasetId = datasetId.value;
-    currentState.problemType = detectedProblemType; // Save detected type
-    currentState.updatedAt = Date.now();
-    localStorage.setItem('mlAppState', JSON.stringify(currentState));
-
-    console.log('\n' + '='.repeat(80));
-    console.log('🎯 TARGET VARIABLE SELECTED');
-    console.log('='.repeat(80));
-    console.log('   Target Column:', selectedColumn.value.name);
-    console.log('   Target Type:', selectedColumn.value.type);
-    console.log('   Suitability Score:', selectedColumn.value.suitabilityScore);
-    console.log('   Dataset ID:', datasetId.value);
-    console.log('   Stored in: localStorage.mlAppState');
-    console.log('='.repeat(80) + '\n');
-
-    // Also notify backend
+    // 2. Notify Backend
     try {
         await authenticatedPost('http://localhost:8000/api/set-target', {
             dataset_id: datasetId.value,
-            target_column: selectedColumn.value.name
+            target_column: selectedColumn.value.name,
+            problem_type: probType
         });
-        console.log('✅ Backend notified of target selection');
     } catch (e) {
-        console.warn("⚠️ Backend notification failed, but proceeding locally:", e);
+        console.warn("Backend target set failed", e);
     }
 
     router.push('/advanced-preprocessing');
   } catch (error) {
-    console.error('❌ Navigation error:', error);
+    console.error('Navigation error:', error);
     alert('Failed to proceed: ' + error.message);
   }
 };
 
-const fetchCompleteStatistics = async () => {
-  if (!datasetId.value) return;
-
-  try {
-    console.log("🔄 Fetching complete statistics...");
-    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}/statistics`);
-    
-    if (!response.ok) {
-      console.warn("⚠️ Failed to fetch statistics");
-      return;
-    }
-
-    const stats = await response.json();
-
-    if (stats.column_stats) {
-      // Update columns with backend statistics
-      stats.column_stats.forEach(stat => {
-        const col = columns.value.find(c => c.name === stat.name);
-        if (col) {
-          col.unique = stat.unique;
-          col.missing = stat.missing;
-          col.distribution = stat.distribution; // Store backend distribution data
-          col.metrics = stat.detailed_metrics; // Store enhanced metrics
-          // Use top values for preview if available (better than first 10 rows)
-          if (stat.top_values && stat.top_values.length > 0) {
-            col.hasBackendPreview = true;
-            col.backendPreview = stat.top_values;
-          }
-        }
-      });
-
-      // Re-process columns with new data
-      availableColumns.value = processColumns(dataset.value, columns.value);
-      
-      // Refresh selectedColumn if it exists to ensure it has the new stats
-      if (selectedColumn.value) {
-        const updatedCol = availableColumns.value.find(c => c.name === selectedColumn.value.name);
-        if (updatedCol) {
-          console.log("🔄 Refreshing selected column with full stats");
-          selectedColumn.value = updatedCol;
-        }
-      }
-      
-      console.log("✅ Updated columns with full dataset statistics");
-    }
-  } catch (error) {
-    console.warn("⚠️ Error updating statistics:", error);
-  }
-};
+// --- Watchers ---
+// Sync local view when global semantic types from backend change
+watch(semanticTypes, () => {
+    console.log("🔄 Semantic types updated in store, re-analyzing targets...");
+    processAvailableColumns();
+}, { deep: true });
 
 onMounted(async () => {
   await mlStore.checkBackendConnection();
-  await loadPreviousData();
-  // Fetch full stats after loading data
-  await fetchCompleteStatistics();
+  await loadData();
 });
 </script>
 

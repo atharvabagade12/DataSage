@@ -2,10 +2,11 @@ import { defineStore } from 'pinia';
 
 export const useExperimentStore = defineStore('experiment', {
   state: () => ({
-    // Dataset Reference (Metadata only)
+    // Dataset Reference
     datasetId: null,
     datasetName: null,
     datasetSize: { rows: 0, columns: 0 },
+    datasetMetadata: null, // { name: '', rows: 0, columns: 0, etc. }
     
     // Problem Definition
     targetColumn: null,
@@ -38,27 +39,74 @@ export const useExperimentStore = defineStore('experiment', {
       droppedColumns: []
     },
     
-    // Model Selection
-    model: {
-      selectedAlgorithm: null, // Algorithm ID/Name
-      hyperparameters: {}, // { C: 1.0, kernel: 'rbf' }
-      validationStrategy: 'kfold',
-      folds: 5
-    }
+    // Model Configuration (Flattened for easier reactivity in components)
+    selectedAlgorithm: null, // Algorithm object/ID
+    hyperparameters: {},
+    validationStrategy: 'kfold',
+    folds: 5,
+    testSize: 0.2
   }),
   
   actions: {
     // Dataset Actions
     setDataset(id, name, size) {
+      // Clear experiment state to ensure fresh start
+      this.targetColumn = null;
+      this.problemType = null;
+      this.resetPreprocessing(); // Use existing reset action
+      this.selectedAlgorithm = null;
+      this.hyperparameters = {};
+      this.validationStrategy = 'kfold';
+
       this.datasetId = id;
       this.datasetName = name;
-      this.datasetSize = size || { rows: 0, columns: 0 };
+      const cleanSize = size || { rows: 0, columns: 0 };
+      this.datasetSize = cleanSize;
+      
+      // Keep datasetMetadata in sync for components expecting it
+      this.datasetMetadata = {
+        id: id,
+        name: name,
+        totalRows: cleanSize.rows || 0,
+        columns: cleanSize.columns || 0
+      };
+    },
+
+    setDatasetId(id) {
+      this.datasetId = id;
+      if (this.datasetMetadata) {
+        this.datasetMetadata.id = id;
+      } else {
+        this.datasetMetadata = { id: id };
+      }
+    },
+
+    updateDatasetMetadata(metadata) {
+      if (metadata.id) this.datasetId = metadata.id;
+      if (metadata.name) this.datasetName = metadata.name;
+      if (metadata.size) this.datasetSize = metadata.size;
+      
+      this.datasetMetadata = {
+        ...this.datasetMetadata,
+        ...metadata,
+        // Ensure standard keys exist for components
+        totalRows: metadata.totalRows || metadata.size?.rows || this.datasetMetadata?.totalRows || 0,
+        columns: metadata.columns || metadata.size?.columns || this.datasetMetadata?.columns || 0
+      };
     },
     
     // Target Actions
     setTarget(column, typeInfo) {
       this.targetColumn = column;
       this.problemType = typeInfo;
+    },
+
+    setTargetColumn(column) {
+      this.targetColumn = column;
+    },
+
+    setProblemType(type) {
+      this.problemType = type;
     },
     
     // Preprocessing Actions
@@ -70,6 +118,21 @@ export const useExperimentStore = defineStore('experiment', {
     
     setSplitApplied(status) {
       this.preprocessing.isSplitApplied = status;
+    },
+    
+    setScalingApplied(status) {
+      this.preprocessing.isScalingApplied = status;
+    },
+
+    setEncodingApplied(status) {
+      this.preprocessing.isEncodingApplied = status;
+    },
+
+    setSmoteApplied(status, config) {
+      this.preprocessing.smote.applied = status;
+      if (config) {
+        this.preprocessing.smote = { ...this.preprocessing.smote, ...config };
+      }
     },
     
     updateScaling(method, columns, applied = true) {
@@ -88,8 +151,44 @@ export const useExperimentStore = defineStore('experiment', {
     },
     
     // Model Actions
+    setAlgorithm(algo) {
+      this.selectedAlgorithm = algo;
+    },
+
     setSelectedAlgorithm(algo) {
-      this.model.selectedAlgorithm = algo;
+      this.selectedAlgorithm = algo;
+    },
+
+    setHyperparameters(params) {
+      this.hyperparameters = params;
+    },
+
+    setValidationConfig(strategy, config = {}) {
+      this.validationStrategy = strategy;
+      if (config.folds) this.folds = config.folds;
+      if (config.testSize) this.testSize = config.testSize;
+    },
+
+    resetPreprocessing() {
+      this.preprocessing = {
+        splitRatio: 0.8,
+        splitStrategy: 'random',
+        randomSeed: 42,
+        isSplitApplied: false,
+        scalingMethod: 'standard',
+        isScalingApplied: false,
+        scaledColumns: [],
+        encodingMethod: 'onehot',
+        isEncodingApplied: false,
+        encodedColumns: [],
+        smote: {
+          applied: false,
+          strategy: 'auto',
+          kNeighbors: 5
+        },
+        selectedFeatures: [],
+        droppedColumns: []
+      };
     },
     
     // Reset Experiment (Keep dataset, clear configs)
@@ -97,6 +196,7 @@ export const useExperimentStore = defineStore('experiment', {
       const currentId = this.datasetId;
       const currentName = this.datasetName;
       const currentSize = this.datasetSize;
+      const currentMetadata = this.datasetMetadata;
       
       this.$reset();
       
@@ -104,6 +204,7 @@ export const useExperimentStore = defineStore('experiment', {
       this.datasetId = currentId;
       this.datasetName = currentName;
       this.datasetSize = currentSize;
+      this.datasetMetadata = currentMetadata;
     },
     
     // Full Reset
@@ -112,5 +213,5 @@ export const useExperimentStore = defineStore('experiment', {
     }
   },
   
-  persist: true, // Auto-persist entire state using default storage (localStorage)
+  persist: true,
 });

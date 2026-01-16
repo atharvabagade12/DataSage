@@ -152,13 +152,13 @@ const getSuitabilityFactors = () => {
 
   // Unique values check
   const uniqueRatio = props.selectedColumn.uniqueValues / props.dataset.length;
-  if (props.selectedColumn.type === "string" && uniqueRatio < 0.5) {
+  if (props.selectedColumn.originalType === "string" && uniqueRatio < 0.5) {
     factors.push({
       icon: "✅",
       text: "Good cardinality for classification",
       status: "good",
     });
-  } else if (props.selectedColumn.type === "number") {
+  } else if (props.selectedColumn.originalType === "number") {
     factors.push({
       icon: "✅",
       text: "Numeric data suitable for ML",
@@ -224,7 +224,7 @@ const getTargetRecommendations = () => {
     }
 
     // Regression
-    if (column.type === "number" && column.uniqueValues > 20) {
+    if (props.selectedColumn.originalType === "number" && column.uniqueValues > 20) {
       recommendations.push({
         icon: "📈",
         title: "Regression Analysis",
@@ -235,7 +235,7 @@ const getTargetRecommendations = () => {
     }
 
     // Time Series (if applicable)
-    if (column.type === "date" || /date|time|timestamp/i.test(column.name)) {
+    if (props.selectedColumn.originalType === "date" || /date|time|timestamp/i.test(column.name)) {
       recommendations.push({
         icon: "⏰",
         title: "Time Series Forecasting",

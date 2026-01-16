@@ -315,7 +315,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useMLDataFlowStore } from '../stores/mlDataFlow'
+import { useExperimentStore } from '../stores/experiment'
+
 const backendConnected = ref(false)
+const mlStore = useMLDataFlowStore()
+const experimentStore = useExperimentStore()
 
 // Page Meta
 useHead({
@@ -555,6 +560,19 @@ const processFile = async (file) => {
     localStorage.setItem('processedData', JSON.stringify(lightweightData))
     localStorage.setItem('backendDatasetId', result.dataset_id)
     localStorage.removeItem('uploadedData') // Clean up old data
+
+    // ✅ UPDATE STORES TO PREVENT STALE DATA
+    mlStore.setCurrentDataset(
+      result.dataset_id, 
+      [], // No data yet, will be fetched
+      result.filename || file.name,
+      result.columns || []
+    );
+    experimentStore.setDataset(
+        result.dataset_id,
+        result.filename || file.name,
+        { rows: result.total_rows, columns: result.total_columns }
+    );
     
     // Update UI
     uploadedFile.value = {

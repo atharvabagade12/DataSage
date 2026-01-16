@@ -35,6 +35,16 @@ class DataPreprocessor:
                 if col in column_metadata:
                     self.semantic_types[col] = column_metadata[col].get('semantic_type')
         
+        # ✅ Fallback: Ensure every column has a semantic type based on pandas dtype
+        for col in df.columns:
+            if col not in self.semantic_types or not self.semantic_types[col]:
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    self.semantic_types[col] = 'numeric'
+                elif pd.api.types.is_datetime64_any_dtype(df[col]):
+                    self.semantic_types[col] = 'datetime'
+                else:
+                    self.semantic_types[col] = 'categorical'
+            
         # Backward compatibility for existing logic that uses self.column_types
         self.column_types = self._detect_column_types()
         

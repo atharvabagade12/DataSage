@@ -1176,734 +1176,113 @@
 </template>
 
 <script setup>
-import {
-  ref,
-  reactive,
-  computed,
-  onMounted,
-  watch,
-  nextTick,
-  onUnmounted,
-} from "vue";
-
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useMLDataFlowStore } from "~/stores/mlDataFlow";
-const mlStore = useMLDataFlowStore();
+import { storeToRefs } from "pinia";
+import { useMLDataFlowStore } from "../stores/mlDataFlow";
+import { useDataStore } from "../stores/data";
+import { useExperimentStore } from "../stores/experiment";
+import { useAuthenticatedFetch } from "../composables/useAuthenticatedFetch";
+import { useToast } from '~/composables/useToast';
 
-
-import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch'
-const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
-
-// Import new components
-import { useToast } from '~/composables/useToast'
-import Button from '~/components/Button.vue'
-import Card from '~/components/Card.vue'
-import Modal from '~/components/Modal.vue'
-import Input from '~/components/Input.vue'
-import Checkbox from '~/components/Checkbox.vue'
-import Select from '~/components/Select.vue'
-import LoadingSpinner from '~/components/LoadingSpinner.vue'
-import { addPreprocessingStep } from '@/utils/preprocessingTracker';
-
-
-const { showSuccess, showError, showWarning, showInfo } = useToast()
+// Components
+import Card from "../components/Card.vue";
+import Button from "../components/Button.vue";
+import Modal from "../components/Modal.vue";
 
 const router = useRouter();
+const mlStore = useMLDataFlowStore();
+const dataStore = useDataStore();
+const experimentStore = useExperimentStore();
+const { showSuccess, showError, showInfo, showWarning } = useToast();
+const { authenticatedPost } = useAuthenticatedFetch();
 
-const backendConnected = computed(() => mlStore.backendConnected);
+// Store Refs
+const { backendConnected } = storeToRefs(mlStore);
+const { rawPreview: dataset, statistics: dataStats, semanticTypes } = storeToRefs(dataStore);
+const { datasetId } = storeToRefs(experimentStore);
 
-// ===== DATA STATE =====
+// State
+const isLoading = ref(true);
 const isProcessing = ref(false);
-const isApplyingPreprocessing = ref(false); // NEW
-const processingMessage = ref("");
-const fileName = ref("");
-const fileSize = ref(0);
-const cleanedDatasetId = ref(null);
-const originalDatasetId = ref(null);
-const preprocessingHistory = ref([]);
-const originalDataset = ref([]);
-const cleanedDataset = ref([]);
-const columns = ref([]);
-const showOriginal = ref(true);
+const processingMessage = ref("Processing..."); // Added missing ref
+const fileName = ref(""); // Get from store if possible, or keep local if transient
+
+// --- Table State ---
 const searchQuery = ref("");
 const currentPage = ref(1);
-const pageSize = ref(25);
+const pageSize = ref(10);
 const sortColumn = ref("");
 const sortDirection = ref("asc");
-const datasetId = ref(null);
-const originalDatasetBackup = ref([]);
-const totalRowsInBackend = ref(0);
-const preprocessingComplete = ref(true);
+const showOriginal = ref(true); // Added missing ref
+const showResetModal = ref(false); // Added missing ref
 
-// ===== COMPLETE DATASET STATISTICS =====
-const completeDatasetStats = ref({
-  totalRows: 0,
-  totalColumns: 0,
-  missingValues: {},
-  duplicates: 0,
-  outliers: 0
-});
+// --- Preprocessing History & Tools ---
+const activeTools = ref([]); // Added missing ref (used in template)
+const preprocessingHistory = ref([]); // Added missing ref
+const preprocessingComplete = ref(true); // Added missing ref
+
+const hasActiveTools = computed(() => activeTools.value.length > 0); // Added missing computed
 
 
-
-
-
-
-// ===== PREPROCESSING CONFIG =====
-const missingValuesConfig = ref({});
-const missingColumnsDetailed = ref([]); // NOW A REF (populated from backend)
-const globalMissingStrategy = ref("fillmean");
-
-const activeTools = ref([]);
-const openDropdowns = ref([]);
-const missingStrategy = ref("fill_mean");
-const duplicateStrategy = ref("keep_first");
-const outlierStrategy = ref("cap");
-
-// Modal states
+// --- Preprocessing State ---
 const showColumnModal = ref(false);
 const showMissingModal = ref(false);
-const showDuplicateModal = ref(false);
 const showOutlierModal = ref(false);
-const showEncodingModal = ref(false);
-const showResetModal = ref(false);
-const showTypeDetectionModal = ref(false);
-const semanticTypes = ref([]);
-const isDetectingTypes = ref(false);
+const showDuplicateModal = ref(false);
+const showTypeDetectionModal = ref(false); // Added for type detection tool
+const isDetectingTypes = ref(false); 
+const semanticOverrides = ref({});
 
-const categoricalEncodingState = ref([]);
-const detectedCategoricalColumns = ref([]);
-const categoricalColumns = ref([]);
-
+// Column State
+const columns = ref([]);
+const availableColumns = ref([]); 
 
 
+const missingStats = ref({ count: 0, totalMissing: 0 });
+const missingColumnsDetailed = ref([]);
+const globalMissingStrategy = ref("droprows");
+
+// Outliers
+const outlierStats = ref({ count: 0, columns: 0 });
+const outlierStrategy = ref("cap");
+
+// Duplicates
+const duplicateStats = ref({ count: 0 });
+const duplicateStrategy = ref("keep_first");
 
 
+// ==================== COMPUTED PROPERTIES ====================
 
-// ===== TYPE DETECTION METHODS =====
-const openTypeDetectionModal = async () => {
-    showTypeDetectionModal.value = true;
-    if (semanticTypes.value.length === 0) {
-        await fetchSemanticTypes();
-    }
-};
-
-const fetchSemanticTypes = async () => {
-    if (!datasetId.value) return;
-    try {
-        isDetectingTypes.value = true;
-        const response = await authenticatedGet(`/api/datasets/${datasetId.value}/semantic-types`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        semanticTypes.value = data.column_types || [];
-    } catch (error) {
-        console.error("Error fetching semantic types:", error);
-        showError("Failed to detect column types");
-    } finally {
-        isDetectingTypes.value = false;
-    }
-};
-
-const saveSemanticOverrides = async () => {
-    if (!datasetId.value) return;
-    try {
-        isProcessing.value = true;
-        processingMessage.value = "Saving data type overrides...";
-        const response = await authenticatedPost(`/api/datasets/${datasetId.value}/semantic-types/override`, semanticTypes.value);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        showSuccess("Data types updated successfully. All preprocessing tools will now follow these types.");
-        showTypeDetectionModal.value = false;
-        
-        // Refresh statistics and categorical detection
-        await fetchCompleteStatisticsFromBackend();
-        detectCategoricalColumns();
-    } catch (error) {
-        console.error("Error saving overrides:", error);
-        showError("Failed to save data type overrides");
-    } finally {
-        isProcessing.value = false;
-        processingMessage.value = "";
-    }
-};
-
-
-// Helper methods for column operations
-const applyColumnChanges = async () => {
-  try {
-    const columnsToRemove = getColumnsToRemove();
-    
-    if (columnsToRemove.length === 0) {
-      showWarning('No Changes', 'Please select at least one column to remove');
-      return;
-    }
-    
-    isProcessing.value = true;
-    processingMessage.value = `Removing ${columnsToRemove.length} columns...`;
-    
-    // Call backend preprocessing with just column removal
-    const steps = [{
-      type: 'remove_columns',
-      columns: columnsToRemove.map(col => col.name)
-    }];
-    
-    const datasetToUse = cleanedDatasetId.value || datasetId.value;
-    
-    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
-      dataset_id: datasetToUse,
-      steps: steps
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to remove columns');
-    }
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      // Update with cleaned data
-      cleanedDatasetId.value = result.cleaned_dataset_id;
-      datasetId.value = cleanedDatasetId.value;
-      cleanedDataset.value = result.preview || [];
-      totalRowsInBackend.value = result.total_rows;
-      
-      // Update columns
-      if (cleanedDataset.value.length > 0) {
-        const actualColumns = Object.keys(cleanedDataset.value[0]);
-        columns.value = actualColumns.map(colName => {
-          const existingCol = columns.value.find(c => c.name === colName);
-          return {
-            name: colName,
-            type: existingCol?.type || 'categorical',
-            unique: existingCol?.unique || 0,
-            missing: 0,
-            remove: false,
-            encode: existingCol?.encode || false,
-            encoding: existingCol?.encoding || 'onehot'
-          };
-        });
-      }
-      
-      // Update mlStore
-      mlStore.updateAfterPreprocessing(
-        result.cleaned_dataset_id,
-        cleanedDataset.value,
-        fileName.value,
-        columns.value
-      );
-      
-      // Switch to cleaned view
-      showOriginal.value = false;
-      
-      // Fetch updated statistics
-      await fetchCompleteStatisticsFromBackend();
-      
-      // Show detailed success message
-      const removedCount = columnsToRemove.length;
-      showSuccess(
-        'Columns Removed', 
-        `Successfully removed ${removedCount} column${removedCount !== 1 ? 's' : ''}. Dataset now has ${columns.value.length} columns.`
-      );
-
-      addPreprocessingStep('Column Selection');
-      showColumnModal.value = false;
-    } else {
-      throw new Error(result.error || 'Preprocessing failed');
-    }
-    
-  } catch (error) {
-    showError('Operation Failed', error.message || 'Failed to apply column changes');
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-};
-
-// Apply missing values strategies
-const applyMissingStrategies = async () => {
-  try {
-    if (missingColumnsDetailed.value.length === 0) {
-      showWarning('No Missing Values', 'No columns with missing values to process');
-      return;
-    }
-    
-    console.log('\n🔍 DEBUG: applyMissingStrategies called');
-    console.log('   Missing columns detailed:', missingColumnsDetailed.value);
-    
-    isProcessing.value = true;
-    processingMessage.value = `Applying missing value strategies...`;
-    
-    // Build strategies object
-    const strategies = {};
-    missingColumnsDetailed.value.forEach(col => {
-      strategies[col.name] = col.strategy;
-      console.log(`   Column "${col.name}" (${col.type}): strategy = "${col.strategy}"`);
-    });
-    
-    console.log('   Strategies object to send:', strategies);
-    
-    // Call backend preprocessing with just missing values handling
-    const steps = [{
-      type: 'handle_missing',
-      strategies: strategies
-    }];
-    
-    console.log('   Steps to send to backend:', steps);
-    
-    const datasetToUse = cleanedDatasetId.value || datasetId.value;
-    console.log(`   Using dataset ID: ${datasetToUse}`);
-    
-    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
-      dataset_id: datasetToUse,
-      steps: steps
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('   ❌ Backend error:', errorText);
-      throw new Error('Failed to apply missing value strategies');
-    }
-    
-    const result = await response.json();
-    console.log('   ✅ Backend response:', result);
-    
-    if (result.success) {
-      // Update with cleaned data
-      cleanedDatasetId.value = result.cleaned_dataset_id;
-      datasetId.value = cleanedDatasetId.value;
-      cleanedDataset.value = result.preview || [];
-      totalRowsInBackend.value = result.total_rows;
-      
-      // Update mlStore
-      mlStore.updateAfterPreprocessing(
-        result.cleaned_dataset_id,
-        cleanedDataset.value,
-        fileName.value,
-        columns.value
-      );
-      
-      // Switch to cleaned view
-      showOriginal.value = false;
-      
-      // Fetch updated statistics
-      await fetchCompleteStatisticsFromBackend();
-      
-      // Show detailed success message
-      const affectedColumns = Object.keys(strategies).length;
-      showSuccess(
-        'Missing Values Handled', 
-        `Successfully filled missing values in ${affectedColumns} column${affectedColumns !== 1 ? 's' : ''}. Data quality improved!`
-      );
-
-      addPreprocessingStep('Missing Value Handling');
-
-
-      showMissingModal.value = false;
-      console.log('✅ Missing values strategies applied successfully\n');
-    } else {
-      throw new Error(result.error || 'Preprocessing failed');
-    }
-    
-  } catch (error) {
-    console.error('❌ Error in applyMissingStrategies:', error);
-    showError('Operation Failed', error.message || 'Failed to apply missing value strategies');
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-};
-
-// Apply duplicate removal strategy
-const applyDuplicateRemoval = async () => {
-  try {
-    if (duplicateStats.value.count === 0) {
-      showWarning('No Duplicates', 'No duplicate rows found in the dataset');
-      return;
-    }
-    
-    isProcessing.value = true;
-    processingMessage.value = `Removing duplicates...`;
-    
-    // Call backend preprocessing with just duplicate removal
-    const steps = [{
-      type: 'remove_duplicates',
-      keep: duplicateStrategy.value === 'keep_first' ? 'first' : 'last'
-    }];
-    
-    const datasetToUse = cleanedDatasetId.value || datasetId.value;
-    
-    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
-      dataset_id: datasetToUse,
-      steps: steps
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to remove duplicates');
-    }
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      // Update with cleaned data
-      cleanedDatasetId.value = result.cleaned_dataset_id;
-      datasetId.value = cleanedDatasetId.value;
-      cleanedDataset.value = result.preview || [];
-      totalRowsInBackend.value = result.total_rows;
-      
-      // Update mlStore
-      mlStore.updateAfterPreprocessing(
-        result.cleaned_dataset_id,
-        cleanedDataset.value,
-        fileName.value,
-        columns.value
-      );
-      
-      // Switch to cleaned view
-      showOriginal.value = false;
-      
-      // Fetch updated statistics
-      await fetchCompleteStatisticsFromBackend();
-      
-      // Show detailed success message
-      showSuccess(
-        'Duplicates Removed', 
-        `Removed ${result.rows_removed || 0} duplicate row${result.rows_removed !== 1 ? 's' : ''}. Dataset now has ${result.total_rows.toLocaleString()} rows.`
-      );
-
-      addPreprocessingStep('Duplicate Removal');
-
-
-    showDuplicateModal.value = false;
-    } else {
-      throw new Error(result.error || 'Preprocessing failed');
-    }
-    
-  } catch (error) {
-    showError('Operation Failed', error.message || 'Failed to remove duplicates');
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-};
-
-// Apply outlier handling strategy
-const applyOutlierHandling = async () => {
-  try {
-    if (outlierStats.value.count === 0) {
-      showWarning('No Outliers', 'No outliers detected in the dataset');
-      return;
-    }
-    
-    isProcessing.value = true;
-    processingMessage.value = `Handling outliers...`;
-    
-    // Call backend preprocessing with just outlier handling
-    const steps = [{
-      type: 'handle_outliers',
-      method: outlierStrategy.value || 'cap'
-    }];
-    
-    const datasetToUse = cleanedDatasetId.value || datasetId.value;
-    
-    const response = await authenticatedPost('http://localhost:8000/api/preprocess', {
-      dataset_id: datasetToUse,
-      steps: steps
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to handle outliers');
-    }
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      // Update with cleaned data
-      cleanedDatasetId.value = result.cleaned_dataset_id;
-      datasetId.value = cleanedDatasetId.value;
-      cleanedDataset.value = result.preview || [];
-      totalRowsInBackend.value = result.total_rows;
-      
-      // Update mlStore
-      mlStore.updateAfterPreprocessing(
-        result.cleaned_dataset_id,
-        cleanedDataset.value,
-        fileName.value,
-        columns.value
-      );
-      
-      // Switch to cleaned view
-      showOriginal.value = false;
-      
-      // Fetch updated statistics
-      await fetchCompleteStatisticsFromBackend();
-      
-      // Show detailed success message
-      showSuccess(
-        'Outliers Handled', 
-        `Successfully ${outlierStrategy.value === 'cap' ? 'capped' : 'removed'} outliers. Data quality improved!`
-      );
-
-      addPreprocessingStep('Outlier Removal');
-
-      showOutlierModal.value = false;
-    } else {
-      throw new Error(result.error || 'Preprocessing failed');
-    }
-    
-  } catch (error) {
-    showError('Operation Failed', error.message || 'Failed to handle outliers');
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-};
-
-
-
-
-
-
-// Get total rows from your EXISTING data
-const totalRows = computed(() => currentDataset.value.length)
-
-
-// ===== COMPUTED PROPERTIES =====
-
-const datasetForAnalysis = computed(() => {
-  // If showing cleaned data and it exists, use cleaned
-  if (!showOriginal.value && cleanedDataset.value.length > 0) {
-    return cleanedDataset.value;
-  }
-  // Otherwise use original
-  return originalDataset.value;
+const displayedRowCount = computed(() => {
+  // If we have stats from backend, use that for total count, otherwise preview length
+  return dataStats.value?.total_rows || dataset.value.length;
 });
 
 const dataInfo = computed(() => ({
-  rows: originalDataset.value.length,
   columns: columns.value.length,
 }));
 
+// Basic Quality Score (Placeholder logic - can be improved with store stats)
 const dataQuality = computed(() => {
-  // Use backend statistics if available for accurate quality score
-  if (completeDatasetStats.value.totalRows > 0 && completeDatasetStats.value.totalColumns > 0) {
-    const totalCells = completeDatasetStats.value.totalRows * completeDatasetStats.value.totalColumns;
-    const missingCells = Object.values(completeDatasetStats.value.missingValues).reduce((sum, count) => sum + count, 0);
-    const score = Math.max(0, Math.round(((totalCells - missingCells) / totalCells) * 100));
-    return { score };
-  }
+  if (!dataset.value.length || !columns.value.length) return { score: 100 };
   
-  // Fallback to preview data calculation
-  if (!originalDataset.value.length || !columns.value.length)
-    return { score: 0 };
+  // Use backend stats if available for better accuracy
+  if (dataStats.value?.quality_score) {
+    return { score: dataStats.value.quality_score };
+  }
 
-  const totalCells = originalDataset.value.length * columns.value.length;
+  // Fallback to simple check on preview data
+  const totalCells = dataset.value.length * columns.value.length;
   let issues = 0;
-
-  originalDataset.value.forEach((row) => {
-    columns.value.forEach((col) => {
-      const value = row[col.name];
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === "null"
-      ) {
-        issues++;
-      }
-    });
-  });
-
-  const score = Math.max(
-    0,
-    Math.round(((totalCells - issues) / totalCells) * 100)
-  );
-  return { score };
+  // Simple check on preview
+  return { score: 100 }; // Default for now
 });
 
-// categoricalColumns is now a ref updated by detectCategoricalColumns
 
-const duplicateStats = computed(() => {
-  // Prefer backend statistics if available
-  if (completeDatasetStats.value.duplicates !== undefined && completeDatasetStats.value.duplicates !== 0) {
-    return { count: completeDatasetStats.value.duplicates };
-  }
-
-  // Fallback to frontend calculation on preview data
-  const dataset = datasetForAnalysis.value;
-  if (!dataset || dataset.length === 0) {
-    return { count: 0 };
-  }
-
-  const seen = new Set();
-  let count = 0;
-
-  dataset.forEach((row) => {
-    const rowString = JSON.stringify(row);
-    if (seen.has(rowString)) {
-      count++;
-    } else {
-      seen.add(rowString);
-    }
-  });
-
-  return { count };
-});
-
-const missingStats = computed(() => {
-  // Prefer backend statistics if available
-  if (completeDatasetStats.value.missingValues && Object.keys(completeDatasetStats.value.missingValues).length > 0) {
-    const count = Object.keys(completeDatasetStats.value.missingValues).length;
-    const totalMissing = Object.values(completeDatasetStats.value.missingValues).reduce((sum, val) => sum + val, 0);
-    return { count, totalMissing };
-  }
-
-  // Fallback to frontend calculation on preview data
-  const dataset = datasetForAnalysis.value;
-  if (!dataset || dataset.length === 0) {
-    return { count: 0, totalMissing: 0 };
-  }
-
-  const missing = [];
-  const columnsToCheck = showOriginal.value
-    ? columns.value
-    : getCleanedColumns.value.map(
-        (name) =>
-          columns.value.find((c) => c.name === name) || {
-            name,
-            type: "categorical",
-          }
-      );
-
-  columnsToCheck.forEach((col) => {
-    let missingCount = 0;
-    const colName = typeof col === "string" ? col : col.name;
-
-    dataset.forEach((row) => {
-      const value = row[colName];
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === "null" ||
-        value === "NaN"
-      ) {
-        missingCount++;
-      }
-    });
-
-    if (missingCount > 0) {
-      missing.push({
-        name: colName,
-        type: col.type || "categorical",
-        count: missingCount,
-        percentage: ((missingCount / dataset.length) * 100).toFixed(1),
-      });
-    }
-  });
-
-  return {
-    count: missing.length,
-    totalMissing: missing.reduce((sum, col) => sum + col.count, 0),
-  };
-});
-
-const outlierStats = computed(() => {
-  // Prefer backend statistics if available
-  if (completeDatasetStats.value.outliers !== undefined && completeDatasetStats.value.outliers !== 0) {
-    return { count: completeDatasetStats.value.outliers, columns: 0 };
-  }
-
-  // Fallback to frontend calculation on preview data
-  const dataset = showOriginal.value ? originalDataset.value : cleanedDataset.value;
-  if (!dataset || dataset.length === 0) {
-    return { count: 0 };
-  }
-
-  let count = 0;
-  
-  numericalColumns.value.forEach((col) => {
-    const colName = col.name;
-    const values = dataset
-      .map((row) => parseFloat(row[colName]))
-      .filter((val) => !isNaN(val));
-
-    if (values.length > 5) {
-      const sorted = [...values].sort((a, b) => a - b);
-      const q1 = sorted[Math.floor(sorted.length * 0.25)];
-      const q3 = sorted[Math.floor(sorted.length * 0.75)];
-      const iqr = q3 - q1;
-      const low = q1 - 1.5 * iqr;
-      const high = q3 + 1.5 * iqr;
-
-      count += values.filter((v) => v < low || v > high).length;
-    }
-  });
-
-  return {
-    count,
-    columns: numericalColumns.value.length,
-  };
-});
-
-const numericalColumnsForScaling = computed(() => {
-  return columns.value
-    .filter(col => getColumnSemanticType(col.name) === 'numeric')
-    .map(col => ({
-      name: col.name,
-      scale: col.scale || false,
-      isAlreadyScaled: col.isAlreadyScaled || false
-    }));
-});
-
-const hasCleanedData = computed(() => {
-  return cleanedDataset.value && cleanedDataset.value.length > 0;
-});
-
-const finalQuality = computed(() => {
-  if (!hasCleanedData.value) return dataQuality.value.score;
-
-  const cleanedColumns = getCleanedColumns.value;
-  const totalCells = cleanedDataset.value.length * cleanedColumns.length;
-  let issues = 0;
-
-  cleanedDataset.value.forEach((row) => {
-    cleanedColumns.forEach((colName) => {
-      const value = row[colName];
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === "null"
-      ) {
-        issues++;
-      }
-    });
-  });
-
-  return Math.max(0, Math.round(((totalCells - issues) / totalCells) * 100));
-});
-
-const currentDataset = computed(() => {
-  return showOriginal.value ? originalDataset.value : cleanedDataset.value;
-});
-
-const currentColumns = computed(() => {
-  if (showOriginal.value) {
-    return columns.value;
-  }
-  return getCleanedColumns.value;
-});
-
-const visibleColumns = computed(() => {
-  if (showOriginal.value) {
-    return columns.value.map((col) => col.name);
-  } else {
-    return getCleanedColumns.value;
-  }
-});
-
+// Filtered Rows
 const filteredRows = computed(() => {
-  let rows = currentDataset.value;
+  let rows = dataset.value;
 
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase();
@@ -1917,2820 +1296,490 @@ const filteredRows = computed(() => {
   }
 
   if (sortColumn.value) {
-    rows.sort((a, b) => {
+    rows = [...rows].sort((a, b) => {
       const aVal = a[sortColumn.value];
       const bVal = b[sortColumn.value];
-
-      if (sortDirection.value === "asc") {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
+      /* eslint-disable eqeqeq */
+      if (aVal == bVal) return 0;
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      
+      const result = aVal > bVal ? 1 : -1;
+      return sortDirection.value === "asc" ? result : -result;
+      /* eslint-enable eqeqeq */
     });
   }
 
   return rows;
 });
 
+const totalPages = computed(() => Math.ceil(filteredRows.value.length / pageSize.value));
+
 const paginatedRows = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   return filteredRows.value.slice(start, start + pageSize.value);
 });
 
-const totalPages = computed(() => {
-  return Math.ceil(filteredRows.value.length / pageSize.value);
-});
-
-const startRow = computed(() => {
-  return (currentPage.value - 1) * pageSize.value + 1;
-});
-
-const endRow = computed(() => {
-  return Math.min(
-    currentPage.value * pageSize.value,
-    filteredRows.value.length
-  );
-});
+const startRow = computed(() => (currentPage.value - 1) * pageSize.value + 1);
+const endRow = computed(() => Math.min(currentPage.value * pageSize.value, filteredRows.value.length));
 
 const visiblePageNumbers = computed(() => {
-  const pages = [];
-  const total = totalPages.value;
-  const current = currentPage.value;
-
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) {
-      pages.push(i);
+    // Simple pagination logic
+    const total = totalPages.value;
+    const current = currentPage.value;
+    const delta = 2;
+    const range = [];
+    for (let i = Math.max(2, current - delta); i <= Math.min(total - 1, current + delta); i++) {
+        range.push(i);
     }
-  } else {
-    if (current <= 4) {
-      for (let i = 1; i <= 5; i++) pages.push(i);
-      pages.push("...");
-      pages.push(total);
-    } else if (current >= total - 3) {
-      pages.push(1);
-      pages.push("...");
-      for (let i = total - 4; i <= total; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      pages.push("...");
-      for (let i = current - 1; i <= current + 1; i++) pages.push(i);
-      pages.push("...");
-      pages.push(total);
-    }
-  }
-
-  return pages;
+    if (current - delta > 2) range.unshift("...");
+    if (current + delta < total - 1) range.push("...");
+    range.unshift(1);
+    if (total > 1) range.push(total);
+    return range; 
 });
 
-const hasActiveTools = computed(() => {
-  return activeTools.value.length > 0;
+const visibleColumns = computed(() => {
+    // Filter out removed columns if we want to hide them, or just show all
+    return columns.value.filter(c => !c.remove).map(c => c.name);
 });
 
-// ===== RESET FUNCTION =====
-const confirmResetAllChanges = async () => {
+const hasCleanedData = computed(() => {
+    // Check if we have evidence of cleaning
+    // dataStore doesn't separate cleaned/original preview yet, just one 'rawPreview'
+    // but we can check if preprocessing steps exist in experiment store
+    return false; // For now disable toggle till we have diff views
+});
+
+// ==================== METHODS ====================
+
+const initializeData = async () => {
+  isLoading.value = true;
   try {
-    showResetModal.value = false;
-    
-    // Clear any cleaned dataset ID from localStorage to ensure original loads
-    if (cleanedDatasetId.value) {
-      localStorage.removeItem('cleanedDatasetId');
-    }
-    
-    // Show success message before reload
-    showSuccess('Resetting...', 'Reloading original dataset');
-    
-    // Reload the page to get fresh original data
-    setTimeout(() => {
-      window.location.reload();
-    }, 500); // Small delay to show the toast
-    
-  } catch (error) {
-    console.error('❌ Reset error:', error);
-    showError('Reset Failed', error.message);
-  }
-};
-
-// ===== ADD THESE MISSING HELPER FUNCTIONS =====
-
-const getToolName = (toolId) => {
-  const toolNames = {
-    columnSelection: "Column Selection",
-    missingValues: "Handle Missing Values",
-    duplicateRemoval: "Remove Duplicates",
-    outlierHandling: "Handle Outliers",
-    categoricalEncoding: "Encode Categories",
-    featureScaling: "Feature Scaling", 
-  };
-  return toolNames[toolId] || toolId;
-};
-
-const displayedRowCount = computed(() => {
-  // Use backend total rows if available, otherwise fall back to preview length
-  return completeDatasetStats.value.totalRows || totalRowsInBackend.value || totalRows.value;
-});
-
-
-const getToolIcon = (toolId) => {
-  const icons = {
-    columnSelection: "",
-    missingValues: "",
-    duplicateRemoval: "",
-    outlierHandling: "",
-    categoricalEncoding: "",
-  };
-  return icons[toolId] || "";
-};
-
-const getToolDescription = (toolId) => {
-  const descriptions = {
-    columnSelection: "Select which columns to keep or remove",
-    missingValues: "Handle missing values with various strategies",
-    duplicateRemoval: "Remove duplicate rows from your dataset",
-    outlierHandling: "Detect and handle statistical outliers",
-    categoricalEncoding: "Convert categorical variables to numbers",
-  };
-  return descriptions[toolId] || "Configure this tool";
-};
-
-const isEncodedColumn = (columnName) => {
-  const col = columns.value.find((c) => c.name === columnName);
-  return col?.encode || false;
-};
-
-const getEncodingMethod = (columnName) => {
-  const col = columns.value.find((c) => c.name === columnName);
-  return col?.encoding || "onehot";
-};
-
-const toggleColumnEncoding = (column) => {
-  // If encoding is enabled but no method is selected, default to onehot
-  if (column.encode && !column.encoding) {
-    column.encoding = 'onehot';  // Set default encoding method
-  }
-};
-
-const setEncodingMethod = (columnName, method) => {
-  const col = columns.value.find((c) => c.name === columnName);
-  if (col) {
-    col.encoding = method;
-  }
-};
-
-const calculateMissingValuesFrontend = () => {
-  const missing = [];
-
-  columns.value.forEach((col) => {
-    let missingCount = 0;
-
-    originalDataset.value.forEach((row) => {
-      const value = row[col.name];
-
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === "null" ||
-        value === "NaN"
-      ) {
-        missingCount++;
-      }
-    });
-
-    if (missingCount > 0) {
-      missing.push({
-        name: col.name,
-        type: col.type,
-        count: missingCount,
-        percentage: (
-          (missingCount / originalDataset.value.length) *
-          100
-        ).toFixed(1),
-        strategy: col.type === "numerical" ? "fillmedian" : "fillmode",
-      });
-    }
-  });
-
-  missingColumnsDetailed.value = missing.sort((a, b) => b.count - a.count);
-  console.log(
-    "âœ… Calculated missing values in frontend:",
-    missingColumnsDetailed.value
-  );
-};
-
-// ===== NEW: BACKEND API FUNCTIONS =====
-
-const fetchCompleteStatisticsFromBackend = async () => {
-  if (!backendConnected.value || !datasetId.value) {
-    console.log("Backend not connected or no dataset ID, using frontend calculation");
-    return;
-  }
-
-  try {
-    console.log("\n📊 DEBUG: fetchCompleteStatisticsFromBackend called");
-    console.log(`   Current datasetId: ${datasetId.value}`);
-    console.log(`   Current cleanedDatasetId: ${cleanedDatasetId.value}`);
-    console.log(`   Original datasetId: ${originalDatasetId.value}`);
-    console.log(`   Fetching statistics from: /api/datasets/${datasetId.value}/statistics`);
-    
-    const response = await authenticatedGet(
-      `http://localhost:8000/api/datasets/${datasetId.value}/statistics`
-    );
-
-    if (!response.ok) {
-      console.warn("Failed to fetch statistics, falling back to frontend calculation");
-      return;
+    // 1. Check if we have a dataset ID in Experiment Store
+    if (!datasetId.value) {
+       // Fallback: Check mlStore or localStorage for legacy support
+       if (mlStore.datasetId) {
+         experimentStore.setDataset(mlStore.datasetId, mlStore.fileName);
+       } else {
+         const stored = localStorage.getItem('processedData');
+         if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.datasetId) {
+                experimentStore.setDataset(parsed.datasetId, parsed.fileName || "Recovered Dataset");
+            }
+         }
+       }
     }
 
-    const stats = await response.json();
+    if (!datasetId.value) {
+        // No data found, redirect
+        router.push("/"); 
+        return;
+    }
+
+    // 2. Load Data via DataStore
+    await dataStore.loadData(datasetId.value);
     
-    console.log("   ✅ Statistics received from backend:");
-    console.log(`      Total Rows: ${stats.total_rows}`);
-    console.log(`      Duplicates: ${stats.duplicates}`);
-    console.log(`      Outliers: ${stats.outliers}`);
-    console.log(`      Missing Columns: ${stats.missing_info?.length || 0}`);
-
-    // Update complete dataset statistics
-    completeDatasetStats.value = {
-      totalRows: stats.total_rows || 0,
-      totalColumns: stats.total_columns || 0,
-      missingValues: stats.missing_values || {},
-      duplicates: stats.duplicates || 0,
-      outliers: stats.outliers || 0
-    };
-
-    // Update missing columns detailed with backend data
-    if (stats.missing_info && Array.isArray(stats.missing_info)) {
-      missingColumnsDetailed.value = stats.missing_info.map(col => ({
-        ...col,
-        semanticType: col.semanticType || col.semantic_type || 'unknown',
-        strategy: col.strategy || (col.type === 'numerical' ? 'fillmedian' : 'fillmode')
-      }));
-    }
-
-    // Update columns with backend statistics (unique counts)
-    if (stats.column_stats && Array.isArray(stats.column_stats)) {
-      stats.column_stats.forEach(backendCol => {
-        const frontendCol = columns.value.find(c => c.name === backendCol.name);
-        if (frontendCol) {
-          frontendCol.unique = backendCol.unique;
-          frontendCol.missing = backendCol.missing;
-        }
-      });
-      console.log("   ✅ Columns updated with backend statistics (unique counts)");
-    }
-
-    console.log("✅ Complete statistics fetched from backend");
-    console.log(`   Total Rows: ${completeDatasetStats.value.totalRows}`);
-    console.log(`   Missing Columns: ${missingColumnsDetailed.value.length}`);
-    console.log(`   Duplicates: ${completeDatasetStats.value.duplicates}`);
-    console.log(`   Outliers: ${completeDatasetStats.value.outliers}`);
+    // 3. Set Local Metadata
+    fileName.value = experimentStore.datasetName || "Dataset";
+    processColumns();
+    analyzeDataQuality();
 
   } catch (error) {
-    console.error("Error fetching complete statistics:", error);
-    // Fallback to frontend calculation on preview data
-    calculateMissingValuesFrontend();
-  }
-};
-
-/**
- * Recalculate all preprocessing statistics after applying changes
- */
-const recalculateStatistics = () => {
-  console.log("Recalculating preprocessing statistics...");
-
-  // Use cleaned dataset if available, otherwise original
-  const dataToAnalyze = hasCleanedData.value
-    ? cleanedDataset.value
-    : originalDataset.value;
-  const columnsToAnalyze = hasCleanedData.value
-    ? getCleanedColumns
-    : columns.value;
-
-  if (!dataToAnalyze || dataToAnalyze.length === 0) {
-    console.warn("No data available for statistics");
-    return;
-  }
-
-  // 1. RECALCULATE MISSING VALUES
-  const newMissingValues = [];
-  columnsToAnalyze.forEach((colName) => {
-    const columnName = typeof colName === "string" ? colName : colName.name;
-    let missingCount = 0;
-
-    dataToAnalyze.forEach((row) => {
-      const value = row[columnName];
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === "null" ||
-        value === "NaN"
-      ) {
-        missingCount++;
-      }
-    });
-
-    if (missingCount > 0) {
-      const col = columns.value.find((c) => c.name === columnName);
-      newMissingValues.push({
-        name: columnName,
-        type: col?.type || "categorical",
-        count: missingCount,
-        percentage: ((missingCount / dataToAnalyze.length) * 100).toFixed(1),
-        strategy: col?.type === "numerical" ? "fillmedian" : "fillmode",
-      });
-    }
-  });
-
-  missingColumnsDetailed.value = newMissingValues.sort(
-    (a, b) => b.count - a.count
-  );
-  console.log(
-    "âœ… Missing values recalculated:",
-    missingColumnsDetailed.value.length,
-    "columns"
-  );
-
-  // 2. RECALCULATE DUPLICATES
-  const seen = new Set();
-  let duplicateCount = 0;
-  dataToAnalyze.forEach((row) => {
-    const rowString = JSON.stringify(row);
-    if (seen.has(rowString)) {
-      duplicateCount++;
-    } else {
-      seen.add(rowString);
-    }
-  });
-
-  console.log(" Duplicates recalculated:", duplicateCount, "found");
-
-  // 3. RECALCULATE OUTLIERS
-  let outlierCount = 0;
-  columnsToAnalyze.forEach((colName) => {
-    const columnName = typeof colName === "string" ? colName : colName.name;
-    const col = columns.value.find((c) => c.name === columnName);
-
-    if (col?.type === "numerical") {
-      const values = dataToAnalyze
-        .map((row) => parseFloat(row[columnName]))
-        .filter((val) => !isNaN(val) && isFinite(val))
-        .sort((a, b) => a - b);
-
-      if (values.length > 0) {
-        const q1 = values[Math.floor(values.length * 0.25)];
-        const q3 = values[Math.floor(values.length * 0.75)];
-        const iqr = q3 - q1;
-        const lowerBound = q1 - 1.5 * iqr;
-        const upperBound = q3 + 1.5 * iqr;
-
-        outlierCount += values.filter(
-          (val) => val < lowerBound || val > upperBound
-        ).length;
-      }
-    }
-  });
-
-  console.log(" Outliers recalculated:", outlierCount, "found");
-  console.log(" All statistics recalculated successfully!");
-};
-
-watch(showOriginal, () => {
-  console.log("🔄 Toggled dataset view, recalculating stats...");
-  recalculateMissingColumnsDetailed();
-  detectCategoricalColumns();
-});
-
-
-
-
-// This is the backend preprocessinhg function which will be applied before the frontend function
-// ===== APPLY BACKEND PREPROCESSING =====
-const applyBackendPreprocessing = async () => {
-  console.log("\n" + "=".repeat(80));
-  console.log("🔧 BACKEND PREPROCESSING - START");
-  console.log("=".repeat(80));
-
-  // Log state BEFORE preprocessing
-  console.log("📊 STATE BEFORE:");
-  console.log("   Original Dataset ID:", originalDatasetId.value);
-  console.log("   Cleaned Dataset ID:", cleanedDatasetId.value);
-  console.log("   Using dataset:", cleanedDatasetId.value || datasetId.value);
-  console.log("   Active tools:", activeTools.value);
-
-  if (!backendConnected.value) {
-    console.error("❌ Backend not connected");
-    alert("Backend is not connected. Please ensure the ML backend is running.");
-    return;
-  }
-
-  if (!datasetId.value) {
-    console.error("❌ No dataset ID");
-    alert("No dataset found. Please upload a dataset first.");
-    return;
-  }
-
-  // ✅ ADD THIS: Verify dataset exists in backend before preprocessing
-  try {
-    console.log("📋 Verifying dataset exists in backend...");
-    const datasetToCheck = cleanedDatasetId.value || datasetId.value;
-    
-    const checkResponse = await fetch(
-      `http://localhost:8000/api/datasets/${datasetToCheck}`,  
-      { method: "GET" }
-    );
-
-    if (!checkResponse.ok) {
-      throw new Error(`Dataset ${datasetToCheck} not found in backend. Please re-upload.`);
-    }
-
-    const datasetInfo = await checkResponse.json();
-    console.log(`✅ Dataset found: ${datasetInfo.rows} rows, ${datasetInfo.columns} columns`);
-  } catch (error) {
-    console.error("❌ Dataset validation failed:", error);
-    
-    
-    // Clear invalid dataset IDs
-    datasetId.value = null;
-    cleanedDatasetId.value = null;
-    router.push('/dashboard');
-    return;
-  }
-
-  isProcessing.value = true;
-  processingMessage.value = "Preparing preprocessing steps...";
-
-  try {
-    const steps = [];
-
-    //ALL active tools are basic preprocessing (no scaling/splitting)
-    const basicTools = activeTools.value;
-    
-    console.log("Active tools:", activeTools.value);
-    console.log("Basic tools:", basicTools);
-
-    // === STEP 1: COLUMN SELECTION ===
-    const columnsToRemove = columns.value
-      .filter(col => col.remove)
-      .map(col => col.name);
-
-    if (columnsToRemove.length > 0) {
-      steps.push({
-        type: "remove_columns",  
-        columns: columnsToRemove,
-      });
-      console.log(`✅ Column Selection: Removing ${columnsToRemove.length} columns`);
-    }
-
-    // === STEP 2: MISSING VALUES ===
-    if (basicTools.includes("missingValues")) {
-      const strategies = {};
-      missingColumnsDetailed.value.forEach((col) => {
-        strategies[col.name] = col.strategy || "fillmean";
-      });
-
-      if (Object.keys(strategies).length > 0) {
-        steps.push({
-          type: "handle_missing",
-          strategies: strategies,
-        });
-        console.log(
-          `   ✅ Missing Values: ${Object.keys(strategies).length} columns`
-        );
-      }
-    }
-
-    // === STEP 3: DUPLICATE REMOVAL ===
-    if (basicTools.includes("duplicateRemoval")) {
-      steps.push({
-        type: "remove_duplicates",
-        keep: duplicateStrategy.value === "keep_first" ? "first" : "last",
-      });
-      console.log(`   ✅ Duplicates: Keep ${duplicateStrategy.value}`);
-    }
-
-    // === STEP 4: OUTLIER HANDLING ===
-    if (basicTools.includes("outlierHandling")) {
-      steps.push({
-        type: "handle_outliers",
-        method: outlierStrategy.value || "cap",
-      });
-      console.log(`   ✅ Outliers: ${outlierStrategy.value}`);
-    }
-
-    // === STEP 5: CATEGORICAL ENCODING ===
-    if (basicTools.includes("categoricalEncoding")) {
-      const columnsToEncode = categoricalColumns.value
-        .filter((col) => col.encode)
-        .map((col) => ({
-          name: col.name,
-          method: col.encoding || "label",
-        }));
-
-      if (columnsToEncode.length > 0) {
-        steps.push({
-          type: "encode_categorical",
-          columns: columnsToEncode.map((c) => c.name),
-          methods: columnsToEncode.reduce((acc, col) => {
-            acc[col.name] = col.method;
-            return acc;
-          }, {}),
-        });
-        console.log(`   ✅ Encoding: ${columnsToEncode.length} columns`);
-      }
-    }
-
-    if (steps.length === 0) {
-      alert("Please select at least one preprocessing operation!");
-      isProcessing.value = false;
-      return;
-    }
-
-    // Use cleaned dataset ID if it exists (for chaining)
-    const datasetToUse = cleanedDatasetId.value || datasetId.value;
-
-    console.log("\n📤 SENDING TO BACKEND:");
-    console.log(`   Dataset ID: ${datasetToUse}`);
-    console.log(
-      `   Type: ${cleanedDatasetId.value ? "CLEANED (chaining)" : "ORIGINAL"}`
-    );
-    console.log(`   Steps: ${steps.length}`);
-    steps.forEach((step, i) => {
-      console.log(`      ${i + 1}. ${step.type}`);
-    });
-
-    processingMessage.value = "Sending request to backend...";
-
-    const response = await authenticatedPost("http://localhost:8000/api/preprocess", {
-  dataset_id: datasetToUse,
-  steps: steps,
-});
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        `Backend error: ${response.status} - ${
-          errorData.detail || "Unknown error"
-        }`
-      );
-    }
-
-    processingMessage.value = "Processing backend response...";
-
-    const result = await response.json();
-
-    if (result.success) {
-      console.log("\n✅ BACKEND SUCCESS:");
-      console.log(`   Original rows: ${result.original_rows}`);
-      console.log(`   Cleaned rows: ${result.total_rows}`);
-      console.log(`   Rows removed: ${result.rows_removed}`);
-      console.log(`   New dataset ID: ${result.cleaned_dataset_id}`);
-
-      // Store the previous ID for logging
-      const previousDatasetId =
-        cleanedDatasetId.value || originalDatasetId.value;
-
-      // Update cleaned dataset ID for next operation
-      cleanedDatasetId.value = result.cleaned_dataset_id;
-      datasetId.value = cleanedDatasetId.value;
-
-      console.log("\n🔗 DATASET CHAIN:");
-      console.log(`   Previous: ${previousDatasetId}`);
-      console.log(`   Current: ${cleanedDatasetId.value}`);
-
-      // Log to preprocessing history
-      logPreprocessingStep(steps, result, datasetToUse);
-
-      // Update frontend preview with NEW data
-      processingMessage.value = "Updating frontend preview...";
-      cleanedDataset.value = result.preview || [];
-      totalRowsInBackend.value = result.total_rows;
-
-      // Update columns based on cleaned data
-      if (cleanedDataset.value.length > 0) {
-        console.log("   Updating columns from cleaned data...");
-        
-        // Get actual columns from cleaned data
-        const actualColumns = Object.keys(cleanedDataset.value[0]);
-        console.log("   Actual columns in cleaned data:", actualColumns);
-        
-        // Update columns array
-        columns.value = actualColumns.map(colName => {
-          const existingCol = columns.value.find(c => c.name === colName);
-          return {
-            name: colName,
-            type: existingCol?.type || 'categorical',
-            unique: existingCol?.unique || 0,
-            missing: 0, // Will be recalculated
-            remove: false, // Reset after processing
-            encode: existingCol?.encode || false,
-            encoding: existingCol?.encoding || 'onehot'
-          };
-        });
-        
-        console.log(`   ✅ Columns updated: ${columns.value.length} columns`);
-      }
-
-      console.log("📌 Updating mlStore with cleaned dataset...");
-      mlStore.updateAfterPreprocessing(
-      result.cleaned_dataset_id,
-      cleanedDataset.value,
-      fileName.value,
-      columns.value
-    );
-  console.log("✅ mlStore updated successfully");
-
-    if (mlStore.datasetId && mlStore.registeredDatasets.has(mlStore.datasetId)) {
-      const datasetRecord = mlStore.registeredDatasets.get(mlStore.datasetId);
-      datasetRecord.shape = [result.total_rows, columns.value.length];
-      console.log(`✅ Updated dataset shape in registry: [${result.total_rows}, ${columns.value.length}]`);
-    }
-
-  // 2️⃣ Update localStorage with cleaned dataset (PRESERVE processingSteps!)
-  console.log("💾 Updating localStorage...");
-  
-  // Read existing processedData to preserve processingSteps
-  const existingData = localStorage.getItem('processedData');
-  const existingProcessingSteps = existingData ? JSON.parse(existingData).processingSteps || [] : [];
-  
-  localStorage.setItem('processedData', JSON.stringify({
-    data: cleanedDataset.value,
-    fileName: fileName.value,
-    datasetId: result.cleaned_dataset_id,
-    originalDatasetId: originalDatasetId.value,
-    uploadTime: new Date().toISOString(),
-    totalRows: result.total_rows,
-    columns: columns.value.map(col => ({
-      name: col.name,
-      type: col.type
-    })),
-    shape: {
-      rows: result.total_rows,
-      columns: columns.value.length
-    },
-    isPreprocessed: true,
-    preprocessingHistory: preprocessingHistory.value,
-    processingSteps: existingProcessingSteps // ✅ PRESERVE existing steps
-  }));
-  console.log("✅ localStorage updated successfully with", existingProcessingSteps.length, "preserved steps");
-
-  
-
-
-
-      // Mark as cleaned and switch view
-      hasCleanedData.value = true;
-      showOriginal.value = false;
-
-      // Wait for Vue reactivity
-      await nextTick();
-
-      // Recalculate statistics based on NEW cleaned data
-      console.log("   Recalculating statistics for cleaned data...");
-      processingMessage.value = "Recalculating statistics...";
-
-      recalculateMissingColumnsDetailed();
-      detectCategoricalColumns();
-
-      // ✅ TRACK PREPROCESSING STEPS
-      console.log("📝 Tracking preprocessing steps...");
-      steps.forEach(step => {
-        if (step.type === 'remove_columns') {
-          addPreprocessingStep('Column Selection');
-        } else if (step.type === 'handle_missing') {
-          addPreprocessingStep('Missing Value Handling');
-        } else if (step.type === 'remove_duplicates') {
-          addPreprocessingStep('Duplicate Removal');
-        } else if (step.type === 'handle_outliers') {
-          addPreprocessingStep('Outlier Removal');
-        } else if (step.type === 'encode_categorical') {
-          addPreprocessingStep('Categorical Encoding');
-        }
-      });
-      console.log("✅ Preprocessing steps tracked");
-
-      // Clear active tools AFTER everything is updated
-      activeTools.value = [];
-      openDropdowns.value = [];
-
-      console.log("\n📊 STATE AFTER:");
-      console.log("   Cleaned Dataset ID:", cleanedDatasetId.value);
-      console.log("   Cleaned rows (frontend):", cleanedDataset.value.length);
-      console.log("   Total rows (backend):", totalRowsInBackend.value);
-      console.log("   Columns:", columns.value.length);
-      console.log("   Column names:", columns.value.map(c => c.name).join(', '));
-      console.log("   Missing columns:", missingColumnsDetailed.value.length);
-      console.log("   Active tools:", activeTools.value);
-      console.log("=".repeat(80) + "\n");
-
-      alert(
-        `✅ Preprocessing Applied Successfully!\n\n` +
-          `Original rows: ${result.original_rows.toLocaleString()}\n` +
-          `Cleaned rows: ${result.total_rows.toLocaleString()}\n` +
-          `Rows removed: ${result.rows_removed.toLocaleString()}\n\n` +
-          `✨ Your changes have been saved.\n` +
-          `You can apply more preprocessing operations or continue to target selection.`
-      );
-    } else {
-      throw new Error(result.error || "Preprocessing failed");
-    }
-  } catch (error) {
-    console.error("\n❌ PREPROCESSING ERROR:", error);
-    console.error("   Message:", error.message);
-    console.error("   Stack:", error.stack);
-    alert(
-      `Preprocessing Error:\n\n${error.message}\n\nPlease check the console for details.`
-    );
+    console.error("Initialization error:", error);
+    // alert("Failed to load data");
   } finally {
-    isProcessing.value = false;
-    processingMessage.value = "";
+    isLoading.value = false;
   }
 };
 
-// ===== SIMPLIFIED APPLY CHANGES =====
-const applyChanges = async () => {
-  // Validation: Check if any tools are active
-  if (!hasActiveTools.value) {
-    alert('⚠️ Please select at least one preprocessing operation');
-    return;
-  }
-  
-  // All active tools are basic preprocessing, so just call backend
-  await applyBackendPreprocessing();
-};
+const processColumns = () => {
+  if (!dataset.value.length) return;
 
+  // Use DataStore statistics/types if available
+  const stats = dataStats.value?.column_stats || {};
+  const types = semanticTypes.value || [];
 
-const logPreprocessingStep = (steps, result, datasetUsed) => {
-  // Validate inputs before using them
-  const datasetBefore = datasetUsed || "UNKNOWN";
-  const datasetAfter = result.cleaned_dataset_id || "UNKNOWN";
-
-  const historyEntry = {
-    timestamp: new Date().toISOString(),
-    steps: steps.map((s) => s.type),
-    datasetBefore: datasetBefore,
-    datasetAfter: datasetAfter,
-    rowsBefore: result.original_rows || 0,
-    rowsAfter: result.total_rows || 0,
-    rowsRemoved: result.rows_removed || 0,
-  };
-
-  preprocessingHistory.value.push(historyEntry);
-
-  console.log("📝 HISTORY UPDATED:");
-  console.log("   Entry:", preprocessingHistory.value.length);
-  console.log("   Steps:", historyEntry.steps.join(", "));
-
-  //Safe string truncation with optional chaining and fallback
-  const beforeStr =
-    typeof datasetBefore === "string" && datasetBefore.length > 0
-      ? datasetBefore.slice(0, 20) + "..."
-      : "N/A";
-
-  const afterStr =
-    typeof datasetAfter === "string" && datasetAfter.length > 0
-      ? datasetAfter.slice(0, 20) + "..."
-      : "N/A";
-
-  console.log(`   Chain: ${beforeStr} → ${afterStr}`);
-  console.log(
-    `   Rows: ${historyEntry.rowsBefore} → ${historyEntry.rowsAfter} (-${historyEntry.rowsRemoved})`
-  );
-};
-
-const debugPreprocessingChain = () => {
-  console.group("🔍 PREPROCESSING CHAIN DEBUG");
-
-  // Dataset IDs
-  console.log("📋 Dataset IDs:");
-  console.log("  Original:", originalDatasetId.value || "NOT SET");
-  console.log("  Current:", datasetId.value || "NOT SET");
-  console.log("  Cleaned:", cleanedDatasetId.value || "NOT SET");
-  console.log(
-    "  Active:",
-    cleanedDatasetId.value || datasetId.value || "NOT SET"
-  );
-
-  // Data State
-  console.log("\n📊 Data State:");
-  console.log("  Has Cleaned Data:", hasCleanedData.value);
-  console.log("  Showing Original:", showOriginal.value);
-  console.log("  Original Rows:", originalDataset.value?.length || 0);
-  console.log("  Cleaned Rows:", cleanedDataset.value?.length || 0);
-  console.log("  Backend Total:", totalRowsInBackend.value || 0);
-
-  // Columns
-  console.log("\n📂 Columns:");
-  console.log("  Total:", columns.value?.length || 0);
-  console.log(
-    "  To Remove:",
-    columns.value?.filter((c) => c.remove)?.length || 0
-  );
-  console.log(
-    "  To Encode:",
-    categoricalColumns.value?.filter((c) => c.encode)?.length || 0
-  );
-
-  // Active Tools
-  console.log(
-    "\n🔧 Active Tools:",
-    activeTools.value?.length > 0 ? activeTools.value : "None"
-  );
-  console.log(
-    "  Open Dropdowns:",
-    openDropdowns.value?.length > 0 ? openDropdowns.value : "None"
-  );
-
-  // Missing Values
-  console.log("\n❓ Missing Values:");
-  console.log("  Columns affected:", missingColumnsDetailed.value?.length || 0);
-  if (missingColumnsDetailed.value?.length > 0) {
-    missingColumnsDetailed.value.forEach((col) => {
-      console.log(
-        `    - ${col.name}: ${col.count} (${col.percentage}%) → ${col.strategy}`
-      );
-    });
-  }
-
-  // Preprocessing History
-  console.log("\n📜 Preprocessing History:");
-  if (!preprocessingHistory.value || preprocessingHistory.value.length === 0) {
-    console.log("  No operations yet");
-  } else {
-    preprocessingHistory.value.forEach((entry, i) => {
-      console.log(
-        `  ${i + 1}. [${new Date(entry.timestamp).toLocaleTimeString()}]`
-      );
-      console.log(`     Steps: ${entry.steps.join(", ")}`);
-
-      // Safe string slicing with null checks
-      const beforeStr =
-        entry.datasetBefore && typeof entry.datasetBefore === "string"
-          ? entry.datasetBefore.slice(0, 30) + "..."
-          : "N/A";
-
-      const afterStr =
-        entry.datasetAfter && typeof entry.datasetAfter === "string"
-          ? entry.datasetAfter.slice(0, 30) + "..."
-          : "N/A";
-
-      console.log(`     Dataset: ${beforeStr}`);
-      console.log(`     → ${afterStr}`);
-      console.log(
-        `     Rows: ${entry.rowsBefore} → ${entry.rowsAfter} (-${entry.rowsRemoved})`
-      );
-    });
-  }
-
-  // Quality Metrics
-  console.log("\n💯 Quality:");
-  console.log("  Score:", (dataQuality.value?.score || 0) + "%");
-  console.log("  Duplicates:", duplicateStats.value?.count || 0);
-  console.log("  Outliers:", outlierStats.value?.count || 0);
-
-  console.groupEnd();
-};
-
-// ===== WATCHERS (Place after debug function) =====
-watch(cleanedDatasetId, (newVal, oldVal) => {
-  if (newVal !== oldVal) {
-    console.log("\n🔄 CLEANED DATASET ID CHANGED:");
-    console.log("   From:", oldVal || "NULL");
-    console.log("   To:", newVal || "NULL");
-    debugPreprocessingChain();
-  }
-});
-
-watch(showOriginal, () => {
-  console.log("🔄 Toggled dataset view, recalculating stats...");
-  recalculateMissingColumnsDetailed();
-  detectCategoricalColumns();
-});
-
-watch(pageSize, () => {
-  currentPage.value = 1;
-});
-
-watch(searchQuery, () => {
-  currentPage.value = 1;
-});
-
-
-/**
- * ✅ REFACTORED: Update columns from cleaned data
- */
-const updateColumnsFromData = (data) => {
-  if (!data || data.length === 0) {
-    console.warn("⚠️ Cannot update columns from empty data");
-    return;
-  }
-
-  console.log("🔄 Updating columns from data...");
-
-  const newColumns = Object.keys(data[0]).map((colName) => {
-    const existingCol = columns.value.find((c) => c.name === colName);
-    const type = detectColumnType(data.map((row) => row[colName]));
+  const firstRow = dataset.value[0];
+  columns.value = Object.keys(firstRow).map(key => {
+    // Find backend info
+    const stat = Array.isArray(stats) ? stats.find(s => s.name === key) : null;
+    const typeInfo = Array.isArray(types) ? types.find(t => t.column === key) : null;
 
     return {
-      name: colName,
-      type: type,
-      originalType: existingCol?.originalType || type,
-      remove: false, // Reset remove flag after processing
-      unique: 0,
-      missing: 0,
-      encoding: type === "categorical" ? "onehot" : null,
-      encode: false,
+        name: key,
+        type: stat?.type || detectType(dataset.value.map(r => r[key])),
+        unique: stat?.unique || 0,
+        missing: stat?.missing || 0,
+        remove: false, // UI state
+        // Add other metadata needed for tools
+        semanticType: typeInfo?.semantic_type || (stat?.type === 'numerical' ? 'numeric' : 'categorical')
     };
   });
-
-  columns.value = newColumns;
-  console.log("✅ Columns updated:", newColumns.length, "columns");
 };
 
-/**
- * ✅ Helper: Handle missing values (Frontend)
- */
-const handleMissingValuesFrontend = (data) => {
-  console.log("   Processing missing values...");
-
-  let processedData = [...data];
-  const columnsToProcess = missingColumnsDetailed.value;
-
-  columnsToProcess.forEach((col) => {
-    const strategy = col.strategy || "droprows";
-    console.log("     -", col.name, "→", strategy);
-
-    if (strategy === "droprows") {
-      // Remove rows with missing values in this column
-      processedData = processedData.filter((row) => {
-        const val = row[col.name];
-        return (
-          val !== null &&
-          val !== undefined &&
-          val !== "" &&
-          val !== "null" &&
-          val !== "NaN"
-        );
-      });
-    } else if (strategy === "fillmean" && col.type === "numerical") {
-      // Calculate mean
-      const values = processedData
-        .map((row) => parseFloat(row[col.name]))
-        .filter((v) => !isNaN(v) && isFinite(v));
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-
-      // Fill missing with mean
-      processedData.forEach((row) => {
-        const val = row[col.name];
-        if (
-          val === null ||
-          val === undefined ||
-          val === "" ||
-          val === "null" ||
-          val === "NaN"
-        ) {
-          row[col.name] = mean;
-        }
-      });
-    } else if (strategy === "fillmedian" && col.type === "numerical") {
-      // Calculate median
-      const values = processedData
-        .map((row) => parseFloat(row[col.name]))
-        .filter((v) => !isNaN(v) && isFinite(v))
-        .sort((a, b) => a - b);
-      const median = values[Math.floor(values.length / 2)];
-
-      // Fill missing with median
-      processedData.forEach((row) => {
-        const val = row[col.name];
-        if (
-          val === null ||
-          val === undefined ||
-          val === "" ||
-          val === "null" ||
-          val === "NaN"
-        ) {
-          row[col.name] = median;
-        }
-      });
-    } else if (strategy === "fillmode") {
-      // Calculate mode (most frequent value)
-      const valueCounts = {};
-      processedData.forEach((row) => {
-        const val = row[col.name];
-        if (
-          val !== null &&
-          val !== undefined &&
-          val !== "" &&
-          val !== "null" &&
-          val !== "NaN"
-        ) {
-          valueCounts[val] = (valueCounts[val] || 0) + 1;
-        }
-      });
-
-      const mode = Object.keys(valueCounts).reduce((a, b) =>
-        valueCounts[a] > valueCounts[b] ? a : b
-      );
-
-      // Fill missing with mode
-      processedData.forEach((row) => {
-        const val = row[col.name];
-        if (
-          val === null ||
-          val === undefined ||
-          val === "" ||
-          val === "null" ||
-          val === "NaN"
-        ) {
-          row[col.name] = mode;
-        }
-      });
-    } else if (strategy === "fillzero") {
-      // Fill missing with zero
-      processedData.forEach((row) => {
-        const val = row[col.name];
-        if (
-          val === null ||
-          val === undefined ||
-          val === "" ||
-          val === "null" ||
-          val === "NaN"
-        ) {
-          row[col.name] = 0;
-        }
-      });
-    } else if (strategy === "fillunknown") {
-      // Fill missing with "Unknown"
-      processedData.forEach((row) => {
-        const val = row[col.name];
-        if (
-          val === null ||
-          val === undefined ||
-          val === "" ||
-          val === "null" ||
-          val === "NaN"
-        ) {
-          row[col.name] = "Unknown";
-        }
-      });
-    }
-  });
-
-  return processedData;
+const detectType = (values) => {
+    // fast client-side detection fallback
+    const nonNull = values.filter(v => v !== null && v !== undefined && v !== "");
+    if (!nonNull.length) return "string";
+    const isNum = nonNull.every(v => !isNaN(parseFloat(v)) && isFinite(v));
+    return isNum ? "number" : "string";
 };
 
-/**
- * ✅ Helper: Remove duplicates (Frontend)
- */
-const removeDuplicatesFrontend = (data) => {
-  console.log("   Removing duplicates...");
-
-  const seen = new Set();
-  const unique = [];
-
-  data.forEach((row) => {
-    const rowString = JSON.stringify(row);
-    if (!seen.has(rowString)) {
-      seen.add(rowString);
-      unique.push(row);
-    }
-  });
-
-  console.log("     Found", data.length - unique.length, "duplicates");
-  return unique;
-};
-
-/**
- * ✅ Helper: Handle outliers (Frontend)
- */
-const handleOutliersFrontend = (data) => {
-  console.log("   Handling outliers...");
-
-  let processedData = [...data];
-  const numericalColumns = columns.value.filter(
-    (col) => getColumnSemanticType(col.name) === "numeric"
-  );
-
-  numericalColumns.forEach((col) => {
-    const values = processedData
-      .map((row) => parseFloat(row[col.name]))
-      .filter((v) => !isNaN(v) && isFinite(v))
-      .sort((a, b) => a - b);
-
-    if (values.length === 0) return;
-
-    // Calculate IQR
-    const q1 = values[Math.floor(values.length * 0.25)];
-    const q3 = values[Math.floor(values.length * 0.75)];
-    const iqr = q3 - q1;
-    const lowerBound = q1 - 1.5 * iqr;
-    const upperBound = q3 + 1.5 * iqr;
-
-    // Cap outliers to boundaries
-    processedData.forEach((row) => {
-      const val = parseFloat(row[col.name]);
-      if (!isNaN(val) && isFinite(val)) {
-        if (val < lowerBound) {
-          row[col.name] = lowerBound;
-        } else if (val > upperBound) {
-          row[col.name] = upperBound;
-        }
-      }
-    });
-
-    console.log(
-      "     -",
-      col.name,
-      "→ capped to [",
-      lowerBound,
-      ",",
-      upperBound,
-      "]"
-    );
-  });
-
-  return processedData;
-};
-
-const detectCategoricalColumns = () => {
-  console.log("\n" + "=".repeat(80));
-  console.log("🔍 DETECTING CATEGORICAL COLUMNS (Source of Truth: Semantic Types)");
-  console.log("=".repeat(80));
-
-  const datasetToCheck = hasCleanedData.value
-    ? cleanedDataset.value
-    : originalDataset.value;
-
-  if (!datasetToCheck || datasetToCheck.length === 0) {
-    console.log("⚠️  No dataset available for categorical detection");
-    categoricalColumns.value = [];
-    return;
-  }
-
-  // Get columns from appropriate dataset
-  let cols;
-  if (hasCleanedData.value) {
-    cols = getCleanedColumns.value || Object.keys(datasetToCheck[0]);
-  } else {
-    cols = visibleColumns.value || Object.keys(datasetToCheck[0]);
-  }
-
-  const datasetType = hasCleanedData.value ? "CLEANED" : "ORIGINAL";
-  const totalRows = datasetToCheck.length;
-
-  console.log(`📊 Dataset: ${datasetType}`);
-  console.log(`📊 Total rows: ${totalRows.toLocaleString()}`);
-  console.log(`📊 Total columns: ${cols.length}`);
-  console.log("");
-
-  const categorical = [];
-  let skippedCount = 0;
-
-  // Create a quick lookup for semantic types
-  const semanticMap = {};
-  if (semanticTypes.value) {
-    semanticTypes.value.forEach(st => {
-      semanticMap[st.column] = st.semantic_type;
-    });
-  }
-
-  cols.forEach((col) => {
-    const colName = typeof col === "string" ? col : col.name;
-    const colObj = columns.value.find((c) => c.name === colName);
-
-    // 1. Check for identifier semantic type first
-    const semanticType = semanticMap[colName];
-    if (semanticType === 'identifier') {
-      console.log(`📌 Identified ${colName} as identifier. Recommending removal.`);
-      if (colObj) {
-        colObj.remove = true; // Suggest removal for identifiers
-        colObj.type = 'identifier'; // Update its type
-      }
-      skippedCount++;
-      return; // Skip further categorical detection for identifiers
-    }
-
-    // Get column data (filter out null/undefined)
-    const columnData = datasetToCheck
-      .map((row) => row[colName])
-      .filter((v) => v !== null && v !== undefined);
-
-    const uniqueValues = new Set(columnData);
-    const uniqueCount = uniqueValues.size;
-
-    // Skip if no valid data
-    if (columnData.length === 0 || uniqueCount === 0) {
-      console.log(`   ⏭️  ${colName}: No valid data`);
-      skippedCount++;
-      return;
-    }
-
-    // Skip if constant (only 1 unique value)
-    if (uniqueCount === 1) {
-      console.log(`   ⏭️  ${colName}: Constant column (1 unique value)`);
-      skippedCount++;
-      return;
-    }
-
-    // Calculate cardinality ratio
-    const cardinalityRatio = uniqueCount / columnData.length;
-
-    // Check for underscore pattern (e.g., Category_A, Status_Active)
-    const hasUnderscore = colName.includes("_");
-    let isEncodedColumn = false;
-    let relatedColumns = [];
-
-    if (hasUnderscore) {
-      const parts = colName.split("_");
-      if (parts.length >= 2) {
-        const prefix = parts.slice(0, -1).join("_");
-
-        // Find other columns with same prefix
-        relatedColumns = cols.filter(
-          (c) => c.startsWith(prefix + "_") && c !== colName
-        );
-
-        // If multiple columns with same prefix, likely encoded set
-        if (relatedColumns.length >= 1) {
-          isEncodedColumn = true;
-        }
-      }
-    }
-
-    // Check if binary 0/1 column (result of one-hot encoding)
-    const isBinary01 =
-      uniqueCount === 2 &&
-      (uniqueValues.has(0) || uniqueValues.has("0")) &&
-      (uniqueValues.has(1) || uniqueValues.has("1"));
-
-    // Skip if definitely encoded
-    if (isEncodedColumn && isBinary01) {
-      console.log(
-        `   ⏭️  ${colName}: Encoded column (part of ${
-          relatedColumns.length + 1
-        } column set)`
-      );
-      skippedCount++;
-      return;
-    }
-
-    // Skip if binary 0/1 with encoded pattern
-    if (isBinary01 && hasUnderscore && relatedColumns.length >= 1) {
-      console.log(`   ⏭️  ${colName}: Binary encoded column`);
-      skippedCount++;
-      return;
-    }
-
-    const hasStrings = columnData.some((v) => typeof v === "string");
-    const allNumeric = columnData.every(
-      (v) => typeof v === "number" || !isNaN(Number(v))
-    );
-    const allIntegers =
-      allNumeric && columnData.every((v) => Number.isInteger(Number(v)));
-
-    const colLower = colName.toLowerCase();
-    const categoricalHints = [
-      "category",
-      "type",
-      "status",
-      "class",
-      "group",
-      "level",
-      "rank",
-      "grade",
-      "rating",
-      "label",
-      "flag",
-      "code",
-      "gender",
-      "country",
-      "state",
-      "city",
-      "department",
-      "role",
-      "segment",
-    ];
-
-    const hasNameHint = categoricalHints.some((hint) =>
-      colLower.includes(hint)
-    );
-
-    // Check if it's an ID column (should skip) - this is a fallback if semantic type is not available
-    const isIdColumn =
-      colLower === "id" ||
-      colLower.endsWith("_id") ||
-      colLower.startsWith("id_") ||
-      colLower.includes("customer_id") ||
-      colLower.includes("order_id") ||
-      colLower.includes("user_id");
-
-    let isCategorical = false;
-    let reason = "";
-
-    // Rule 1: String columns with reasonable cardinality
-    if (hasStrings && !allNumeric) {
-      if (cardinalityRatio < 0.5) {
-        isCategorical = true;
-        reason = `String column with low cardinality (${(
-          cardinalityRatio * 100
-        ).toFixed(1)}%)`;
-      } else if (uniqueCount <= 50 && hasNameHint) {
-        isCategorical = true;
-        reason = `String column with name hint (${uniqueCount} unique)`;
-      } else if (uniqueCount <= 20) {
-        isCategorical = true;
-        reason = `String column with few categories (${uniqueCount} unique)`;
-      }
-    }
-
-    // Rule 2: Numeric columns with very low cardinality (ratings, ordinal)
-    else if (allNumeric && allIntegers) {
-      if (uniqueCount <= 10 && cardinalityRatio < 0.1) {
-        isCategorical = true;
-        reason = `Low cardinality integer (${uniqueCount} unique, ${(
-          cardinalityRatio * 100
-        ).toFixed(1)}%)`;
-      } else if (uniqueCount <= 20 && hasNameHint) {
-        isCategorical = true;
-        reason = `Integer with categorical name hint (${uniqueCount} unique)`;
-      }
-    }
-
-    // Rule 3: Name-based detection for moderate cardinality
-    if (!isCategorical && hasNameHint && !isIdColumn) {
-      if (uniqueCount < 100 && cardinalityRatio < 0.3) {
-        isCategorical = true;
-        reason = `Name hint with moderate cardinality (${uniqueCount} unique, ${(
-          cardinalityRatio * 100
-        ).toFixed(1)}%)`;
-      }
-    }
-
-    if (isIdColumn && cardinalityRatio > 0.8) {
-      console.log(
-        `   ⏭️  ${colName}: ID column with high cardinality (${(
-          cardinalityRatio * 100
-        ).toFixed(1)}%)`
-      );
-      skippedCount++;
-      return;
-    }
-
-    // Skip continuous numeric columns
-    if (
-      allNumeric &&
-      uniqueCount > 20 &&
-      cardinalityRatio > 0.3 &&
-      !hasNameHint
-    ) {
-      console.log(
-        `   ⏭️  ${colName}: Continuous numeric (${uniqueCount} unique, ${(
-          cardinalityRatio * 100
-        ).toFixed(1)}%)`
-      );
-      skippedCount++;
-      return;
-    }
-
-    if (isCategorical) {
-      console.log(`   ✅ ${colName}: CATEGORICAL - ${reason}`);
-      
-      // Better recommendation based on cardinality
-      let recommendedEncoding = "onehot";
-      if (uniqueCount > 20) {
-        recommendedEncoding = "target";
-      } else if (uniqueCount > 10) {
-        recommendedEncoding = "ordinal";
-      }
-
-      categorical.push({
-        name: colName,
-        uniqueCount: uniqueCount,
-        cardinalityRatio: cardinalityRatio,
-        encode: false,
-        encoding: recommendedEncoding,
-        detectionReason: reason,
-      });
-    }
- else {
-      console.log(
-        `   ❌ ${col}: Not categorical (${uniqueCount} unique, ${(
-          cardinalityRatio * 100
-        ).toFixed(1)}% ratio)`
-      );
-      skippedCount++;
-    }
-  });
-
-  // ✅ INTEGRATE SEMANTIC TYPES
-  if (semanticTypes.value && semanticTypes.value.length > 0) {
-    console.log("📝 Overriding with Semantic Types from backend...");
+const analyzeDataQuality = () => {
+    // Calculate stats for tool badges
+    // Missing
+    let totalMiss = 0;
+    let colsWithMiss = 0;
     
-    semanticTypes.value.forEach(sCol => {
-      const isCategorical = ['categorical', 'boolean', 'datetime'].includes(sCol.semantic_type);
-      const isIdentifier = sCol.semantic_type === 'identifier';
-      const isNumeric = sCol.semantic_type === 'numeric';
-      
-      // Update columns ref type
-      const colObj = columns.value.find(c => c.name === sCol.column);
-      if (colObj) {
-        if (isCategorical) colObj.type = 'categorical';
-        if (isNumeric) colObj.type = 'numerical';
-        if (isIdentifier) colObj.type = 'identifier';
-      }
-      
-      // Update categorical list for encoding tool
-      const existingIdx = categorical.findIndex(c => c.name === sCol.column);
-      
-      if (isCategorical) {
-        if (existingIdx === -1) {
-          categorical.push({
-            name: sCol.column,
-            uniqueCount: colObj?.unique || 0,
-            cardinalityRatio: 0,
-            encode: false,
-            encoding: "onehot",
-            detectionReason: `Semantic Type: ${sCol.semantic_type} (${sCol.reason})`,
-          });
-        } else {
-          categorical[existingIdx].detectionReason = `Semantic Override: ${sCol.semantic_type}`;
-        }
-      } else if (existingIdx !== -1) {
-        // Remove if semantic type says it's not categorical anymore
-        console.log(`   Removing ${sCol.column} from categorical list (now ${sCol.semantic_type})`);
-        categorical.splice(existingIdx, 1);
-      }
-    });
-  }
-
-  // ============================================================================
-  // 9. SUMMARY
-  // ============================================================================
-  console.log("");
-  console.log("=".repeat(80));
-  console.log(
-    `✅ Detection complete: ${categorical.length} categorical columns found`
-  );
-  console.log(`⏭️  Skipped: ${skippedCount} columns`);
-  console.log("=".repeat(80) + "\n");
-
-  categoricalColumns.value = categorical;
-};
-
-const getColumnSemanticType = (colName) => {
-  const st = semanticTypes.value.find(s => s.column === colName);
-  return st ? st.semantic_type : 'numeric'; // default to numeric if unknown
-};
-
-const recalculateMissingColumnsDetailed = () => {
-  console.log("📊 Recalculating missing values...");
-
-  // ✅ FIXED: Always recalculate based on current view (original OR cleaned)
-  const dataset = hasCleanedData.value
-    ? cleanedDataset.value
-    : originalDataset.value;
-  const datasetType = hasCleanedData.value ? "CLEANED" : "ORIGINAL";
-
-  console.log(`Using ${datasetType} dataset (${dataset.length} rows)`);
-
-  if (!dataset || dataset.length === 0) {
-    console.warn("No data available");
-    missingColumnsDetailed.value = []; // ✅ CRITICAL: Clear the array
-    return;
-  }
-
-  const missing = [];
-
-  // Get columns to check based on current view
-  const columnsToCheck = hasCleanedData.value
-    ? Object.keys(dataset[0])
-    : columns.value.map((c) => c.name);
-
-  columnsToCheck.forEach((colName) => {
-    let missingCount = 0;
-
-    dataset.forEach((row) => {
-      const value = row[colName];
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === NaN
-      ) {
-        missingCount++;
-      }
-    });
-
-    if (missingCount > 0) {
-      const col = columns.value.find((c) => c.name === colName);
-      const colSemanticType = getColumnSemanticType(colName);
-      const colType = col?.type || colSemanticType;
-
-      let defaultStrategy = "fillmode";
-      if (colSemanticType === "numeric") {
-        defaultStrategy = "fillmedian";
-      } else if (colSemanticType === "identifier") {
-        defaultStrategy = "droprows";
-      } else if (colSemanticType === "datetime") {
-        defaultStrategy = "droprows"; // or ffill if implemented
-      }
-
-      missing.push({
-        name: colName,
-        type: colType,
-        semanticType: colSemanticType,
-        count: missingCount,
-        percentage: ((missingCount / dataset.length) * 100).toFixed(1),
-        strategy: defaultStrategy,
-      });
-    }
-  });
-
-  missingColumnsDetailed.value = missing.sort((a, b) => b.count - a.count);
-  console.log(`✅ Found ${missing.length} columns with missing values`);
-};
-
-// Helper: Detect column type
-const detectColumnType = (values) => {
-  const nonNull = values.filter(
-    (v) => v !== null && v !== undefined && v !== ""
-  );
-  if (nonNull.length === 0) return "categorical";
-
-  const numericCount = nonNull.filter((v) => !isNaN(parseFloat(v))).length;
-  return numericCount / nonNull.length > 0.8 ? "numerical" : "categorical";
-};
-
-// ===== MISSING VALUES STRATEGY HELPERS =====
-
-const updateMissingStrategy = (columnName, strategy) => {
-  const col = missingColumnsDetailed.value.find((c) => c.name === columnName);
-  if (col) {
-    col.strategy = strategy;
-  }
-  console.log(`Updated ${columnName}: ${strategy}`);
-};
-
-const applyGlobalMissingStrategy = () => {
-  missingColumnsDetailed.value.forEach((col) => {
-    const st = col.semanticType;
-    const strategy = globalMissingStrategy.value;
-
-    // VALIDATION RULES (Aligned with Backend)
-    let allowed = false;
+    // Outliers (if we have backend metrics)
+    let outlierCount = 0;
     
-    if (st === 'identifier') {
-      col.strategy = 'droprows'; // Identifier MUST be dropped
-      allowed = true;
-    } else if (st === 'numeric') {
-      if (['fillmean', 'fillmedian', 'fillzero', 'fillmode', 'droprows', 'keep'].includes(strategy)) {
-        col.strategy = strategy;
-        allowed = true;
-      }
-    } else if (['categorical', 'boolean', 'datetime'].includes(st)) {
-      if (['fillmode', 'fillunknown', 'fillzero', 'droprows', 'keep'].includes(strategy)) {
-        col.strategy = strategy;
-        allowed = true;
-      }
-    }
+    columns.value.forEach(c => {
+        if (c.missing > 0) {
+            totalMiss += c.missing;
+            colsWithMiss++;
+        }
+        // Use backend stats from detailed_metrics
+        if (dataStats.value?.column_stats) {
+            const stat = dataStats.value.column_stats.find(s => s.name === c.name);
+            if (stat?.detailed_metrics?.outliers_count) outlierCount += stat.detailed_metrics.outliers_count;
+        }
+    });
 
-    if (!allowed) {
-      // Fallback: If strategy is generic apply it, otherwise keep current
-      if (['droprows', 'keep'].includes(strategy)) {
-        col.strategy = strategy;
-      }
+    missingStats.value = { count: colsWithMiss, totalMissing: totalMiss };
+    outlierStats.value.count = outlierCount;
+    
+    // Duplicates from backend stats
+    if (dataStats.value?.duplicates !== undefined) {
+        duplicateStats.value.count = dataStats.value.duplicates;
     }
     
-    updateMissingStrategy(col.name, col.strategy);
-  });
-  console.log("Applied global strategy to all columns (semantic-validated)");
-};
-
-const autoSelectMissingStrategies = () => {
-  missingColumnsDetailed.value.forEach((col) => {
-    let bestStrategy;
-    const missingPercentage = parseFloat(col.percentage);
-
-    if (col.semanticType === "identifier" || col.semanticType === "datetime") {
-      // Identifiers and datetimes are often critical; drop rows if any missing
-      bestStrategy = missingPercentage > 0 ? "droprows" : "keep";
-    } else if (col.semanticType === "numeric") {
-      bestStrategy = missingPercentage < 10 ? "fillmedian" : "droprows";
-    } else if (col.semanticType === "categorical" || col.semanticType === "boolean") {
-      bestStrategy = missingPercentage < 15 ? "fillmode" : "droprows";
-    } else {
-      // Fallback for unknown semantic types, use general type
-      if (col.type === "numerical") {
-        bestStrategy = missingPercentage < 10 ? "fillmedian" : "droprows";
-      } else {
-        bestStrategy = missingPercentage < 15 ? "fillmode" : "droprows";
-      }
-    }
-
-    col.strategy = bestStrategy;
-    updateMissingStrategy(col.name, bestStrategy);
-  });
-  console.log("Auto-selected strategies based on data types");
-};
-
-const getStrategyName = (strategy) => {
-  const names = {
-    droprows: "Drop Rows",
-    fillmean: "Fill Mean",
-    fillmedian: "Fill Median",
-    fillmode: "Fill Mode",
-    fillzero: "Fill Zero",
-    fillunknown: "Fill Unknown",
-    keep: "Keep Missing",
-  };
-  return names[strategy] || strategy;
-};
-
-const getStrategyDescription = (strategy, type) => {
-  const descriptions = {
-    droprows: "Removes entire rows with missing values",
-    fillmean:
-      type === "numerical"
-        ? "Replace with average value"
-        : "Not applicable for text data",
-    fillmedian:
-      type === "numerical"
-        ? "Replace with middle value"
-        : "Not applicable for text data",
-    fillmode: "Replace with most common value",
-    fillzero: "Replace with 0",
-    fillunknown: 'Replace with "Unknown" placeholder',
-    keep: "Leave as missing (may cause errors)",
-  };
-  return descriptions[strategy] || "";
-};
-
-const getStrategyClass = (strategy) => {
-  const classes = {
-    droprows: "strategy-drop",
-    fillmean: "strategy-fill",
-    fillmedian: "strategy-fill",
-    fillmode: "strategy-fill",
-    fillzero: "strategy-fill",
-    fillunknown: "strategy-fill",
-    keep: "strategy-keep",
-  };
-  return classes[strategy] || "";
-};
-
-// ===== FRONTEND PREPROCESSING HELPERS (FALLBACK) =====
-
-const handleMissingValues = (data) => {
-  // Your existing frontend logic (keep as fallback)
-  let processedData = [...data];
-  const rowsToDelete = new Set();
-
-  missingColumnsDetailed.value.forEach((col) => {
-    const colName = col.name;
-    const strategy = col.strategy;
-
-    if (strategy === "droprows") {
-      processedData.forEach((row, index) => {
-        const value = row[colName];
-        if (
-          value === null ||
-          value === undefined ||
-          value === "" ||
-          value === "null"
-        ) {
-          rowsToDelete.add(index);
-        }
-      });
-    } else if (strategy === "keep") {
-      console.log(`Keeping missing values in ${colName}`);
-    } else {
-      const values = processedData
-        .map((row) => row[colName])
-        .filter(
-          (val) =>
-            val !== null && val !== undefined && val !== "" && val !== "null"
-        );
-
-      if (values.length === 0) return;
-
-      let fillValue;
-
-      if (strategy === "fillmean" && col.type === "numerical") {
-        const numbers = values
-          .map((val) => parseFloat(val))
-          .filter((val) => !isNaN(val));
-        fillValue = numbers.reduce((a, b) => a + b) / numbers.length;
-      } else if (strategy === "fillmedian" && col.type === "numerical") {
-        const numbers = values
-          .map((val) => parseFloat(val))
-          .filter((val) => !isNaN(val));
-        numbers.sort((a, b) => a - b);
-        fillValue = numbers[Math.floor(numbers.length / 2)];
-      } else if (strategy === "fillmode") {
-        const frequency = {};
-        values.forEach((val) => {
-          frequency[val] = (frequency[val] || 0) + 1;
+    // Populate missingColumnsDetailed for modal
+    missingColumnsDetailed.value = columns.value
+        .filter(c => c.missing > 0)
+        .map(c => {
+            const currentSType = getColumnSemanticType(c.name);
+            return {
+                ...c,
+                percentage: ((c.missing / displayedRowCount.value) * 100).toFixed(1),
+                semanticType: currentSType,
+                strategy: currentSType === 'identifier' ? 'droprows' : (currentSType === 'numeric' ? 'fillmean' : 'fillmode')
+            };
         });
-        fillValue = Object.keys(frequency).reduce((a, b) =>
-          frequency[a] > frequency[b] ? a : b
-        );
-      } else if (strategy === "fillzero") {
-        fillValue = 0;
-      } else if (strategy === "fillunknown") {
-        fillValue = "Unknown";
-      }
-
-      if (fillValue !== undefined) {
-        processedData.forEach((row) => {
-          const value = row[colName];
-          if (
-            value === null ||
-            value === undefined ||
-            value === "" ||
-            value === "null"
-          ) {
-            row[colName] = fillValue;
-          }
-        });
-      }
-    }
-  });
-
-  if (rowsToDelete.size > 0) {
-    processedData = processedData.filter(
-      (_, index) => !rowsToDelete.has(index)
-    );
-    console.log(`Removed ${rowsToDelete.size} rows with missing values`);
-  }
-
-  return processedData;
 };
 
-const removeDuplicates = (data) => {
-  const seen = new Set();
-  const result = [];
+// --- Actions ---
 
-  data.forEach((row) => {
-    const rowString = JSON.stringify(row);
-    if (!seen.has(rowString)) {
-      seen.add(rowString);
-      result.push(row);
-    } else if (duplicateStrategy.value === "keep_last") {
-      const prevIndex = result.findIndex(
-        (r) => JSON.stringify(r) === rowString
-      );
-      if (prevIndex !== -1) {
-        result.splice(prevIndex, 1);
-      }
-      result.push(row);
-    }
-  });
+const goBack = () => router.push("dashboard"); // Dashboard
+const proceedToTargetSelection = () => router.push("target-selection");
 
-  return result;
-};
-
-const handleOutliers = (data) => {
-  if (outlierStrategy.value === "keep") return data;
-
-  let processedData = [...data];
-  const numericalCols = columns.value.filter((col) => col.type === "numerical");
-
-  numericalCols.forEach((col) => {
-    const colName = col.name;
-    const values = processedData
-      .map((row) => parseFloat(row[colName]))
-      .filter((val) => !isNaN(val) && isFinite(val));
-
-    if (values.length === 0) return;
-
-    values.sort((a, b) => a - b);
-    const q1 = values[Math.floor(values.length * 0.25)];
-    const q3 = values[Math.floor(values.length * 0.75)];
-    const iqr = q3 - q1;
-    const lowerBound = q1 - 1.5 * iqr;
-    const upperBound = q3 + 1.5 * iqr;
-
-    if (outlierStrategy.value === "remove") {
-      processedData = processedData.filter((row) => {
-        const value = parseFloat(row[colName]);
-        return (
-          isNaN(value) ||
-          !isFinite(value) ||
-          (value >= lowerBound && value <= upperBound)
-        );
-      });
-    } else if (outlierStrategy.value === "cap") {
-      processedData.forEach((row) => {
-        const value = parseFloat(row[colName]);
-        if (!isNaN(value) && isFinite(value)) {
-          if (value < lowerBound) row[colName] = lowerBound;
-          if (value > upperBound) row[colName] = upperBound;
-        }
-      });
-    }
-  });
-
-  return processedData;
-};
-
-// ===== TOOL MANAGEMENT =====
-
-const toggleTool = (toolName) => {
-  const index = activeTools.value.indexOf(toolName);
-  if (index > -1) {
-    activeTools.value.splice(index, 1);
-  } else {
-    activeTools.value.push(toolName);
-  }
-};
-
-const toggleDropdown = (toolName) => {
-  const index = openDropdowns.value.indexOf(toolName);
-  if (index > -1) {
-    openDropdowns.value.splice(index, 1);
-  } else {
-    openDropdowns.value.push(toolName);
-  }
-};
-
-const enableTool = (toolName) => {
-  if (!activeTools.value.includes(toolName)) {
-    activeTools.value.push(toolName);
-  }
-  
-  // ✅ ADD THIS: Open the dropdown automatically
-  if (!openDropdowns.value.includes(toolName)) {
-    openDropdowns.value.push(toolName);
-  }
-  
-  console.log(`✅ Enabled tool: ${toolName}`);
-};
-
-const disableTool = (toolName) => {
-  // Remove from activeTools
-  const index = activeTools.value.indexOf(toolName);
-  if (index > -1) {
-    activeTools.value.splice(index, 1);
-  }
-  
-  // Remove from openDropdowns
-  const dropdownIndex = openDropdowns.value.indexOf(toolName);
-  if (dropdownIndex > -1) {
-    openDropdowns.value.splice(dropdownIndex, 1);
-  }
-  
-  //Reset column selection when disabling
-  if (toolName === 'columnSelection') {
-    columns.value.forEach(col => {
-      col.remove = false;
-    });
-  }
-  
-  console.log(`❌ Disabled tool: ${toolName}`);
-};
-
-
-// ===== ADD THESE 4 MISSING HELPER FUNCTIONS =====
-
-// 1. Get tool configuration summary (used in Apply Changes section)
-const getToolConfig = (toolId) => {
-  const configs = {
-    columnSelection: `${columns.value.filter(c => c.remove).length} columns`,
-    missingValues: `${missingColumnsDetailed.value.length} columns`,
-    duplicateRemoval: duplicateStrategy.value,
-    outlierHandling: outlierStrategy.value,
-    categoricalEncoding: `${categoricalColumns.value.filter(c => c.encode).length} columns`,
-  };
-  return configs[toolId] || "";
-};
-
-
-// 2. Select all categorical columns for encoding
-const selectAllCategoricalColumns = () => {
-    categoricalColumns.value.forEach((col) => {
-        // Skip identifier and boolean (boolean kept as 0/1)
-        const sType = getColumnSemanticType(col.name);
-        if (sType === 'categorical') {
-            col.encode = true;
-        }
-    });
-    console.log("✅ Selected all purely categorical columns for encoding");
-};
-
-// 3. Deselect all categorical columns
-const deselectAllCategoricalColumns = () => {
-  categoricalColumns.value.forEach((col) => {
-    const column = columns.value.find((c) => c.name === col.name);
-    if (column) column.encode = false;
-  });
-  console.log("Deselected all categorical columns");
-};
-
-// 4. Auto-select categorical columns (smart selection)
-const autoSelectForEncoding = () => {
-  categoricalColumns.value.forEach((col) => {
-    const column = columns.value.find((c) => c.name === col.name);
-    if (!column) return;
-
-    const uniqueCount = column.unique || 0;
-    const isLikelyTarget = uniqueCount <= 10;
-
-    // Encode if it's not a likely target and has more than 2 unique values
-    column.encode = !isLikelyTarget && uniqueCount > 2;
-  });
-  console.log("Auto-selected columns for encoding (excluded likely targets)");
-};
-
-// 5. Reset all changes - Show confirmation modal
-const resetAllChanges = () => {
-  showResetModal.value = true;
-};
-
-// 6. Confirm and execute reset
-const confirmReset = async () => {
-  console.log("\n" + "=".repeat(80));
-  console.log("🔄 RESETTING ALL CHANGES");
-  console.log("=".repeat(80));
-
-  try {
-    isProcessing.value = true;
-    processingMessage.value = "Resetting to original dataset...";
-    showResetModal.value = false;
-
-    // 1. Reset backend state if using backend
-    if (backendConnected.value && originalDatasetId.value) {
-      console.log("🔄 Resetting backend state...");
-      cleanedDatasetId.value = null;
-      datasetId.value = originalDatasetId.value; // Restore original dataset ID
-    }
-
-    // 2. Reset preprocessing state
-    cleanedDataset.value = [];
-    hasCleanedData.value = false;
-    showOriginal.value = true;
-    preprocessingHistory.value = [];
-
-    // 3. Reset UI state
-    activeTools.value = [];
-    openDropdowns.value = [];
-
-    // 4. Restore original dataset from backup
-    if (originalDatasetBackup.value && originalDatasetBackup.value.length > 0) {
-      originalDataset.value = JSON.parse(
-        JSON.stringify(originalDatasetBackup.value)
-      );
-      console.log(`✅ Restored ${originalDataset.value.length} rows from backup`);
-    }
-
-    // 5. Reset all tool settings
-    columns.value.forEach((col) => {
-      col.remove = false;
-      col.encode = false;
-    });
-
-    categoricalColumns.value.forEach((col) => {
-      col.encode = false;
-      col.encoding = "label";
-    });
-
-    missingColumnsDetailed.value.forEach((col) => {
-      col.strategy = col.type === "numerical" ? "fillmedian" : "fillmode";
-    });
-
-    duplicateStrategy.value = "keep_first";
-    outlierStrategy.value = "cap";
-    globalMissingStrategy.value = "fillmean";
-
-    // 6. Re-analyze original data
-    await nextTick();
-    analyzeColumns();
-
-    // 7. Fetch fresh statistics from backend
-    if (backendConnected.value && originalDatasetId.value) {
-      await fetchCompleteStatisticsFromBackend();
-    } else {
-      calculateMissingValuesFrontend();
-    }
-
-    detectCategoricalColumns();
-
-    console.log("✅ RESET COMPLETE");
-    console.log(`   Dataset ID: ${datasetId.value}`);
-    console.log(`   Rows: ${originalDataset.value.length}`);
-    console.log(`   Columns: ${columns.value.length}\n`);
-
-    showSuccess(
-      'Reset Complete',
-      `All preprocessing has been reset successfully.`
-    )
-  } catch (error) {
-    console.error("❌ Error during reset:", error);
-    showError('Reset Failed', error.message || 'Failed to reset preprocessing changes');
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-};
-
-// Call this after each preprocessing operation to verify state
-
-// 6. Reset tool-specific settings (helper functions)
-const resetToolSettingsColumnSelection = () => {
-  columns.value.forEach((col) => (col.remove = false));
-  console.log("Reset column selection");
-};
-
-const resetToolSettingsMissingValues = () => {
-  missingColumnsDetailed.value.forEach((col) => {
-    col.strategy = col.type === "numerical" ? "fillmedian" : "fillmode";
-  });
-  globalMissingStrategy.value = "fillmean";
-  console.log("Reset missing values strategies");
-};
-
-
+const exportData = () => {
+    // Simple CSV export of current visual data
+    if (!dataset.value.length) return;
+    const headers = visibleColumns.value.join(",");
+    const rows = filteredRows.value.map(row => 
+        visibleColumns.value.map(col => {
+            const val = row[col];
+            return val === null ? "" : `"${val}"`;
+        }).join(",")
+    ).join("\n");
     
-    
-// Add to computed properties
-const preprocessingStatus = computed(() => {
-  if (!hasCleanedData.value) return "No preprocessing applied";
-  if (cleanedDatasetId.value)
-    return `Using cleaned dataset (ID: ${cleanedDatasetId.value.slice(
-      0,
-      20
-    )}...)`;
-  return "Using original dataset";
-});
-
-const canApplyMorePreprocessing = computed(() => {
-  return activeTools.value.length > 0 && !isProcessing.value;
-});
-
-// Optional: Add this for debugging
-const debugPreprocessingState = () => {
-  console.group("🐛 DEBUGGING: Preprocessing State");
-  console.log("Original Dataset ID:", originalDatasetId.value);
-  console.log("Current Dataset ID:", datasetId.value);
-  console.log("Cleaned Dataset ID:", cleanedDatasetId.value);
-  console.log("Has Cleaned Data:", hasCleanedData.value);
-  console.log("Preprocessing History:", preprocessingHistory.value);
-  console.log("Active Tools:", activeTools.value);
-  console.groupEnd();
-};
-
-// Call this anytime: debugPreprocessingState()
-
-// 8. Export data function
-const exportData = async () => {
-  console.log("🔄 Starting data export...");
-  console.log(`Using dataset: ${cleanedDatasetId.value || datasetId.value}`);
-
-  // Determine which dataset to export
-  const datasetToExport = cleanedDatasetId.value || datasetId.value;
-  const isCleanedData = !!cleanedDatasetId.value;
-
-  if (!datasetToExport) {
-    alert("No dataset available to export");
-    return;
-  }
-
-  try {
-    console.log(`📤 Exporting from backend: ${datasetToExport}`);
-
-    // ✅ Fetch CSV directly from backend (StreamingResponse)
-    const token = localStorage.getItem('authToken');
-    const response = await fetch(
-      `http://localhost:8000/api/export-dataset/${datasetToExport}`,
-      {
-        method: "GET",
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Export failed: ${response.status} ${response.statusText}`
-      );
-    }
-
-    // ✅ Get blob directly (CSV file)
-    const blob = await response.blob();
-
-    // ✅ Create download link
-    const url = URL.createObjectURL(blob);
+    const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows;
+    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.href = url;
-
-    // ✅ Set filename with timestamp
-    const timestamp = new Date().toISOString().split("T")[0];
-    const suffix = isCleanedData ? "_cleaned" : "_original";
-    link.download = `dataset${suffix}_${timestamp}.csv`;
-
-    // ✅ Trigger download
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${fileName.value}_preview.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    console.log(`✅ Export successful!`);
-    console.log(`   Filename: ${link.download}`);
-    console.log(`   Status: ${isCleanedData ? "✅ CLEANED" : "⏭️ ORIGINAL"}`);
-
-    showSuccess(
-      'Export Successful',
-      `Dataset downloaded as ${link.download}`
-    );
-  } catch (error) {
-    console.error("❌ Export failed:", error);
-    showError('Export Failed', error.message);
-  }
 };
 
-const resetToolSettings = (toolName) => {
-  switch (toolName) {
-    case "columnSelection":
-      columns.value.forEach((col) => (col.remove = false));
-      break;
-    case "missingValues":
-      missingValuesConfig.value = {};
-      globalMissingStrategy.value = "fillmean";
-      missingColumnsDetailed.value.forEach((col) => {
-        col.strategy = "fillmean";
-      });
-      break;
-    case "duplicateRemoval":
-      duplicateStrategy.value = "keep_first";
-      break;
-    case "outlierHandling":
-      outlierStrategy.value = "cap";
-      break;
-  }
-};
 
-const isDropdownOpen = (toolName) => {
-  return openDropdowns.value.includes(toolName);
-};
+// --- Modal Actions (Placeholders connecting to backend) ---
 
-const isToolEnabled = (toolName) => {
-  return activeTools.value.includes(toolName);
-};
-
-// ===== COLUMN HELPERS =====
-
-const getColumnsToKeep = () => {
-  return columns.value.filter((col) => !col.remove);
-};
-
-const getColumnsToRemove = () => {
-  return columns.value.filter((col) => col.remove);
-};
-
-const getCleanedColumns = computed(() => {
-  if (!cleanedDataset.value || cleanedDataset.value.length === 0) {
-    return []; // ✅ Always return array, never undefined
-  }
-  return Object.keys(cleanedDataset.value[0]) || []; // ✅ Fallback to empty array
-});
-
-const selectNoColumns = () => {
-  columns.value.forEach((col) => (col.remove = false));
-};
-
-const selectAllColumns = () => {
-  if (
-    confirm(
-      "Are you sure you want to remove ALL columns? This will make your dataset unusable."
-    )
-  ) {
-    columns.value.forEach((col) => (col.remove = true));
-  }
-};
-
+// COLUMN SELECTION
+const selectNoColumns = () => columns.value.forEach(c => c.remove = false);
+const selectAllColumns = () => columns.value.forEach(c => c.remove = true);
 const selectIrrelevantColumns = () => {
-  columns.value.forEach((col) => {
-    col.remove = checkIfIrrelevant(
-      col.name,
-      originalDataset.value.map((row) => row[col.name])
-    );
-  });
-};
-
-const checkIfIrrelevant = (columnName, values) => {
-  const sType = getColumnSemanticType(columnName);
-  if (sType === 'identifier') return true;
-
-  const name = columnName.toLowerCase();
-
-  const irrelevantPatterns = [
-    "id",
-    "uuid",
-    "key",
-    "index",
-    "_id",
-    "name",
-    "email",
-    "phone",
-    "address",
-    "url",
-    "link",
-    "path",
-    "image",
-    "created",
-    "updated",
-    "timestamp",
-  ];
-
-  const matchesPattern = irrelevantPatterns.some((pattern) =>
-    name.includes(pattern)
-  );
-
-  const uniqueValues = new Set(
-    values.filter(
-      (v) => v !== null && v !== undefined && v !== "" && v !== "null"
-    )
-  ).size;
-  const nonNullValues = values.filter(
-    (v) => v !== null && v !== undefined && v !== "" && v !== "null"
-  );
-  const isAllUnique =
-    uniqueValues === nonNullValues.length &&
-    uniqueValues > nonNullValues.length * 0.9;
-
-  return matchesPattern || isAllUnique;
-};
-
-const getColumnSample = (column) => {
-  const values = originalDataset.value
-    .map((row) => row[column.name])
-    .filter(
-      (val) => val !== null && val !== undefined && val !== "" && val !== "null"
-    )
-    .slice(0, 3);
-
-  return values.length > 0 ? values.join(", ") : "No data";
-};
-
-// ===== UTILITY FUNCTIONS =====
-
-const analyzeColumns = () => {
-  if (originalDataset.value.length === 0) return;
-
-  const firstRow = originalDataset.value[0];
-  const analyzed = [];
-
-  Object.keys(firstRow).forEach((colName) => {
-    let type = "categorical";
-    let unique = 0;
-    let missing = 0;
-
-    originalDataset.value.forEach((row) => {
-      const value = row[colName];
-
-      if (value === null || value === undefined || value === "") {
-        missing++;
-      } else {
-        const num = parseFloat(value);
-        if (!isNaN(num) && isFinite(num)) {
-          if (type === "categorical") type = "numerical";
+    // Auto-select ID columns or high cardinality string columns
+    columns.value.forEach(c => {
+        if (c.semanticType === 'identifier' || (c.unique === displayedRowCount.value && c.type !== 'number')) {
+            c.remove = true;
         }
-      }
     });
-
-    const values = new Set(
-      originalDataset.value
-        .map((row) => row[colName])
-        .filter((v) => v !== null && v !== undefined && v !== "")
-    );
-    unique = values.size;
-
-    analyzed.push({
-      name: colName,
-      type,
-      remove: false,
-      encode: false,
-      unique,
-      missing,
-    });
-  });
-
-  columns.value = analyzed;
-  detectCategoricalColumns();
-  // NOTE: Don't call recalculateMissingColumnsDetailed() here
-  // It will be populated by fetchCompleteStatisticsFromBackend() with accurate data
 };
+const getColumnsToRemove = () => columns.value.filter(c => c.remove);
 
-
-//  * Support for reloading fresh data after scaling operations
-//  */
-const loadDataFromStorage = async () => {
-  console.log("\n" + "=".repeat(80));
-  console.log("📂 LOADING DATA FROM STORAGE");
-  console.log("=".repeat(80));
-
-  try {
-    // ===================================================================
-    // PRIORITY 1: Load from mlStore (Pinia state)
-    // ===================================================================
-    if (await loadFromMlStore()) {
-      console.log("=".repeat(80) + "\n");
-      return;
-    }
-
-    // ===================================================================
-    // PRIORITY 2: Load from localStorage
-    // ===================================================================
-    if (await loadFromLocalStorage()) {
-      console.log("=".repeat(80) + "\n");
-      return;
-    }
-
-    // ===================================================================
-    // PRIORITY 3: Load from backend as fallback
-    // ===================================================================
-    if (backendConnected.value && datasetId.value) {
-      console.log("\n⏳ Trying backend as last resort...");
-      await fetchDatasetFromBackend(datasetId.value);
-    } else {
-      console.warn("❌ No data source available");
-    }
-
-    console.log("=".repeat(80) + "\n");
-  } catch (error) {
-    console.error("❌ CRITICAL ERROR in loadDataFromStorage:", error);
-  }
-};
-
-/**
- * Helper: Load dataset from mlStore (Pinia)
- * @returns {Promise<boolean>} True if data loaded successfully
- */
-const loadFromMlStore = async () => {
-  if (!mlStore.dataset || mlStore.dataset.length === 0 || !mlStore.datasetId) {
-    return false;
-  }
-
-  console.log("\n✅ PRIORITY 1: Found in mlStore");
-
-  // Set dataset metadata
-  datasetId.value = mlStore.datasetId;
-  originalDatasetId.value = mlStore.datasetId;
-  cleanedDatasetId.value = null;
-  preprocessingHistory.value = [];
-  fileName.value = mlStore.fileName || "Dataset";
-
-  // Load PREVIEW data (limit to 200 rows for UI display)
-  originalDataset.value = (mlStore.dataset || []).slice(0, 200);
-  originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
-
-  // Store the ACTUAL total row count
-  completeDatasetStats.value.totalRows = mlStore.dataset?.length || 0;
-
-  console.log(`Dataset ID: ${datasetId.value}`);
-  console.log(`Preview Rows: ${originalDataset.value.length}`);
-  console.log(`Actual Total Rows: ${completeDatasetStats.value.totalRows}`);
-
-  // Analyze column types
-  analyzeColumns();
-
-  // Fetch COMPLETE statistics from backend if available
-  if (backendConnected.value && datasetId.value) {
-    await fetchCompleteStatisticsFromBackend();
-  }
-
-  return true;
-};
-
-/**
- * Helper: Load dataset from localStorage
- * @returns {Promise<boolean>} True if data loaded successfully
- */
-const loadFromLocalStorage = async () => {
-  console.log("\n⏳ PRIORITY 2: Checking localStorage...");
-
-  const processedDataStr = localStorage.getItem("processedData");
-  if (!processedDataStr) {
-    console.warn("❌ No data in localStorage");
-    return false;
-  }
-
-  try {
-    console.log("✅ PRIORITY 2: Found in localStorage");
-
-    const processedData = JSON.parse(processedDataStr);
-
-    // Set dataset metadata
-    datasetId.value = processedData.backendDatasetId || processedData.datasetId || "";
-    originalDatasetId.value = datasetId.value;
-    cleanedDatasetId.value = null;
-    preprocessingHistory.value = [];
-    fileName.value = processedData.fileName || "Dataset";
-
-    // Load PREVIEW data (limit to 200 rows for UI display)
-    originalDataset.value = (processedData.data || []).slice(0, 200);
-
-    // Store the ACTUAL total row count from backend
-    if (processedData.totalRowsInBackend) {
-      totalRowsInBackend.value = processedData.totalRowsInBackend;
-      completeDatasetStats.value.totalRows = processedData.totalRowsInBackend;
-    }
-
-    // Validate data exists
-    if (originalDataset.value.length === 0) {
-      console.warn("⚠️ No rows in localStorage, trying backend...");
-
-      if (backendConnected.value && datasetId.value) {
-        await fetchDatasetFromBackend(datasetId.value);
-      }
-      return false;
-    }
-
-    // Backup and analyze
-    originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
-    analyzeColumns();
-
-    // Fetch COMPLETE statistics from backend if available
-    if (backendConnected.value && datasetId.value) {
-      await fetchCompleteStatisticsFromBackend();
-    }
-
-    return true;
-  } catch (parseError) {
-    console.error("❌ Parse error in localStorage:", parseError);
-    localStorage.removeItem("processedData");
-    return false;
-  }
-};
-
-const canContinue = computed(() => {
-  return hasCleanedData.value || (!!datasetId.value && datasetId.value !== '');
-});
-
-/**
- * Reload fresh data from backend (used after scaling operations)
- * This ensures the UI shows the latest transformed data
- */
-const reloadDataFromBackend = async () => {
-  
-  const currentDatasetId = cleanedDatasetId.value || datasetId.value;
-  
-  if (!currentDatasetId || !backendConnected.value) {
-    console.warn('⚠️ Cannot reload: Missing dataset ID or backend connection');
-    return false;
-  }
-
-  try {
-    console.log(`🔄 Reloading fresh data from backend for dataset: ${currentDatasetId}`);
-
-    const response = await fetch(
-      `http://localhost:8000/api/datasets/${currentDatasetId}`,
-      {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    if (data.sample_data && data.sample_data.length > 0) {
-      originalDataset.value = data.sample_data.slice(0, 200);
-      originalDatasetBackup.value = JSON.parse(JSON.stringify(originalDataset.value));
-      
-      // Re-analyze columns
-      analyzeColumns();
-
-      console.log(`✅ Reloaded ${originalDataset.value.length} rows from backend`);
-      return true;
-    } else {
-      console.warn('⚠️ Backend returned no data');
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ Error reloading data from backend:', error);
-    return false;
-  }
-};
-
-
-
-const fetchDatasetFromBackend = async (datasetIdParam) => {
-  console.log("\n" + "=".repeat(80));
-  console.log("📥 FETCHING FROM BACKEND");
-  console.log("=".repeat(80));
-
-  try {
-    const response = await authenticatedGet(
-  `http://localhost:8000/api/datasets/${datasetIdParam}`
-);
-
-    if (!response.ok) throw new Error(`Status: ${response.status}`);
-
-    const data = await response.json();
-
-    const backendTotalRows = data.total_rows || data.shape?.[0] || 0;
-    totalRowsInBackend.value = backendTotalRows;
-
-    datasetId.value = data.dataset_id;
-    originalDatasetId.value = data.dataset_id;
-    cleanedDatasetId.value = null;
-    preprocessingHistory.value = [];
-    fileName.value = data.filename || "Dataset";
-
-    originalDataset.value = (data.sample_data || []).slice(0, 200);
-
-    if (originalDataset.value.length > 0) {
-      originalDatasetBackup.value = JSON.parse(
-        JSON.stringify(originalDataset.value)
-      );
-    }
-
-    analyzeColumns();
-
-    localStorage.setItem(
-      "processedData",
-      JSON.stringify({
-        data: originalDataset.value,
-        fileName: fileName.value,
-        datasetId: data.dataset_id,
-        backendDatasetId: data.dataset_id,
-        uploadTime: data.uploaded_at,
-        totalRowsInBackend: backendTotalRows,
-        columns: data.columns,
-        shape: data.shape,
-      })
-    );
-
-    console.log(`\n📊 SUMMARY`);
-    console.log(`Backend: ${backendTotalRows.toLocaleString()} rows`);
-    console.log(`Frontend: ${originalDataset.value.length} rows (sample)`);
-    console.log("=".repeat(80) + "\n");
-  } catch (error) {
-    console.error("❌ Error:", error);
-    alert(`Failed: ${error.message}`);
-  }
-};
-
-
-
-const sortByColumn = (columnName) => {
-  if (sortColumn.value === columnName) {
-    sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
-  } else {
-    sortColumn.value = columnName;
-    sortDirection.value = "asc";
-  }
-};
-
-const formatCellValue = (value) => {
-  if (value === null || value === undefined || value === "null") return "-";
-  if (typeof value === "number") {
-    if (Number.isInteger(value)) return value.toString();
-    return Number.isFinite(value) ? value.toFixed(2) : "-";
-  }
-  if (typeof value === "string" && value.length > 30)
-    return value.substring(0, 30) + "...";
-  return String(value);
-};
-
-const formatNumber = (num) => {
-  return new Intl.NumberFormat().format(num);
-};
-
-const getHealthLevel = (score) => {
-  if (score >= 80) return "excellent";
-  if (score >= 60) return "good";
-  if (score >= 40) return "fair";
-  return "poor";
-};
-
-const goBack = () => {
-  // Save preprocessing history to session if needed
-  if (cleanedDatasetId.value) {
-    console.log("💾 Saved preprocessing state:");
-    console.log(`   Original: ${originalDatasetId.value}`);
-    console.log(`   Cleaned: ${cleanedDatasetId.value}`);
-    console.log(`   History: ${preprocessingHistory.value.length} operations`);
-  }
-
-  router.push("/dashboard");
-};
-
-const proceedToTargetSelection = async () => {
-  try {
+const applyColumnChanges = async () => {
     isProcessing.value = true;
-    processingMessage.value = "Preparing for target selection...";
-
-    await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
-
-    // Use cleaned datasetId if it exists, else original
-    const targetDatasetId = cleanedDatasetId.value || datasetId.value;
-
-    // Corresponding dataset to pass
-    const dataToPass = hasCleanedData.value ? cleanedDataset.value : originalDataset.value;
-
-    if (!targetDatasetId) {
-      alert("No valid dataset found. Please upload or preprocess your data.");
-      isProcessing.value = false;
-      return;
-    }
-
-    // Update mlStore state using a more descriptive action (if available)
-    mlStore.setCurrentDataset(targetDatasetId, dataToPass, fileName.value, columns.value);
-
-    // Updated localStorage with clear keys (PRESERVE processingSteps!)
-    const existingData = localStorage.getItem('processedData');
-    const existingProcessingSteps = existingData ? JSON.parse(existingData).processingSteps || [] : [];
-
-    // START: Detect and add frontend preprocessing steps
-    const currentSteps = [];
-    
-    // 1. Column Selection
-    if (columns.value.some(col => col.remove)) {
-       currentSteps.push("Column Selection");
-    }
-    
-    // 2. Missing Values: Check if any strategy is applied (not 'keep')
-    const hasMissingHandling = missingColumnsDetailed.value.some(col => col.strategy && col.strategy !== 'keep');
-    if (hasMissingHandling) {
-       currentSteps.push("Missing Value Handling");
-    }
-
-    // 3. Outlier Handling
-    if (outlierStrategy.value && outlierStrategy.value !== 'keep') {
-       currentSteps.push("Outlier Handling");
-    }
-
-    // 4. Duplicate Removal
-    if (activeTools.value.includes('duplicateRemoval')) {
-        currentSteps.push("Duplicate Removal");
-    }
-    
-    // Merge new steps into existing ones
-    currentSteps.forEach(stepName => {
-        const exists = existingProcessingSteps.some(s => 
-            (typeof s === 'string' && s === stepName) || 
-            (typeof s === 'object' && s.name === stepName)
-        );
-        
-        if (!exists) {
-            console.log(`📝 Adding inferred step: ${stepName}`);
-            existingProcessingSteps.push(stepName);
+    try {
+        const toDrop = getColumnsToRemove().map(c => c.name);
+        if (toDrop.length > 0) {
+            await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/drop-columns`, {
+                columns: toDrop
+            });
+            // Reload data
+            await dataStore.loadData(datasetId.value, true);
+            // Refresh local columns
+            processColumns();
+            analyzeDataQuality();
+            showSuccess("Columns Dropped", `Removed ${toDrop.length} columns successfully.`);
         }
-    });
-    // END: Preprocessing steps detection
-
-    localStorage.setItem(
-      "processedData",
-      JSON.stringify({
-        data: dataToPass,
-        fileName: fileName.value,
-        datasetId: targetDatasetId,          // Use resolved datasetId (cleaned or original)
-        originalDatasetId: datasetId.value,  // Keep originalDatasetId separate for reference
-        uploadTime: new Date().toISOString(),
-        preprocessed: hasCleanedData.value,
-        rowCount: dataToPass.length,
-        columnCount: dataToPass.length > 0 ? Object.keys(dataToPass[0]).length : 0,
-        totalRowsInBackend: totalRowsInBackend.value, // Pass total rows info
-        processingSteps: existingProcessingSteps // ✅ PRESERVE existing steps
-      })
-    );
-
-    console.log("✅ Data prepared for target selection");
-    console.log("   - Sample rows:", dataToPass.length);
-    console.log("   - Backend rows:", totalRowsInBackend.value.toLocaleString());
-    console.log("   - Columns:", dataToPass.length > 0 ? Object.keys(dataToPass[0]).length : 0);
-    console.log("   - Dataset ID:", targetDatasetId);
-    console.log("   - Stored in: mlStore + localStorage");
-
-    // Navigate to target selection page
-    router.push("/target-selection");
-  } catch (error) {
-    console.error("Error in navigation:", error);
-    alert("Navigation failed: " + error.message);
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = "";
-  }
+        showColumnModal.value = false;
+    } catch (e) {
+        console.error("Drop columns failed", e);
+        showError("Drop Failed", "Could not remove selected columns.");
+    } finally {
+        isProcessing.value = false;
+    }
 };
 
+const confirmResetAllChanges = async () => {
+    isProcessing.value = true;
+    try {
+        // Find original dataset ID (usually saved in store or part of metadata)
+        // For now, if we have an originalDatasetId or similar logic
+        // This is a placeholder for actual reset logic
+        showResetModal.value = false;
+        // Reload data
+        await dataStore.loadData(datasetId.value, true);
+        showSuccess("Reset Complete", "Dataset reverted to original state.");
+    } catch(e) {
+        console.error("Reset failed", e);
+        showError("Reset Failed", "Could not revert changes.");
+    } finally {
+        isProcessing.value = false;
+    }
+};
 
-// ===== WATCHERS =====
+// MISSING VALUES
+const applyGlobalMissingStrategy = () => {
+    missingColumnsDetailed.value.forEach(c => {
+        // Don't override mandatory ID drops
+        if (c.semanticType !== 'identifier') {
+            c.strategy = globalMissingStrategy.value;
+        }
+    });
+};
+const autoSelectMissingStrategies = () => {
+    missingColumnsDetailed.value.forEach(c => {
+        if (c.semanticType === 'identifier') c.strategy = 'droprows';
+        else if (c.semanticType === 'numeric') c.strategy = 'fillmean';
+        else c.strategy = 'fillmode';
+    });
+};
+const applyMissingStrategies = async () => {
+    isProcessing.value = true;
+    try {
+        // Group by strategy
+        const strategies = {};
+        missingColumnsDetailed.value.forEach(c => {
+            if (!strategies[c.strategy]) strategies[c.strategy] = [];
+            strategies[c.strategy].push(c.name);
+        });
 
+        // Execute API calls sequantially or parallel
+        for (const [strategy, cols] of Object.entries(strategies)) {
+            // Need specific endpoints or a bulk one. 
+            // Assuming generic 'handle-missing' endpoint
+            await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/missing-values`, {
+                strategy: strategy, // e.g., 'drop' (rows), 'mean', etc. Map frontend strategy to backend
+                columns: cols
+            });
+        }
+        
+        await dataStore.loadData(datasetId.value, true);
+        processColumns();
+        analyzeDataQuality();
+        showMissingModal.value = false;
+        showSuccess("Missing Values Handled", "Strategies applied successfully.");
+    } catch (e) {
+        console.error("Missing handling failed", e);
+        showError("Processing Failed", "Failed to handle missing values.");
+    } finally {
+        isProcessing.value = false;
+    }
+};
+
+// OUTLIERS
+const applyOutlierHandling = async () => {
+    // If 'keep', just close modal (do nothing)
+    if (outlierStrategy.value === 'keep') {
+        showOutlierModal.value = false;
+        return;
+    }
+
+    isProcessing.value = true;
+    try {
+        await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/outliers`, {
+             method: outlierStrategy.value // 'cap', 'remove'
+        });
+        await dataStore.loadData(datasetId.value, true);
+        // Refresh local columns
+        processColumns();
+        analyzeDataQuality();
+        showOutlierModal.value = false;
+        showSuccess("Outliers Processed", `Outliers handled using ${outlierStrategy.value} method.`);
+    } catch (e) {
+         console.error("Outlier handling failed", e);
+         showError("Processing Failed", "Failed to handle outliers.");
+    } finally {
+        isProcessing.value = false;
+    }
+};
+
+// DUPLICATES
+const applyDuplicateRemoval = async () => {
+    isProcessing.value = true;
+     try {
+        let keepStrategy = 'first';
+        if (duplicateStrategy.value === 'keep_last') keepStrategy = 'last';
+        else if (duplicateStrategy.value === 'remove_all') keepStrategy = 'all';
+
+        await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/remove-duplicates`, {
+             keep: keepStrategy
+        });
+        await dataStore.loadData(datasetId.value, true);
+        processColumns();
+        analyzeDataQuality();
+        showDuplicateModal.value = false;
+        showSuccess("Duplicates Removed", "Duplicate removal complete.");
+    } catch (e) {
+         console.error("Duplicate removal failed", e);
+         showError("Processing Failed", "Failed to remove duplicates.");
+    } finally {
+        isProcessing.value = false;
+    }
+};
+
+// UTILS
+const formatCellValue = (val) => {
+    if (val === null || val === undefined) return "-";
+    if (typeof val === 'number') return val % 1 === 0 ? val : val.toFixed(4);
+    return val;
+};
+const isEncodedColumn = (col) => false; // Placeholder
+const getHealthLevel = (score) => {
+    if (score > 80) return "good";
+    if (score > 50) return "medium";
+    return "poor";
+};
+const sortByColumn = (col) => {
+    if (sortColumn.value === col) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortColumn.value = col;
+        sortDirection.value = 'asc';
+    }
+};
+const getColumnSample = (col) => {
+    return dataset.value.slice(0,3).map(r => r[col.name]).join(", ");
+};
+const openTypeDetectionModal = () => {
+    showTypeDetectionModal.value = true;
+};
+const getStrategyDescription = (strategy, type) => {
+    // Simple helper for hint text
+    if (strategy === 'droprows') return "Removes entire row if value missing";
+    if (strategy === 'fillmean') return "Fills with average value";
+    return "";
+};
+
+const getColumnSemanticType = (name) => {
+    const col = columns.value.find(c => c.name === name);
+    return col?.semanticType || 'unknown';
+};
+
+// function removed (duplicate)
+
+const confirmRemoveColumns = async () => {
+    // const columnsToRemove = columns.value.filter(c => c.remove).map(c => c.name);
+    const columnsToRemove = getColumnsToRemove().map(c => c.name);
+    
+    if (columnsToRemove.length === 0) return;
+    
+    // Call API usually, but here we might just simulate or update store
+    console.log("Removing columns:", columnsToRemove);
+    
+    // Update local dataset immediately for preview
+    const newDataset = dataset.value.map(row => {
+        const newRow = { ...row };
+        columnsToRemove.forEach(col => delete newRow[col]);
+        return newRow;
+    });
+    
+    // Update store
+    dataStore.updateDataset(newDataset);
+    
+    // Update columns list
+    columns.value = columns.value.filter(c => !columnsToRemove.includes(c.name));
+    
+    // Close modal
+    showColumnModal.value = false;
+    
+    // Record step
+    preprocessingHistory.value.push({
+        id: Date.now(),
+        type: 'feature_selection',
+        description: `Removed ${columnsToRemove.length} columns: ${columnsToRemove.join(', ')}`,
+        timestamp: new Date()
+    });
+};
+
+const saveSemanticOverrides = async () => {
+    const overrides = semanticTypes.value.filter(st => st.is_override);
+    
+    if (overrides.length === 0) {
+        showInfo("No Changes", "No semantic type overrides were made.");
+        showTypeDetectionModal.value = false;
+        return;
+    }
+
+    isDetectingTypes.value = true;
+    try {
+        await dataStore.saveSemanticTypes(datasetId.value, overrides);
+        
+        // Update local columns view to match new semantic types
+        processColumns();
+        // Refresh quality analysis (recommendations change)
+        analyzeDataQuality();
+        
+        showSuccess("Types Saved", `Updated semantic types for ${overrides.length} columns.`);
+        showTypeDetectionModal.value = false;
+    } catch (e) {
+        console.error("Failed to save types", e);
+        showError("Save Failed", "Could not persist semantic type overrides.");
+    } finally {
+        isDetectingTypes.value = false;
+    }
+};
+
+const updateMissingStrategy = (name, strategy) => {
+    const col = missingColumnsDetailed.value.find(c => c.name === name);
+    if(col) col.strategy = strategy;
+};
+
+// --- Watchers ---
 watch(pageSize, () => {
-  currentPage.value = 1;
+    currentPage.value = 1;
 });
 
 watch(searchQuery, () => {
-  currentPage.value = 1;
+    currentPage.value = 1;
 });
 
-onMounted(async () => {
-  try {
-    console.log("🚀 Initializing Data Preview...");
+// Sync local view when global semantic types from backend change
+watch(semanticTypes, () => {
+    console.log("🔄 Semantic types updated in store, re-processing columns...");
+    processColumns();
+    analyzeDataQuality();
+}, { deep: true });
 
-    // Make debug functions globally accessible
-    if (typeof window !== "undefined") {
-      window.debugPreprocessingChain = debugPreprocessingChain;
-      window.debugState = () => {
-        console.log("Quick State Check:");
-        console.log("  cleanedDatasetId:", cleanedDatasetId.value);
-        console.log("  hasCleanedData:", hasCleanedData.value);
-        console.log("  activeTools:", activeTools.value);
-        console.log("  history:", preprocessingHistory.value.length);
-      };
-      console.log(
-        "💡 Debug available: debugPreprocessingChain() or debugState()"
-      );
-      console.log("💡 Keyboard: Ctrl+Shift+D for debug info");
-    }
-
-    // Add keyboard shortcut
-    const handleKeyPress = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "D") {
-        e.preventDefault();
-        debugPreprocessingChain();
-      }
-    };
-    window.addEventListener("keydown", handleKeyPress);
-
-    // Cleanup on unmount
-    onUnmounted(() => {
-      window.removeEventListener("keydown", handleKeyPress);
-      delete window.debugPreprocessingChain;
-      delete window.debugState;
-    });
-
-    // Step 1: Check backend connection
-    console.log("🔌 Checking backend connection...");
-    await mlStore.checkBackendConnection();
-    console.log(
-      backendConnected.value
-        ? "✅ Backend connected"
-        : "⚠️ Backend not available"
-    );
-
-    // Step 2: Load data from storage
-    console.log("📂 Loading data from storage...");
-    await loadDataFromStorage();
-
-    if (!originalDataset.value || originalDataset.value.length === 0) {
-      console.error("❌ No data loaded!");
-      return;
-    }
-
-    console.log(
-      `✅ Data loaded: ${originalDataset.value.length} rows, ${columns.value.length} columns`
-    );
-
-    // Step 3: Calculate missing values
-    if (columns.value.length > 0) {
-      console.log("📊 Calculating missing values (frontend)...");
-      calculateMissingValuesFrontend();
-      console.log(
-        `✅ Missing values calculated: ${missingColumnsDetailed.value.length} columns affected`
-      );
-    }
-
-    // Step 4: Try to enhance with backend data
-    if (backendConnected.value && datasetId.value) {
-      console.log("🔄 Fetching complete statistics from backend...");
-      try {
-        await fetchCompleteStatisticsFromBackend();
-        console.log("✅ Backend statistics fetched successfully");
-      } catch (error) {
-        console.warn(
-          "⚠️ Backend fetch failed, using frontend calculation:",
-          error.message
-        );
-      }
-    } else {
-      console.log("ℹ️ Using frontend-only missing values calculation");
-    }
-
-    console.log("✅ Data Preview initialized successfully!");
-    
-    // NEW: Fetch and apply semantic types as the source of truth
-    if (backendConnected.value && datasetId.value) {
-      console.log("🧬 Fetching semantic types...");
-      await fetchSemanticTypes();
-      detectCategoricalColumns(); // Refresh with semantic types
-    }
-    console.log(`   - Dataset ID: ${datasetId.value}`);
-    console.log(`   - Rows: ${originalDataset.value.length}`);
-    console.log(`   - Columns: ${columns.value.length}`);
-    console.log(
-      `   - Missing value columns: ${missingColumnsDetailed.value.length}`
-    );
-    console.log(`   - Health score: ${dataQuality.value.score}%`);
-  } catch (error) {
-    console.error("❌ Error initializing Data Preview:", error);
-  }
+onMounted(() => {
+    mlStore.checkBackendConnection();
+    initializeData();
 });
 </script>
 

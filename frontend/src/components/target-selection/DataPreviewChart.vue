@@ -14,7 +14,7 @@
           class="chart-selector"
           :class="{ 'placeholder': !chartType }"
         >
-          <template v-if="selectedColumn && (selectedColumn.type === 'number' || selectedColumn.type === 'numerical')">
+          <template v-if="selectedColumn && (selectedColumn.originalType === 'number' || selectedColumn.originalType === 'numerical')">
             <option value="histogram">📊 Histogram</option>
             <option value="box">📦 Box Plot</option>
             <option value="line">📈 Distribution Curve</option>
@@ -22,7 +22,7 @@
             <option value="violin">🎻 Violin Plot</option>
           </template>
 
-          <template v-else-if="selectedColumn && selectedColumn.type === 'string'">
+          <template v-else-if="selectedColumn && (selectedColumn.originalType === 'string' || selectedColumn.originalType === 'categorical')">
             <option value="doughnut">🍩 Value Distribution</option>
             <option value="bar">📊 Bar Chart</option>
             <option value="pie">🥧 Pie Chart</option>
@@ -77,7 +77,7 @@
         <div v-if="!isLoadingChart" class="chart-insights">
           <div class="insight-cards">
             <!-- NUMERICAL METRICS -->
-            <template v-if="selectedColumn.metrics && (selectedColumn.type === 'number' || selectedColumn.type === 'numerical')">
+            <template v-if="selectedColumn.metrics && (selectedColumn.originalType === 'number' || selectedColumn.originalType === 'numerical')">
               <div class="insight-card">
                 <span class="insight-label">Mean</span>
                 <span class="insight-value">{{ selectedColumn.metrics.mean.toFixed(2) }}</span>
@@ -101,11 +101,12 @@
               <div class="insight-card">
                 <span class="insight-label">Completeness</span>
                 <span class="insight-value">{{ getCompletenessPercentage() }}%</span>
+                <span class="insight-badge full">FULL DATASET</span>
               </div>
             </template>
 
             <!-- CATEGORICAL METRICS -->
-            <template v-else-if="selectedColumn.metrics && (selectedColumn.type === 'string' || selectedColumn.type === 'categorical')">
+            <template v-else-if="selectedColumn.metrics && (selectedColumn.originalType === 'string' || selectedColumn.originalType === 'categorical')">
               <div class="insight-card">
                 <span class="insight-label">Classes</span>
                 <span class="insight-value">{{ selectedColumn.metrics.class_count }}</span>
@@ -131,6 +132,7 @@
               <div class="insight-card">
                  <span class="insight-label">Completeness</span>
                  <span class="insight-value">{{ getCompletenessPercentage() }}%</span>
+                 <span class="insight-badge full">FULL DATASET</span>
               </div>
             </template>
 
@@ -152,6 +154,7 @@
                 <span class="insight-value"
                   >{{ getCompletenessPercentage() }}%</span
                 >
+                <span class="insight-badge sampled">SAMPLED</span>
               </div>
             </template>
           </div>
@@ -196,8 +199,10 @@ const chartInstance = ref(null);
 
 watch(() => props.selectedColumn, async (newColumn) => {
   if (newColumn) {
-    if (newColumn.type === "number" || newColumn.type === "numerical") {
+    if (newColumn.originalType === "number" || newColumn.originalType === "numerical") {
       chartType.value = "histogram";
+    } else if (newColumn.originalType === "date") {
+      chartType.value = "bar"; // Dates don't have a special chart in this component yet
     } else {
       chartType.value = "doughnut";
     }
@@ -230,10 +235,16 @@ const getChartTypeName = () => {
   return chartNames[chartType.value] || "Chart";
 };
 
+const isFullDatasetChart = () => {
+  if (!props.selectedColumn) return false;
+  if (chartType.value === 'scatter') return false; 
+  return !!props.selectedColumn.distribution;
+};
+
 const getDistributionType = () => {
   if (!props.selectedColumn) return "Unknown";
 
-  if (props.selectedColumn.type === "number" || props.selectedColumn.type === "numerical") {
+  if (props.selectedColumn.originalType === "number" || props.selectedColumn.originalType === "numerical") {
     if (props.selectedColumn.encoding === "binary") return "Binary";
     if (props.selectedColumn.encoding === "ordinal") return "Ordinal";
     const uniqueRatio =
@@ -248,7 +259,7 @@ const getDistributionType = () => {
 };
 
 const getOutlierCount = () => {
-  if (!props.selectedColumn || (props.selectedColumn.type !== "number" && props.selectedColumn.type !== "numerical"))
+  if (!props.selectedColumn || (props.selectedColumn.originalType !== "number" && props.selectedColumn.originalType !== "numerical"))
     return "N/A";
   return props.selectedColumn.outliers || 0;
 };
@@ -316,8 +327,8 @@ const generateChart = async () => {
     Chart.register(...registerables);
 
     if (
-      props.selectedColumn.type === "numerical" ||
-      props.selectedColumn.type === "number"
+      props.selectedColumn.originalType === "numerical" ||
+      props.selectedColumn.originalType === "number"
     ) {
       const numbers = cleanData
         .map((val) => parseFloat(val))
@@ -428,7 +439,7 @@ const createBackendHistogramChart = async (Chart, ctx, histogram) => {
         },
       ],
     },
-    options: getChartOptions("Distribution (Full Dataset)"),
+    options: getChartOptions(`Distribution (${isFullDatasetChart() ? "Full Dataset" : "Sampled"})`),
   });
 };
 
@@ -451,7 +462,7 @@ const createBackendBoxPlotChart = async (Chart, ctx, boxPlot) => {
         },
       ],
     },
-    options: getChartOptions("Box Plot (Full Dataset)"),
+    options: getChartOptions(`Box Plot (${isFullDatasetChart() ? "Full Dataset" : "Sampled"})`),
   });
 };
 
@@ -523,7 +534,7 @@ const createDoughnutChart = async (Chart, ctx, entries) => {
         },
       ],
     },
-    options: getPieChartOptions("Value Distribution"),
+    options: getPieChartOptions(`Value Distribution (${isFullDatasetChart() ? "Full Dataset" : "Sampled"})`),
   });
 };
 
@@ -544,7 +555,7 @@ const createBarChart = async (Chart, ctx, entries) => {
         },
       ],
     },
-    options: getChartOptions("Category Counts"),
+    options: getChartOptions(`Category Counts (${isFullDatasetChart() ? "Full Dataset" : "Sampled"})`),
   });
 };
 
@@ -567,7 +578,7 @@ const createScatterChart = async (Chart, ctx, data) => {
       ],
     },
     options: {
-      ...getChartOptions("Scatter Plot"),
+      ...getChartOptions("Scatter Plot (Sampled)"),
       scales: {
         ...getChartOptions("Scatter Plot").scales,
         x: {
@@ -613,7 +624,7 @@ const createLineChart = async (Chart, ctx, data) => {
       ],
     },
     options: {
-      ...getChartOptions("Distribution Curve"),
+      ...getChartOptions(`Distribution Curve (${isFullDatasetChart() ? "Full Dataset" : "Sampled"})`),
       scales: {
         ...getChartOptions("Distribution Curve").scales,
         x: {
@@ -787,6 +798,27 @@ onBeforeUnmount(() => {
 .empty-state p {
   color: #b3b3d1;
   margin: 0;
+}
+
+.insight-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  letter-spacing: 0.5px;
+}
+
+.insight-badge.full {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.insight-badge.sampled {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border: 1px solid rgba(102, 126, 234, 0.2);
 }
 
 .chart-skeleton {
