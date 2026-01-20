@@ -1093,6 +1093,9 @@ const updateMetrics = (metrics) => {
   // Update validation method
   if (metrics.validation_method !== undefined) {
     currentMetrics.validation_method = metrics.validation_method;
+  } else {
+    // Fallback: Use the strategy selected in the UI
+    currentMetrics.validation_method = validationStrategy.value;
   }
 
   currentMetrics.samplesPerSec = Math.floor(800 + Math.random() * 400);
@@ -1919,6 +1922,10 @@ const unlockConfiguration = () => {
   Object.keys(currentMetrics).forEach(key => {
     if (Array.isArray(currentMetrics[key])) {
       currentMetrics[key] = [];
+    } else if (key === 'validation_method') {
+      currentMetrics[key] = 'simple';
+    } else if (key === 'best_params') {
+      currentMetrics[key] = null;
     } else {
       currentMetrics[key] = 0;
     }
@@ -1960,8 +1967,15 @@ const retrainModel = () => {
   
   // Reset metrics
   Object.keys(currentMetrics).forEach(key => {
-    if (Array.isArray(currentMetrics[key])) currentMetrics[key] = [];
-    else currentMetrics[key] = 0;
+    if (Array.isArray(currentMetrics[key])) {
+      currentMetrics[key] = [];
+    } else if (key === 'validation_method') {
+      currentMetrics[key] = 'simple';
+    } else if (key === 'best_params') {
+      currentMetrics[key] = null;
+    } else {
+      currentMetrics[key] = 0;
+    }
   });
 
   // Clear chart

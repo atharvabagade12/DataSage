@@ -250,7 +250,7 @@ const continueToAdvancedPreprocessing = async () => {
 
   try {
     // 1. Update Experiment Store
-    experimentStore.setTargetColumn(selectedColumn.value.name);
+    experimentStore.setTargetColumn(selectedColumn.value);
     
     // Set problem type based on column properties (simplistic detection)
     // Real detection should happen on backend or via robust logic

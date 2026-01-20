@@ -486,7 +486,7 @@
         <div class="action-content">
           <!--  ENHANCE your configuration summary section -->
           <div class="configuration-summary">
-            <h3>Advanced Configuration Summary</h3>
+            <h3>Configuration Summary</h3>
             <div class="summary-grid">
               <div class="summary-item">
                 <span class="summary-label">Algorithm: </span>
@@ -886,11 +886,13 @@ const detectProblemType = (target) => {
   let confidence = 0.8;
 
   // Check multiple possible property names for data type
-  const dataType = target.type || 
+  const rawType = target.type || 
                    target.dataType || 
                    target.dtype || 
                    target.originalType ||
                    target.columnType;
+                   
+  const dataType = String(rawType).toLowerCase();
   
   const uniqueValues = target.uniqueValues || 
                        target.unique_values || 
@@ -904,79 +906,68 @@ const detectProblemType = (target) => {
   });
 
   // ============================================================================
-  // PRIORITY 1: Check uniqueValues first (most reliable indicator)
+  // PRIORITY 1: Binary Classification (Explicit 2 values)
   // ============================================================================
-  
   if (uniqueValues === 2) {
-    // Binary classification - regardless of dataType
     problemType = "binary_classification";
     confidence = 0.95;
-    console.log("✅ Detected as BINARY CLASSIFICATION (2 unique values, regardless of dataType)");
-    return { type: problemType, confidence };
-  } 
-  else if (uniqueValues > 2 && uniqueValues <= 20) {
-    // Multiclass classification
-    problemType = "multiclass_classification";
-    confidence = 0.9;
-    console.log("✅ Detected as MULTICLASS CLASSIFICATION (" + uniqueValues + " unique values)");
+    console.log("✅ Detected as BINARY CLASSIFICATION (2 unique values)");
     return { type: problemType, confidence };
   }
 
   // ============================================================================
-  // PRIORITY 2: Check dataType for continuous/numerical data
+  // PRIORITY 2: Semantic Type Check (Most Reliable)
   // ============================================================================
-  
-  if (dataType === "numerical" || 
-      dataType === "numeric" || 
-      dataType === "continuous" ||
-      dataType === "float" ||
-      dataType === "int" ||
-      dataType === "integer" ||
-      dataType === "number") {
-    problemType = "regression";
-    confidence = 0.95;
-    console.log("✅ Detected as REGRESSION (numerical type with many unique values)");
-    return { type: problemType, confidence };
+  const isNumeric = ['numerical', 'numeric', 'int', 'integer', 'float', 'double', 'decimal', 'number'].includes(dataType);
+  const isCategorical = ['categorical', 'category', 'string', 'object', 'text', 'bool', 'boolean'].includes(dataType);
+
+  if (isNumeric) {
+     // Default to Regression for numerical data
+     // Exception: If user intends classification on numeric labels, they should override, 
+     // but statistically/structurally it's a regression space.
+     problemType = "regression";
+     confidence = 0.9;
+     
+     // Lower confidence if cardinality is very low (could be ordinal/class labels)
+     if (uniqueValues > 0 && uniqueValues <= 10) {
+         confidence = 0.7;
+         console.log(`⚠️ Detected as REGRESSION (Numerical type, low cardinality: ${uniqueValues})`);
+     } else {
+         console.log("✅ Detected as REGRESSION (Numerical type)");
+     }
+     
+     return { type: problemType, confidence };
+  }
+
+  if (isCategorical) {
+      // Must be Multiclass since we already checked uniqueValues === 2
+      problemType = "multiclass_classification";
+      confidence = 0.9;
+      console.log("✅ Detected as MULTICLASS CLASSIFICATION (Categorical type)");
+      return { type: problemType, confidence };
   }
 
   // ============================================================================
-  // PRIORITY 3: Check for high cardinality (likely regression)
+  // PRIORITY 3: Fallback Heuristics (Unknown Type)
   // ============================================================================
   
   if (uniqueValues > 20) {
     problemType = "regression";
-    confidence = 0.7;
-    console.log("⚠️ Detected as REGRESSION (high cardinality: " + uniqueValues + " unique values)");
+    confidence = 0.6;
+    console.log("⚠️ Fallback: Detected as REGRESSION (High cardinality, unknown type)");
     return { type: problemType, confidence };
   }
-
-  // ============================================================================
-  // PRIORITY 4: Categorical/String types (fallback)
-  // ============================================================================
   
-  if (dataType === "categorical" || 
-      dataType === "object" || 
-      dataType === "string") {
-    // If we got here, uniqueValues is either 0, 1, or between 3-20
-    if (uniqueValues === 1) {
-      problemType = "binary_classification"; // Fallback, though this is unusual
-      confidence = 0.3;
-      console.log("⚠️ Unusual case: only 1 unique value, defaulting to binary classification");
-    } else {
+  if (uniqueValues > 2) {
       problemType = "multiclass_classification";
-      confidence = 0.7;
-      console.log("✅ Detected as MULTICLASS CLASSIFICATION (categorical type)");
-    }
-    return { type: problemType, confidence };
+      confidence = 0.6;
+      console.log("⚠️ Fallback: Detected as MULTICLASS CLASSIFICATION (Low cardinality, unknown type)");
+      return { type: problemType, confidence };
   }
 
-  // ============================================================================
-  // FALLBACK: Default to binary classification
-  // ============================================================================
-  
+  // Final Catch-all
   console.log("⚠️ No clear indicators, defaulting to BINARY CLASSIFICATION");
-  console.log("🎯 Final problem type:", { type: problemType, confidence });
-  return { type: problemType, confidence };
+  return { type: "binary_classification", confidence: 0.5 };
 };
 
 const initializeRecommendations = () => {
@@ -2355,9 +2346,14 @@ const startTraining = async () => {
     // Save selection to Experiment Store
     experimentStore.setAlgorithm({
       name: selectedAlgorithm.value.name,
-      type: selectedAlgorithm.value.type || 'classification', // Fallback or derive from logic
-      params: hyperparameters // Save initial params if needed, or let model-training init defaults
+      type: selectedAlgorithm.value.type || 'classification', 
+      params: hyperparameters 
     });
+    
+    // Save the REFINDED/DETECTED Problem Type
+    if (problemType.value) {
+        experimentStore.setProblemType(problemType.value);
+    }
     
     // Also save simple ref for convenience if model-training needs specific object
     experimentStore.selectedAlgorithm = selectedAlgorithm.value;

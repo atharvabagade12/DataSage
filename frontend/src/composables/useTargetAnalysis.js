@@ -521,8 +521,8 @@ export function useTargetAnalysis() {
         }
       }
 
-      // Calculate class distribution and Gini for categorical columns
-      if (currentType === "string" || currentType === "categorical") {
+      // Calculate class distribution and Gini for categorical / boolean columns
+      if (currentType === "string" || currentType === "categorical" || currentType === "boolean" || analysis.originalType === "boolean") {
         if (analysis.distribution && analysis.distribution.value_counts) {
            const counts = analysis.distribution.value_counts;
            const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -545,6 +545,45 @@ export function useTargetAnalysis() {
         
         // Calculate Gini impurity
         analysis.giniImpurity = calculateGiniImpurity(analysis.classDistribution);
+
+        // Calculate Class Imbalance Metrics (Frontend Fallback)
+        if (analysis.classDistribution) {
+             const entries = Object.entries(analysis.classDistribution).sort(([,a], [,b]) => b - a);
+             
+             if (entries.length > 0) {
+                 const majority = entries[0];
+                 const minority = entries[entries.length - 1];
+                 const majorityRatio = majority[1];
+                 const minorityRatio = minority[1];
+                 
+                 // Initialize metrics if null
+                 if (!analysis.metrics) analysis.metrics = {};
+                 
+                 // Populate if missing (backend might have provided these)
+                 if (!analysis.metrics.class_count) analysis.metrics.class_count = entries.length;
+                 
+                 if (!analysis.metrics.majority_class) {
+                     analysis.metrics.majority_class = {
+                         name: majority[0],
+                         percent: (majorityRatio * 100).toFixed(1)
+                     };
+                 }
+                 
+                 if (!analysis.metrics.minority_class) {
+                     analysis.metrics.minority_class = {
+                         name: minority[0],
+                         percent: (minorityRatio * 100).toFixed(1)
+                     };
+                 }
+                 
+                 if (!analysis.metrics.imbalance_ratio) {
+                     // Ratio of counts is equivalent to ratio of proportions
+                     // Avoid division by zero
+                     const ratio = minorityRatio > 0 ? majorityRatio / minorityRatio : entries.length > 1 ? 999 : 1;
+                     analysis.metrics.imbalance_ratio = parseFloat(ratio.toFixed(2));
+                 }
+             }
+        }
       }
 
       // Calculate final suitability score

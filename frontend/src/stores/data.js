@@ -13,6 +13,7 @@ export const useDataStore = defineStore('data', {
     
     // Status
     isLoaded: false,
+    isTypesVerified: false,
     lastFetchedId: null
   }),
   
@@ -78,6 +79,7 @@ export const useDataStore = defineStore('data', {
         if (typesRes.ok) {
            const types = await typesRes.json();
            this.semanticTypes = types.column_types || [];
+           this.isTypesVerified = types.is_verified || false;
         }
 
         if (statsRes.ok) {
@@ -128,6 +130,8 @@ export const useDataStore = defineStore('data', {
 
         const result = await response.json();
         console.log('✅ DataStore: Semantic types saved', result);
+        
+        this.isTypesVerified = true;
         
         // Refresh semantic types from backend if needed, or update locally
         // Updating locally for immediate feedback

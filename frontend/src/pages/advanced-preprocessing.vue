@@ -1077,7 +1077,7 @@
                   SMOTE Analysis
                   <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
                   <span v-else-if="smoteApplied && !hasClassImbalance" class="balanced-badge">✓ Applied & Balanced</span>
-                  <span v-else-if="!hasClassImbalance && splitApplied" class="balanced-badge">✓ Balanced (IR < 3.0)</span>
+                  <span v-else-if="!hasClassImbalance && splitApplied" class="balanced-badge">✓ Balanced (IR < 1.5)</span>
                   <span v-else-if="hasClassImbalance && imbalanceSeverity === 'mild'" class="imbalance-badge-mild">
                     ⚠️ Mild Imbalance: {{ imbalanceRatio.toFixed(2) }}x
                   </span>
@@ -1161,7 +1161,7 @@
                   </div>
                 </div>
                 
-                <div class="imbalance-info" v-if="imbalanceRatio >= 3" :class="'imbalance-' + imbalanceSeverity">
+                <div class="imbalance-info" v-if="imbalanceRatio >= 1.5" :class="'imbalance-' + imbalanceSeverity">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
                   </svg>
@@ -1825,9 +1825,13 @@ const categoricalColumns = computed(() => {
 });
 
 const numericalColumns = computed(() => {
+  const targetName = (typeof selectedTarget.value === 'object' && selectedTarget.value !== null) 
+    ? selectedTarget.value.name 
+    : selectedTarget.value;
+
   return columns.value.filter(col => {
     // 1. Exclude target column
-    if (col.name === selectedTarget.value) return false;
+    if (col.name === targetName) return false;
     // 2. Exclude already scaled columns
     if (scaledColumns.value.has(col.name)) return false;
     // 3. Exclude One-Hot encoded columns (dummies)
@@ -1843,7 +1847,9 @@ const numericalColumns = computed(() => {
 const smoteValidation = computed(() => {
   if (!columns.value || columns.value.length === 0) return { valid: true };
   
-  const targetName = (selectedTarget.value || "").trim().toLowerCase();
+  const rawTarget = selectedTarget.value;
+  const targetStr = (typeof rawTarget === 'object' && rawTarget !== null) ? rawTarget.name : rawTarget;
+  const targetName = (targetStr || "").trim().toLowerCase();
   
   // Find columns that are DEFINITELY not compatible with SMOTE
   const blockers = columns.value.filter(col => {
@@ -2535,7 +2541,8 @@ const applySplit = async () => {
       test_size: 1 - splitRatio.value,
       stratify: splitStrategy.value === 'stratified',
       random_state: randomSeed.value || 42,
-      target_column: selectedTarget.value
+      random_state: randomSeed.value || 42,
+      target_column: typeof selectedTarget.value === 'object' ? selectedTarget.value.name : selectedTarget.value
     };
 
     const response = await authenticatedPost('http://localhost:8000/api/split-dataset', payload)
@@ -2567,6 +2574,11 @@ const applySplit = async () => {
 
       showSuccess('Split Applied', `Train: ${data.train_size} | Test: ${data.test_size}`);
       addPreprocessingStep('Train/Test Split');
+
+      // Update Imbalance Check for SMOTE Availability
+      if (problemType.value === 'classification') {
+         await checkClassImbalance();
+      }
 
     } else {
       throw new Error(data.message || "Split failed");
@@ -2660,12 +2672,27 @@ const checkClassImbalance = async () => {
 
   if (!splitApplied.value || !selectedTarget.value) return;
 
+  // Handle case where selectedTarget is an object (from store) or string
+  const targetName = (typeof selectedTarget.value === 'object' && selectedTarget.value !== null) 
+    ? selectedTarget.value.name 
+    : selectedTarget.value;
+
   try {
     const response = await authenticatedGet(
-      `http://localhost:8000/api/datasets/${datasetId.value}/check-imbalance?target_column=${selectedTarget.value}`
+      `http://localhost:8000/api/datasets/${datasetId.value}/check-imbalance?target_column=${targetName}`
     );
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle state mismatch: Frontend thinks split applied, Backend doesn't
+      if (response.status === 400 && errorData.detail && errorData.detail.includes("must be split")) {
+        console.warn("⚠️ Backend split state missing. Syncing frontend state.");
+        experimentStore.setSplitApplied(false);
+        showWarning("Session Sync", "Please re-apply the train-test split to proceed.");
+        return;
+      }
+      
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
@@ -2713,7 +2740,9 @@ const applySmote = async () => {
     );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`;
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();

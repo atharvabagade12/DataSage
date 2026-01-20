@@ -338,8 +338,8 @@
                   </h3>
                   <p>Verify and override semantic data types for all downstream tools</p>
                 </div>
-                <div class="tool-badge success-badge">
-                  ✓ Active
+                <div class="tool-badge" :class="dataStore.isTypesVerified ? 'success-badge' : 'warning-badge'">
+                  {{ dataStore.isTypesVerified ? '✓ Verified' : '⚠ Verification Required' }}
                 </div>
               </div>
               
@@ -412,9 +412,9 @@
                         />
                         <span class="checkbox-label">{{ column.name }}</span>
                       </label>
-                      <span class="column-type-badge" :class="`type-${column.type}`">
+                      <!-- <span class="column-type-badge" :class="`type-${column.type}`">
                         {{ column.type }}
-                      </span>
+                      </span> -->
                       <span class="semantic-type-pill" :class="getColumnSemanticType(column.name)" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1);">
                         {{ getColumnSemanticType(column.name).toUpperCase() }}
                       </span>
@@ -496,11 +496,8 @@
                 </div>
                 <div class="tool-badges-container">
                   <span class="order-badge order-1">1️⃣ First</span>
-                  <div class="tool-badge" v-if="missingStats.count > 0">
-                    {{ missingStats.count }} columns affected
-                  </div>
-                  <div class="tool-badge success-badge" v-else>
-                    ✓ No missing values
+                  <div class="tool-badge" :class="missingStats.totalMissing === 0 ? 'success-badge' : 'warning-badge'">
+                    {{ missingStats.totalMissing === 0 ? '✓ No missing values' : `${missingStats.totalMissing} issues to handle` }}
                   </div>
                 </div>
               </div>
@@ -899,47 +896,7 @@
               </template>
             </Modal>
             
-            <!-- Reset Confirmation Modal -->
-            <Modal v-model="showResetModal" title="Reset All Changes" size="md">
-              <div class="modal-section">
-                <Card variant="warning">
-                  <div class="warning-content">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-warning)">
-                      <path d="M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" />
-                    </svg>
-                    <div>
-                      <strong>Warning:</strong> This action will reset all preprocessing changes.
-                    </div>
-                  </div>
-                </Card>
-                
-                <div class="reset-info">
-                  <h4>The following will be reset:</h4>
-                  <ul class="reset-list">
-                    <li>✓ All preprocessing operations will be discarded</li>
-                    <li>✓ Original dataset will be restored</li>
-                    <li>✓ All tool configurations will be reset to defaults</li>
-                    <li>✓ Cleaned data will be removed</li>
-                  </ul>
-                  <p class="reset-note">
-                    You will need to reapply any preprocessing steps if you want to use them again.
-                  </p>
-                </div>
-              </div>
-              
-              <template #footer>
-                <Button variant="ghost" @click="showResetModal = false">
-                  Cancel
-                </Button>
-                <Button 
-                  variant="danger" 
-                  :loading="isProcessing"
-                  @click="confirmReset"
-                >
-                  Reset All Changes
-                </Button>
-              </template>
-            </Modal>
+
         </div>
           </section>
 
@@ -1097,51 +1054,50 @@
 
         <!-- Action Buttons -->
         <div class="footer-actions">
-          <button
-            v-if="hasCleanedData"
+          <Button
+            variant="danger"
+            outline
             @click="showResetModal = true"
-            class="footer-btn secondary"
+            :disabled="isProcessing"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"
-              />
+              <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z" />
             </svg>
-            Reset All Changes
-          </button>
+            Reset All Transformations
+          </Button>
 
           <!-- Always show the Continue button -->
-          <button @click="proceedToTargetSelection" class="footer-btn continue-btn primary">
-            <span>{{
-              hasCleanedData
-                ? "Continue with Cleaned Data"
-                : "Continue with Original Data"
-            }}</span>
+          <Button 
+            variant="primary"
+            @click="proceedToTargetSelection" 
+            :disabled="isProcessing"
+            class="continue-btn"
+          >
+            <span>Continue to Target Selection</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
             </svg>
-          </button>
+          </Button>
         </div>
       </div>
     </div>
 
     <!-- Reset All Changes Confirmation Modal -->
-    <Modal v-model="showResetModal" title="Reset All Changes?" size="md">
+    <Modal v-model="showResetModal" title="Reset All Transformations?" size="md">
       <div class="modal-section">
         <div class="config-group">
           <p style="margin-bottom: 1rem; color: #e0e7ef; line-height: 1.6;">
-            Are you sure you want to reset all preprocessing changes?
+            Are you sure you want to reset all preprocessing transformations? This will also reset configurations on later pages (Target Selection, Model Training, etc.) to ensure consistency.
           </p>
           <p style="margin-bottom: 1rem; color: #94a3b8; line-height: 1.6;">
             This will:
           </p>
           <ul style="color: #94a3b8; margin-left: 1.5rem; line-height: 1.8;">
-            <li>Reload the original dataset</li>
-            <li>Remove all preprocessing transformations</li>
-            <li>Clear missing value handling</li>
-            <li>Clear duplicate removal</li>
-            <li>Clear outlier handling</li>
-            
+            <li>✓ Reload the original dataset from source</li>
+            <li>✓ Remove all preprocessing transformations</li>
+            <li>✓ Clear missing value, outlier, and duplicate handling</li>
+            <li>✓ Reset Target Selection & Algorithm selection</li>
+            <li>✓ Re-trigger Type Detection for a fresh start</li>
           </ul>
           <p style="margin-top: 1rem; color: #fbbf24; line-height: 1.6;">
             ⚠️ This action cannot be undone.
@@ -1157,8 +1113,9 @@
           variant="primary" 
           @click="confirmResetAllChanges"
           style="background: #ef4444; border-color: #ef4444;"
+          :loading="isProcessing"
         >
-          Reset All Changes
+          Yes, Reset Everything
         </Button>
       </template>
     </Modal>
@@ -1473,7 +1430,23 @@ const analyzeDataQuality = () => {
 // --- Actions ---
 
 const goBack = () => router.push("dashboard"); // Dashboard
-const proceedToTargetSelection = () => router.push("target-selection");
+const proceedToTargetSelection = () => {
+    // 1. Enforce Type Detection
+    if (!dataStore.isTypesVerified) {
+        showWarning("Type Verification Required", "Please verify and save data types before proceeding.");
+        openTypeDetectionModal();
+        return;
+    }
+
+    // 2. Enforce Missing Values
+    if (missingStats.value.totalMissing > 0) {
+        showError("Missing Values Detected", "You must handle all missing values before proceeding to next page.");
+        showMissingModal.value = true;
+        return;
+    }
+
+    router.push("target-selection");
+};
 
 const exportData = () => {
     // Simple CSV export of current visual data
@@ -1538,17 +1511,30 @@ const applyColumnChanges = async () => {
 
 const confirmResetAllChanges = async () => {
     isProcessing.value = true;
+    processingMessage.value = "Resetting dataset to original state...";
     try {
-        // Find original dataset ID (usually saved in store or part of metadata)
-        // For now, if we have an originalDatasetId or similar logic
-        // This is a placeholder for actual reset logic
-        showResetModal.value = false;
-        // Reload data
+        // 1. Backend Reset
+        await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/reset`, {});
+        
+        // 2. Clear Experiment Store (Resets other pages too)
+        experimentStore.resetExperiment();
+        
+        // 3. Reload Data from Source
         await dataStore.loadData(datasetId.value, true);
-        showSuccess("Reset Complete", "Dataset reverted to original state.");
+        
+        // 4. Reset Local UI State
+        activeTools.value = [];
+        preprocessingHistory.value = [];
+        
+        // 5. Refresh local analysis
+        processColumns();
+        analyzeDataQuality();
+        
+        showResetModal.value = false;
+        showSuccess("Reset Complete", "Dataset and all configurations reverted to original state.");
     } catch(e) {
         console.error("Reset failed", e);
-        showError("Reset Failed", "Could not revert changes.");
+        showError("Reset Failed", "Could not revert changes. Please try again.");
     } finally {
         isProcessing.value = false;
     }
@@ -1729,24 +1715,24 @@ const confirmRemoveColumns = async () => {
 };
 
 const saveSemanticOverrides = async () => {
-    const overrides = semanticTypes.value.filter(st => st.is_override);
-    
-    if (overrides.length === 0) {
-        showInfo("No Changes", "No semantic type overrides were made.");
-        showTypeDetectionModal.value = false;
-        return;
-    }
+    // Collect all semantic type info, not just overrides, to mark as verified
+    const allTypes = semanticTypes.value.map(st => ({
+        column: st.column,
+        semantic_type: st.semantic_type,
+        reason: st.reason,
+        is_override: st.is_override || false
+    }));
 
     isDetectingTypes.value = true;
     try {
-        await dataStore.saveSemanticTypes(datasetId.value, overrides);
+        await dataStore.saveSemanticTypes(datasetId.value, allTypes);
         
         // Update local columns view to match new semantic types
         processColumns();
         // Refresh quality analysis (recommendations change)
         analyzeDataQuality();
         
-        showSuccess("Types Saved", `Updated semantic types for ${overrides.length} columns.`);
+        showSuccess("Types Saved", `Updated semantic types for ${allTypes.length} columns.`);
         showTypeDetectionModal.value = false;
     } catch (e) {
         console.error("Failed to save types", e);

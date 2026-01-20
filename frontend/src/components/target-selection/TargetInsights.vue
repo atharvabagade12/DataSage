@@ -73,6 +73,45 @@
         </div>
       </div>
 
+      <!-- Class Balance Analysis (New) -->
+      <div 
+        v-if="selectedColumn.metrics && (selectedColumn.originalType === 'string' || selectedColumn.type === 'categorical' || selectedColumn.type === 'boolean' || selectedColumn.originalType === 'boolean')" 
+        class="insight-section"
+      >
+        <h4>Class Balance Analysis</h4>
+        <div class="stats-grid">
+           <div class="stat-item">
+             <span class="stat-label">Imbalance Ratio</span>
+             <div class="stat-value-container">
+               <span class="stat-value" :class="getImbalanceClass(selectedColumn.metrics.imbalance_ratio)">
+                 {{ selectedColumn.metrics.imbalance_ratio }}:1
+               </span>
+             </div>
+           </div>
+           
+           <div class="stat-item" v-if="selectedColumn.metrics.majority_class">
+             <span class="stat-label">Majority Class</span>
+             <div class="class-detail">
+               <span class="stat-value">{{ selectedColumn.metrics.majority_class.name }}</span>
+               <span class="stat-sub">{{ selectedColumn.metrics.majority_class.percent }}%</span>
+             </div>
+           </div>
+           
+           <div class="stat-item" v-if="selectedColumn.metrics.minority_class">
+             <span class="stat-label">Minority Class</span>
+             <div class="class-detail">
+               <span class="stat-value">{{ selectedColumn.metrics.minority_class.name }}</span>
+               <span class="stat-sub">{{ selectedColumn.metrics.minority_class.percent }}%</span>
+             </div>
+           </div>
+           
+           <div class="stat-item" v-if="selectedColumn.giniImpurity !== undefined">
+             <span class="stat-label">Gini Impurity</span>
+             <span class="stat-value">{{ selectedColumn.giniImpurity.toFixed(3) }}</span>
+           </div>
+        </div>
+      </div>
+
       <!-- Sample Values -->
       <div class="insight-section">
         <h4>Sample Values</h4>
@@ -262,6 +301,14 @@ const getTargetRecommendations = () => {
     console.error("Error generating recommendations:", error);
     return [];
   }
+};
+
+
+const getImbalanceClass = (ratio) => {
+  if (!ratio) return "";
+  if (ratio <= 1.5) return "good-balance"; // Updated threshold
+  if (ratio <= 3.0) return "mild-imbalance";
+  return "severe-imbalance";
 };
 </script>
 
@@ -482,4 +529,20 @@ const getTargetRecommendations = () => {
 .insights-panel::-webkit-scrollbar-thumb:hover {
   background: rgba(102, 126, 234, 0.5);
 }
+
+/* Class Balance Styles */
+.class-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.stat-sub {
+  font-size: 0.7rem;
+  color: #667eea;
+}
+
+.good-balance { color: #10b981; }
+.mild-imbalance { color: #f59e0b; }
+.severe-imbalance { color: #ef4444; }
 </style>

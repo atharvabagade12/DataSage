@@ -310,5 +310,4 @@ docker compose up --build
 
 ## 📄 License
 
-[Add your license here]
 

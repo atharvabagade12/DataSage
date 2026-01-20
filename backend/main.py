@@ -1,15 +1,15 @@
 
-
 from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
+
 import json
 import asyncio
 import io
 import sys
 import os
-import traceback
+import traceback 
 from typing import Dict, Any, Optional, List
 from fastapi.responses import StreamingResponse
 import multiprocessing
@@ -484,6 +484,26 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
             
             model = search.best_estimator_
             
+            # Extract detailed CV results for the best estimator
+            best_idx = search.best_index_
+            cv_mean = search.cv_results_['mean_test_score'][best_idx]
+            cv_std = search.cv_results_['std_test_score'][best_idx]
+            
+            # Extract individual fold scores
+            cv_scores = []
+            for i in range(folds):
+                key = f'split{i}_test_score'
+                if key in search.cv_results_:
+                    cv_scores.append(float(search.cv_results_[key][best_idx]))
+
+            # Ensure best_params are native types
+            clean_best_params = {}
+            for k, v in search.best_params_.items():
+                if hasattr(v, 'item'): 
+                    clean_best_params[k] = v.item()
+                else:
+                    clean_best_params[k] = v
+            
             # Calculate metrics on the full dataset (which was used for final fit)
             y_pred_full = model.predict(X_full)
             if problem_type == 'classification':
@@ -495,8 +515,12 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
 
             metrics = {
                 'validation_method': validation_method,
-                'best_params': search.best_params_,
+                'best_params': clean_best_params,
                 'best_score': float(search.best_score_),
+                'cv_mean': float(cv_mean),
+                'cv_std': float(cv_std),
+                'cv_scores': cv_scores,
+                'n_iterations': len(search.cv_results_['params']),
                 'test_accuracy' if problem_type == 'classification' else 'test_r2': float(search.best_score_),
                 'train_accuracy' if problem_type == 'classification' else 'train_r2': float(train_acc),
                 'train_f1' if problem_type == 'classification' else 'train_mse': float(train_f1),
@@ -1591,6 +1615,7 @@ async def get_semantic_types(
         return {
             "dataset_id": dataset_id,
             "column_types": results,
+            "is_verified": dataset.column_metadata.get("_is_verified", False) if dataset.column_metadata else False,
             "status": "success"
         }
     except Exception as e:
@@ -1623,6 +1648,9 @@ async def override_semantic_types(
                     "updated_at": datetime.now().isoformat()
                 }
         
+        # Set verification flag
+        current_metadata["_is_verified"] = True
+        
         dataset.column_metadata = current_metadata
         db.commit()
         
@@ -1632,6 +1660,43 @@ async def override_semantic_types(
         }
     except Exception as e:
         print(f"Error overriding semantic types: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/datasets/{dataset_id}/reset")
+async def reset_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Reset dataset to original state by clearing in-memory transformations and reverting metadata"""
+    try:
+        # 1. Fetch from DB
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Check ownership
+        if dataset.user_id != current_user['id']:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        # 2. Clear In-Memory Cache
+        if dataset_id in datasets:
+            del datasets[dataset_id]
+            print(f"🗑️ Cleared in-memory cache for Dataset {dataset_id}")
+
+        # 3. Revert Database Metadata
+        dataset.column_metadata = None
+        dataset.is_processed = False
+        db.commit()
+
+        return {
+            "message": "Dataset successfully reset to original state",
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"Error resetting dataset: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1910,17 +1975,17 @@ async def check_class_imbalance(
         imbalance_ratio = max_count / min_count if min_count > 0 else float('inf')
         
         # Determine if imbalance exists with updated thresholds
-        # IR < 3: Balanced (SMOTE disabled)
-        # 3 ≤ IR < 5: Mild imbalance (SMOTE optional)
-        # IR ≥ 5: Severe imbalance (SMOTE strongly recommended)
-        threshold = 3.0
+        # IR < 1.5: Balanced (SMOTE disabled)
+        # 1.5 ≤ IR < 3.0: Mild imbalance (SMOTE optional)
+        # IR ≥ 3.0: Severe imbalance (SMOTE strongly recommended)
+        threshold = 1.5
         has_imbalance = imbalance_ratio >= threshold
         
         # Generate recommendation
-        if imbalance_ratio < 3.0:
+        if imbalance_ratio < 1.5:
             recommendation = "Balanced dataset - SMOTE not recommended"
             severity = "balanced"
-        elif imbalance_ratio < 5.0:
+        elif imbalance_ratio < 3.0:
             recommendation = "Mild imbalance detected - SMOTE optional but may improve model performance"
             severity = "mild"
         else:
@@ -2086,6 +2151,11 @@ async def apply_smote(
         
         print(f"{'='*80}\n")
         
+        # Prepare preview (limit to 100 rows for performance)
+        preview_df = X_train_resampled.copy()
+        preview_df[y_train_resampled.name] = y_train_resampled
+        train_preview = preview_df.head(100).replace({np.nan: None}).to_dict(orient='records')
+
         return {
             "success": True,
             "message": "SMOTE applied successfully",
@@ -2094,6 +2164,7 @@ async def apply_smote(
             "samples_added": samples_added,
             "class_distribution_before": class_distribution_before,
             "class_distribution_after": class_distribution_after,
+            "train_preview": train_preview,
             "config": {
                 "sampling_strategy": sampling_strategy,
                 "k_neighbors": k_neighbors,

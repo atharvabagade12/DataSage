@@ -292,12 +292,11 @@ const getImbalanceTooltip = (ratio) => {
   if (!ratio) return "";
   const r = Number(ratio);
   let status = "";
-  if (r <= 3) status = "Balanced";
-  else if (r <= 6) status = "Mild Imbalance";
-  else if (r <= 10) status = "High Imbalance";
+  if (r < 1.5) status = "Balanced";
+  else if (r < 3.0) status = "Mild Imbalance";
   else status = "Severe Imbalance 🚨";
   
-  return `Ratio: ${r.toFixed(2)}:1\nStatus: ${status}\n\nReference:\n1:1 - 3:1: Balanced\n3:1 - 6:1: Mild Imbalance\n6:1 - 10:1: High Imbalance\n> 10:1: Severe Imbalance`;
+  return `Ratio: ${r.toFixed(2)}:1\nStatus: ${status}\n\nReference:\n< 1.5: Balanced\n1.5 - 3.0: Mild Imbalance\n> 3.0: Severe Imbalance`;
 };
 
 // ============= CHART GENERATION =============
