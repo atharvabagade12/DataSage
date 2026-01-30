@@ -440,7 +440,109 @@ class DataPreprocessor:
         
         return self.df
     
+    def handle_datetime_features(self, columns, features, cyclic_encoding=False, drop_original=True):
+        """
+        Extract features from datetime columns and optionally apply cyclic encoding.
+        
+        Args:
+            columns (list): Datetime columns to process
+            features (list): List of features to extract ('year', 'month', 'day', 'dayofweek', 'hour', 'minute', 'second', 'is_weekend', 'timestamp')
+            cyclic_encoding (bool): Whether to apply sin/cos transformations to cyclic features
+            drop_original (bool): Whether to drop the original datetime columns
+        """
+        for col in columns:
+            if col not in self.df.columns:
+                print(f"⚠️ Column {col} not found, skipping...")
+                continue
+                
+            print(f"Processing datetime column: {col}")
+            
+            # Ensure it's datetime (with robust error handling for out-of-bounds dates)
+            try:
+                # errors='coerce' will turn out-of-bounds or invalid dates into NaT
+                # format='mixed' handles multiple date formats automatically
+                self.df[col] = pd.to_datetime(self.df[col], errors='coerce', format='mixed')
+            except Exception as e:
+                print(f"❌ Critical error converting {col} to datetime: {e}")
+                continue
+                
+            # Extract requested features
+            for feature in features:
+                new_col = f"{col}_{feature}"
+                
+                if feature == 'year':
+                    self.df[new_col] = self.df[col].dt.year
+                elif feature == 'month':
+                    self.df[new_col] = self.df[col].dt.month
+                    if cyclic_encoding:
+                        val = self.df[new_col]
+                        self.df[f"{new_col}_sin"] = np.sin(2 * np.pi * val / 12)
+                        self.df[f"{new_col}_cos"] = np.cos(2 * np.pi * val / 12)
+                elif feature == 'day':
+                    self.df[new_col] = self.df[col].dt.day
+                    if cyclic_encoding:
+                        val = self.df[new_col]
+                        self.df[f"{new_col}_sin"] = np.sin(2 * np.pi * val / 31)
+                        self.df[f"{new_col}_cos"] = np.cos(2 * np.pi * val / 31)
+                elif feature == 'dayofweek':
+                    self.df[new_col] = self.df[col].dt.dayofweek
+                    if cyclic_encoding:
+                        val = self.df[new_col]
+                        self.df[f"{new_col}_sin"] = np.sin(2 * np.pi * val / 7)
+                        self.df[f"{new_col}_cos"] = np.cos(2 * np.pi * val / 7)
+                elif feature == 'hour':
+                    self.df[new_col] = self.df[col].dt.hour
+                    if cyclic_encoding:
+                        val = self.df[new_col]
+                        self.df[f"{new_col}_sin"] = np.sin(2 * np.pi * val / 24)
+                        self.df[f"{new_col}_cos"] = np.cos(2 * np.pi * val / 24)
+                elif feature == 'minute':
+                    self.df[new_col] = self.df[col].dt.minute
+                    if cyclic_encoding:
+                        val = self.df[new_col]
+                        self.df[f"{new_col}_sin"] = np.sin(2 * np.pi * val / 60)
+                        self.df[f"{new_col}_cos"] = np.cos(2 * np.pi * val / 60)
+                elif feature == 'second':
+                    self.df[new_col] = self.df[col].dt.second
+                    if cyclic_encoding:
+                        val = self.df[new_col]
+                        self.df[f"{new_col}_sin"] = np.sin(2 * np.pi * val / 60)
+                        self.df[f"{new_col}_cos"] = np.cos(2 * np.pi * val / 60)
+                elif feature == 'is_weekend':
+                    # dayofweek is 0-6 (0=Mon, 6=Sun)
+                    dayofweek = self.df[col].dt.dayofweek
+                    self.df[new_col] = dayofweek.isin([5, 6]).astype(float)
+                    # Restore NaNs if original was NaT
+                    self.df.loc[dayofweek.isna(), new_col] = np.nan
+                elif feature == 'timestamp':
+                    # Safe timestamp extraction (returns NaN for NaT)
+                    self.df[new_col] = self.df[col].apply(lambda x: x.timestamp() if pd.notnull(x) else np.nan)
+                
+                # Update semantic types if applicable
+                self.semantic_types[new_col] = 'numeric'
+                    
+            if drop_original:
+                self.df = self.df.drop(columns=[col])
+                self.preprocessing_log.append({
+                    'action': 'datetime_extraction',
+                    'column': col,
+                    'features': features,
+                    'cyclic': cyclic_encoding,
+                    'dropped_original': True
+                })
+            else:
+                self.preprocessing_log.append({
+                    'action': 'datetime_extraction',
+                    'column': col,
+                    'features': features,
+                    'cyclic': cyclic_encoding,
+                    'dropped_original': False
+                })
+                
+        return self.df
+
     def get_preprocessing_summary(self):
+
         """Get summary of all preprocessing steps"""
         return {
             'original_shape': self.original_df.shape,

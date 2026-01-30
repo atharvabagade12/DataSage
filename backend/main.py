@@ -166,6 +166,81 @@ REGRESSION_ALGORITHMS = {
 
 ALGORITHMS = {**CLASSIFICATION_ALGORITHMS, **REGRESSION_ALGORITHMS}
 
+# ===== QUALITY SCORING HELPER =====
+## healthscore in data-preview page
+def calculate_quality_score(df: pd.DataFrame, stats: dict) -> dict:
+    """
+    Calculate a robust quality score (0-100) based on various data quality metrics.
+    
+    Returns:
+        score: The overall quality score
+        breakdown: Detailed scores for each dimension
+    """
+    base_score = 100.0
+    
+    if df is None or df.empty:
+        return {"score": 0, "breakdown": {}}
+
+    total_cells = len(df) * len(df.columns)
+    if total_cells == 0:
+        return {"score": 0, "breakdown": {}}
+
+    # 1. Missing Values Penalty (Max -40 points)
+    # 1% missing = -1.5 points
+    total_missing = sum(stats.get('missing_values', {}).values())
+    missing_pct = (total_missing / total_cells) * 100
+    missing_penalty = min(40.0, missing_pct * 1.5)
+    
+    # 2. Duplicate Rows Penalty (Max -20 points)
+    # 1% duplicates = -2 points
+    total_rows = len(df)
+    duplicates = stats.get('duplicates', 0)
+    duplicate_pct = (duplicates / total_rows) * 100 if total_rows > 0 else 0
+    duplicate_penalty = min(20.0, duplicate_pct * 2.0)
+    
+    # 3. Outlier Penalty (Max -15 points)
+    # 1% outliers = -0.5 points
+    total_outliers = stats.get('outliers', 0)
+    outlier_pct = (total_outliers / total_cells) * 100
+    outlier_penalty = min(15.0, outlier_pct * 0.5)
+    
+    # 4. Constant Columns Penalty (Max -25 points)
+    # Each constant column = -5 points
+    constant_cols = 0
+    for col_stat in stats.get('column_stats', []):
+        if col_stat.get('unique') <= 1:
+            constant_cols += 1
+    constant_penalty = min(25.0, constant_cols * 5.0)
+
+    # Calculate final score
+    final_score = max(0, base_score - missing_penalty - duplicate_penalty - outlier_penalty - constant_penalty)
+    
+    return {
+        "score": round(final_score),
+        "breakdown": {
+            "missing_values": {
+                "score": round(100 - (missing_penalty / 40.0 * 100) if 40.0 > 0 else 100),
+                "penalty": round(missing_penalty, 1),
+                "pct": round(missing_pct, 2)
+            },
+            "duplicates": {
+                "score": round(100 - (duplicate_penalty / 20.0 * 100) if 20.0 > 0 else 100),
+                "penalty": round(duplicate_penalty, 1),
+                "pct": round(duplicate_pct, 2)
+            },
+            "outliers": {
+                "score": round(100 - (outlier_penalty / 15.0 * 100) if 15.0 > 0 else 100),
+                "penalty": round(outlier_penalty, 1),
+                "pct": round(outlier_pct, 2)
+            },
+            "cardinality": {
+                "score": round(100 - (constant_penalty / 25.0 * 100) if 25.0 > 0 else 100),
+                "penalty": round(constant_penalty, 1),
+                "constant_columns": constant_cols
+            }
+        }
+    }
+
 # ===== UTILITY FUNCTIONS =====
 def detect_problem_type(y: pd.Series) -> str:
     """Automatically detect if it's classification or regression"""
@@ -1560,6 +1635,15 @@ async def get_dataset_statistics(
         print(f"   Duplicates: {duplicates}")
         print(f"   Outliers: {outliers}")
 
+        # 6. Calculate Quality Score
+        partial_stats = {
+            "missing_values": missing_values,
+            "duplicates": duplicates,
+            "outliers": outliers,
+            "column_stats": column_stats
+        }
+        quality_info = calculate_quality_score(df, partial_stats)
+
         return {
             "total_rows": len(df),
             "total_columns": len(df.columns),
@@ -1568,6 +1652,8 @@ async def get_dataset_statistics(
             "column_stats": column_stats,
             "duplicates": duplicates,
             "outliers": outliers,
+            "quality_score": quality_info["score"],
+            "quality_breakdown": quality_info["breakdown"],
             "status": "success"
         }
         
@@ -2615,7 +2701,13 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
                 # Label Encoding: Fit on train, transform both
                 encoder = LabelEncoder()
                 X_train[col_name] = encoder.fit_transform(X_train[col_name].astype(str))
-                X_test[col_name] = encoder.transform(X_test[col_name].astype(str))
+                
+                # Handle unseen categories in test set
+                test_values = X_test[col_name].astype(str)
+                # Map unseen categories to -1
+                test_encoded = test_values.map(lambda x: encoder.transform([x])[0] if x in encoder.classes_ else -1)
+                X_test[col_name] = test_encoded
+                
                 encoders_used[col_name] = {'type': 'label', 'encoder': encoder}
                 encoded_columns.append(col_name)
                 
@@ -2748,6 +2840,13 @@ class TfidfColumnConfig(BaseModel):
 class TfidfRequest(BaseModel):
     dataset_id: str
     columns: List[TfidfColumnConfig]
+
+class DateTimeRequest(BaseModel):
+    dataset_id: str
+    columns: List[str]
+    features: List[str]
+    cyclic: bool = False
+    drop_original: bool = True
 
 @app.post("/api/datasets/apply-scaling")
 @app.post("/api/datasets/apply-scaling")
@@ -4101,6 +4200,45 @@ async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, cu
         return {
             "success": True,
             "message": "Duplicates removed",
+            "current_shape": list(df_new.shape)
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/datasets/{dataset_id}/preprocessing/datetime")
+async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Handle datetime feature extraction"""
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    try:
+        df = datasets[dataset_id]['dataframe']
+        metadata = datasets[dataset_id].get('column_metadata', {})
+        processor = DataPreprocessor(df, column_metadata=metadata)
+        
+        print(f"Extracting features from {len(request.columns)} datetime columns")
+        
+        df_new = processor.handle_datetime_features(
+            columns=request.columns,
+            features=request.features,
+            cyclic_encoding=request.cyclic,
+            drop_original=request.drop_original
+        )
+        
+        save_dataset_state(dataset_id, df_new, {
+            'action': 'datetime_preprocessing',
+            'columns': request.columns,
+            'features': request.features,
+            'cyclic': request.cyclic,
+            'drop_original': request.drop_original,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        return {
+            "success": True,
+            "message": "DateTime features processed",
             "current_shape": list(df_new.shape)
         }
     except Exception as e:

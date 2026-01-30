@@ -79,18 +79,94 @@
           </div>
           
           <div class="summary-stat">
-            <div class="quality-indicator">
-              <div class="quality-score" :class="getHealthLevel(dataQuality.score)">
-                <svg class="quality-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12,2L2,7V13.5C2,19.75 6.5,25.5 12,27C17.5,25.5 22,19.75 22,13.5V7L12,2M12,4.18L20,8.09V13.5C20,18.87 16.25,23.74 12,25.13C7.75,23.74 4,18.87 4,13.5V8.09L12,4.18Z"/>
-                </svg>
-                <span>{{ dataQuality.score }}% Quality</span>
+            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19,3H5L1,9L12,21L23,9L19,3Z"/>
+            </svg>
+            <div class="stat-content">
+              <span class="stat-label">Health Score</span>
+              <div class="quality-indicator-wrapper">
+                <div class="quality-indicator" :class="getHealthLevel(dataQuality.score)">
+                  <div class="quality-score-main">
+                    <span>{{ dataQuality.score }}% Quality</span>
+                    <!-- Info Icon Button -->
+                    <button 
+                      v-if="dataQuality.breakdown && Object.keys(dataQuality.breakdown).length > 0"
+                      @click.stop="toggleQualityPopover"
+                      class="health-info-btn"
+                      title="View breakdown"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- Health Score Breakdown Popover (Fixed Position) -->
+    <div v-if="showQualityPopover" class="health-popover-overlay" @click="showQualityPopover = false">
+      <div class="health-popover" @click.stop>
+        <div class="health-popover-header">
+          <h3>Quality Breakdown</h3>
+          <button @click="showQualityPopover = false" class="health-popover-close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="health-popover-body">
+          <div v-if="dataQuality.breakdown.missing_values" class="breakdown-item">
+            <div class="item-label">
+              <span>Missing Values</span>
+              <span class="item-pct">{{ dataQuality.breakdown.missing_values.pct }}%</span>
+            </div>
+            <div class="item-bar-bg">
+              <div class="item-bar-fill" :style="{ width: dataQuality.breakdown.missing_values.score + '%', background: getScoreColor(dataQuality.breakdown.missing_values.score) }"></div>
+            </div>
+          </div>
+          
+          <div v-if="dataQuality.breakdown.duplicates" class="breakdown-item">
+            <div class="item-label">
+              <span>Duplicates</span>
+              <span class="item-pct">{{ dataQuality.breakdown.duplicates.pct }}%</span>
+            </div>
+            <div class="item-bar-bg">
+              <div class="item-bar-fill" :style="{ width: dataQuality.breakdown.duplicates.score + '%', background: getScoreColor(dataQuality.breakdown.duplicates.score) }"></div>
+            </div>
+          </div>
+          
+          <div v-if="dataQuality.breakdown.outliers" class="breakdown-item">
+            <div class="item-label">
+              <span>Outliers</span>
+              <span class="item-pct">{{ dataQuality.breakdown.outliers.pct }}%</span>
+            </div>
+            <div class="item-bar-bg">
+              <div class="item-bar-fill" :style="{ width: dataQuality.breakdown.outliers.score + '%', background: getScoreColor(dataQuality.breakdown.outliers.score) }"></div>
+            </div>
+          </div>
+
+          <div v-if="dataQuality.breakdown.cardinality" class="breakdown-item">
+            <div class="item-label">
+              <span>Column Reliability</span>
+              <span class="item-pct">{{ dataQuality.breakdown.cardinality.constant_columns }} constant</span>
+            </div>
+            <div class="item-bar-bg">
+              <div class="item-bar-fill" :style="{ width: dataQuality.breakdown.cardinality.score + '%', background: getScoreColor(dataQuality.breakdown.cardinality.score) }"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="health-popover-footer">
+          Health score improves as you clean data
+        </div>
+      </div>
+    </div>
 
     <!-- Main Content Container -->
     <div class="main-container">
@@ -828,6 +904,173 @@
                 </Button>
               </template>
             </Modal>
+            
+            <!-- Date/Time Handling Tool -->
+            <Card class="preprocessing-tool-card" hover>
+              <div class="tool-header">
+                <div class="tool-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z" />
+                  </svg>
+                </div>
+                <div class="tool-info">
+                  <h3>Date/Time Handling</h3>
+                  <p>Extract features from time-based columns like year, month, or workdays</p>
+                </div>
+                <div class="tool-badges-container">
+                  <div class="tool-badge" v-if="datetimeColumns.length > 0">
+                    {{ datetimeColumns.length }} columns detected
+                  </div>
+                  <div class="tool-badge info-badge" v-else>
+                    No datetime columns
+                  </div>
+                </div>
+              </div>
+              
+              <div class="tool-footer">
+                <Button variant="primary" @click="showDateTimeModal = true" :disabled="datetimeColumns.length === 0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  </svg>
+                  Configure Time Features
+                </Button>
+              </div>
+            </Card>
+
+            <!-- Date/Time Handling Modal -->
+            <Modal v-model="showDateTimeModal" title="Date/Time Feature Extraction" size="xl">
+              <div class="modal-section">
+                <!-- Info Alert -->
+                <div class="info-alert" style="margin-bottom: 1.5rem; display: flex; gap: 1rem; background: rgba(245, 158, 11, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.2);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b" style="flex-shrink: 0;">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  </svg>
+                  <div>
+                    <strong style="color: #e2e8f0; display: block; margin-bottom: 0.25rem;">Why extract datetime features?</strong>
+                    <p style="color: #94a3b8; font-size: 0.875rem; margin: 0;">Machine learning models can't understand raw date/time strings. By extracting features like Month, Day of Week, or Hour, you help the model find temporal patterns. <strong>Cyclic encoding</strong> further improves performance by representing time as periodic (e.g., December is next to January).</p>
+                  </div>
+                </div>
+
+                <!-- Select Columns -->
+                <div class="config-group" style="margin-bottom: 2rem;">
+                  <div class="modal-section-header">
+                    <h4>1. Select Date/Time Columns</h4>
+                    <span class="tool-badge info-badge">{{ datetimeColumns.length }} detected</span>
+                  </div>
+                  
+                  <div v-if="datetimeColumns.length > 0">
+                    <div class="columns-grid" style="max-height: 250px;">
+                      <div 
+                        v-for="col in datetimeColumns" 
+                        :key="col.name"
+                        class="column-card"
+                        :class="{ 'selected': selectedDateTimeColumns.includes(col.name) }"
+                        @click="toggleDateTimeColumn(col.name)"
+                      >
+                        <input type="checkbox" :checked="selectedDateTimeColumns.includes(col.name)" @click.stop readonly />
+                        <div class="column-content">
+                          <div class="column-header">
+                            <span class="column-name">{{ col.name }}</span>
+                            <span class="column-type categorical" style="font-size: 0.65rem;">DATETIME</span>
+                          </div>
+                          <div class="column-stats">
+                            <span class="stat-item">{{ col.unique }} unique values</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="empty-columns-msg" style="padding: 2rem; text-align: center; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(102, 126, 234, 0.3);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="rgba(148, 163, 184, 0.5)" style="margin-bottom: 0.5rem;">
+                      <path d="M12,2C6.47,2 2,6.47 2,12C2,17.5 6.47,22 12,22C17.5,22 22,17.5 22,12C22,6.47 17.5,2 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z" />
+                    </svg>
+                    <p style="margin: 0; color: #94a3b8; font-size: 0.9rem;">No datetime columns detected. Use the <strong>Type Detection</strong> tool to mark columns as dates.</p>
+                  </div>
+                </div>
+
+                <!-- Feature Selection -->
+                <div class="config-group" style="margin-bottom: 2rem;">
+                  <h4 style="margin-bottom: 1rem; color: #e2e8f0;">2. Select Features to Extract</h4>
+                  <div class="features-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem;">
+                    <div 
+                      v-for="feature in availableTimeFeatures" 
+                      :key="feature.id" 
+                      class="column-card"
+                      :class="{ 'selected': selectedDateTimeFeatures.includes(feature.id) }"
+                      @click="toggleDateTimeFeature(feature.id)"
+                      style="padding: 0.75rem;"
+                    >
+                      <input type="checkbox" :checked="selectedDateTimeFeatures.includes(feature.id)" @click.stop readonly />
+                      <div class="column-content">
+                        <div class="column-header">
+                          <span class="column-name">{{ feature.label }}</span>
+                        </div>
+                        <div class="column-stats">
+                          <span class="stat-item" style="color: #64748b;">{{ feature.desc }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Advanced Options -->
+                <div class="config-group" style="margin-bottom: 2rem;">
+                  <h4 style="margin-bottom: 1rem; color: #e2e8f0;">3. Advanced Options</h4>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <Card hover variant="default" @click="datetimeCyclic = !datetimeCyclic" :class="{ 'selected': datetimeCyclic }" style="cursor: pointer; padding: 1rem;">
+                      <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                        <input type="checkbox" v-model="datetimeCyclic" @click.stop />
+                        <div>
+                          <strong style="color: #e2e8f0; display: block; margin-bottom: 0.25rem;">Cyclic Encoding</strong>
+                          <p style="margin: 0; font-size: 0.8rem; color: #94a3b8;">Transforms time into Sin/Cos coordinates to preserve periodic continuity.</p>
+                        </div>
+                      </div>
+                    </Card>
+                    <Card hover variant="default" @click="datetimeDropOriginal = !datetimeDropOriginal" :class="{ 'selected': datetimeDropOriginal }" style="cursor: pointer; padding: 1rem;">
+                      <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                        <input type="checkbox" v-model="datetimeDropOriginal" @click.stop />
+                        <div>
+                          <strong style="color: #e2e8f0; display: block; margin-bottom: 0.25rem;">Drop Original Columns</strong>
+                          <p style="margin: 0; font-size: 0.8rem; color: #94a3b8;">Removes the raw strings to save memory and reduce redundancy.</p>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+
+                <!-- Selection Summary Tooltip -->
+                <div v-show="selectedDateTimeColumns.length > 0" class="selection-summary-modal">
+                  <Card variant="warning">
+                    <div class="summary-content" style="display: flex; align-items: center; gap: 1rem; padding: 0.5rem;">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12,22C6.47,22 2,17.5 2,12C2,6.47 6.47,2 12,2C17.52,2 22,6.47 22,12C22,17.5 17.5,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z" />
+                      </svg>
+                      <div>
+                        <strong>Ready to extract {{ selectedDateTimeFeatures.length }} features from {{ selectedDateTimeColumns.length }} columns</strong>
+                        <p style="margin: 0; font-size: 0.85rem; color: rgba(255,255,255,0.7);">
+                          This will add {{ selectedDateTimeColumns.length * (selectedDateTimeFeatures.length + (datetimeCyclic ? selectedDateTimeFeatures.filter(f => ['month', 'day', 'dayofweek', 'hour', 'minute', 'second'].includes(f)).length * 2 : 0)) }} new numeric columns to your dataset.
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+              
+              <template #footer>
+                <Button variant="ghost" @click="showDateTimeModal = false">
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  :loading="isProcessing"
+                  @click="applyDateTimeHandling"
+                  :disabled="selectedDateTimeColumns.length === 0 || selectedDateTimeFeatures.length === 0"
+                >
+                  Apply Transformations
+                </Button>
+              </template>
+            </Modal>
+
 
             <!-- Data Type Detection Modal -->
             <Modal v-model="showTypeDetectionModal" title="Data Type Detection & Verification" size="xl">
@@ -1054,30 +1297,28 @@
 
         <!-- Action Buttons -->
         <div class="footer-actions">
-          <Button
-            variant="danger"
-            outline
+          <button
             @click="showResetModal = true"
             :disabled="isProcessing"
+            class="footer-btn secondary"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z" />
             </svg>
             Reset All Transformations
-          </Button>
+          </button>
 
           <!-- Always show the Continue button -->
-          <Button 
-            variant="primary"
+          <button 
             @click="proceedToTargetSelection" 
             :disabled="isProcessing"
-            class="continue-btn"
+            class="footer-btn continue-btn primary"
           >
-            <span>Continue to Target Selection</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            Continue to Target Selection
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
             </svg>
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -1173,6 +1414,7 @@ const sortColumn = ref("");
 const sortDirection = ref("asc");
 const showOriginal = ref(true); // Added missing ref
 const showResetModal = ref(false); // Added missing ref
+const showQualityPopover = ref(false); // Health Score popover state
 
 // --- Preprocessing History & Tools ---
 const activeTools = ref([]); // Added missing ref (used in template)
@@ -1190,6 +1432,13 @@ const showDuplicateModal = ref(false);
 const showTypeDetectionModal = ref(false); // Added for type detection tool
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});
+
+// Date/Time State
+const showDateTimeModal = ref(false);
+const selectedDateTimeColumns = ref([]);
+const selectedDateTimeFeatures = ref(['year', 'month', 'day', 'dayofweek', 'hour', 'is_weekend']);
+const datetimeCyclic = ref(false);
+const datetimeDropOriginal = ref(true);
 
 // Column State
 const columns = ref([]);
@@ -1220,20 +1469,19 @@ const dataInfo = computed(() => ({
   columns: columns.value.length,
 }));
 
-// Basic Quality Score (Placeholder logic - can be improved with store stats)
+// Basic Quality Score (Robust logic using backend stats)
 const dataQuality = computed(() => {
-  if (!dataset.value.length || !columns.value.length) return { score: 100 };
+  if (!dataset.value.length || !columns.value.length) return { score: 100, breakdown: {} };
   
   // Use backend stats if available for better accuracy
-  if (dataStats.value?.quality_score) {
-    return { score: dataStats.value.quality_score };
+  if (dataStats.value?.quality_score !== undefined) {
+    return { 
+        score: dataStats.value.quality_score,
+        breakdown: dataStats.value.quality_breakdown || {}
+    };
   }
 
-  // Fallback to simple check on preview data
-  const totalCells = dataset.value.length * columns.value.length;
-  let issues = 0;
-  // Simple check on preview
-  return { score: 100 }; // Default for now
+  return { score: 100, breakdown: {} };
 });
 
 
@@ -1307,6 +1555,22 @@ const hasCleanedData = computed(() => {
     // but we can check if preprocessing steps exist in experiment store
     return false; // For now disable toggle till we have diff views
 });
+
+const datetimeColumns = computed(() => {
+    return columns.value.filter(c => getColumnSemanticType(c.name) === 'datetime');
+});
+
+const availableTimeFeatures = [
+    { id: 'year', label: 'Year', desc: 'Extract year (e.g. 2023)' },
+    { id: 'month', label: 'Month', desc: 'Extract month (1-12)' },
+    { id: 'day', label: 'Day', desc: 'Extract day of month (1-31)' },
+    { id: 'dayofweek', label: 'Day of Week', desc: '0=Mon, 6=Sun' },
+    { id: 'hour', label: 'Hour', desc: 'Extract hour (0-23)' },
+    { id: 'minute', label: 'Minute', desc: 'Extract minute (0-59)' },
+    { id: 'second', label: 'Second', desc: 'Extract second (0-59)' },
+    { id: 'is_weekend', label: 'Is Weekend', desc: '1 if Sat/Sun, else 0' },
+    { id: 'timestamp', label: 'Timestamp', desc: 'Unix epoch seconds' },
+];
 
 // ==================== METHODS ====================
 
@@ -1640,6 +1904,66 @@ const applyDuplicateRemoval = async () => {
     }
 };
 
+const toggleDateTimeColumn = (name) => {
+    const index = selectedDateTimeColumns.value.indexOf(name);
+    if (index === -1) {
+        selectedDateTimeColumns.value.push(name);
+    } else {
+        selectedDateTimeColumns.value.splice(index, 1);
+    }
+};
+
+const toggleDateTimeFeature = (featureId) => {
+    const index = selectedDateTimeFeatures.value.indexOf(featureId);
+    if (index === -1) {
+        selectedDateTimeFeatures.value.push(featureId);
+    } else {
+        selectedDateTimeFeatures.value.splice(index, 1);
+    }
+};
+
+const applyDateTimeHandling = async () => {
+    if (selectedDateTimeColumns.value.length === 0) return;
+    
+    isProcessing.value = true;
+    processingMessage.value = "Extracting datetime features...";
+    
+    try {
+        const response = await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/datetime`, {
+            dataset_id: datasetId.value,
+            columns: selectedDateTimeColumns.value,
+            features: selectedDateTimeFeatures.value,
+            cyclic: datetimeCyclic.value,
+            drop_original: datetimeDropOriginal.value
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            await dataStore.loadData(datasetId.value, true);
+            processColumns();
+            analyzeDataQuality();
+            showDateTimeModal.value = false;
+            showSuccess("Success", `Extracted features from ${selectedDateTimeColumns.value.length} columns.`);
+            
+            // Clear selection
+            selectedDateTimeColumns.value = [];
+        } else {
+            showError("Extraction Failed", data.detail || data.message || "Could not process datetime features.");
+        }
+    } catch (e) {
+        console.error("DateTime handling failed", e);
+        showError("Extraction Failed", "Could not process datetime features.");
+    } finally {
+        isProcessing.value = false;
+    }
+};
+
+// Toggle Quality Popover
+const toggleQualityPopover = () => {
+  showQualityPopover.value = !showQualityPopover.value;
+};
+
 // UTILS
 const formatCellValue = (val) => {
     if (val === null || val === undefined) return "-";
@@ -1647,9 +1971,15 @@ const formatCellValue = (val) => {
     return val;
 };
 const isEncodedColumn = (col) => false; // Placeholder
+const getScoreColor = (score) => {
+    if (score >= 85) return "var(--color-success, #10b981)";
+    if (score >= 60) return "var(--color-warning, #f59e0b)";
+    return "var(--color-danger, #ef4444)";
+};
+
 const getHealthLevel = (score) => {
-    if (score > 80) return "good";
-    if (score > 50) return "medium";
+    if (score >= 85) return "good";
+    if (score >= 60) return "medium";
     return "poor";
 };
 const sortByColumn = (col) => {
@@ -1844,6 +2174,8 @@ onMounted(() => {
     rgba(118, 75, 162, 0.1)
   );
   border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+  position: relative;
+  z-index: 10; /* Ensure hero section is above main container for popovers */
 }
 
 .hero-content {
@@ -1891,35 +2223,148 @@ onMounted(() => {
   color: #667eea;
 }
 
-.quality-indicator {
-  margin-left: 1rem;
+.quality-indicator-wrapper {
+  position: relative;
+  display: inline-block;
 }
 
-.quality-score {
+.quality-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.5rem 1rem;
   border-radius: 20px;
   font-weight: 600;
   font-size: 0.875rem;
+  cursor: help;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.2);
 }
 
-.quality-score.excellent {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
+.quality-score-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  line-height: 1;
 }
 
-.quality-score.good {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
+.quality-icon {
+  flex-shrink: 0;
+  display: block;
 }
 
-.quality-score.fair {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
+.quality-indicator.good {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.1);
 }
 
-.quality-score.poor {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
+.quality-indicator.medium {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.quality-indicator.poor {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Popover Styling */
+.quality-breakdown-popover {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  width: 280px;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+}
+
+.quality-indicator-wrapper:hover .quality-breakdown-popover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.quality-breakdown-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: rgba(30, 41, 59, 0.95);
+  border-left: 1px solid rgba(102, 126, 234, 0.3);
+  border-top: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.breakdown-header {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.breakdown-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.item-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.item-pct {
+  color: #cbd5e1;
+}
+
+.item-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.item-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.breakdown-footer {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.7rem;
+  color: #64748b;
+  text-align: center;
+  font-style: italic;
 }
 
 /* Main Container */
@@ -3939,10 +4384,10 @@ onMounted(() => {
 
 /* Action Footer */
 .action-footer {
-  background: rgba(26, 26, 46, 0.9);
+  background: rgba(26, 26, 46, 0.8);
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(102, 126, 234, 0.2);
-  padding: 2rem;
+  padding: 1.5rem 2rem;
   position: sticky;
   bottom: 0;
   z-index: 50;
@@ -4035,6 +4480,13 @@ onMounted(() => {
 .footer-btn.secondary:hover {
   background: rgba(102, 126, 234, 0.2);
   border-color: #667eea;
+}
+
+.footer-btn.primary:disabled {
+  background: rgba(102, 126, 234, 0.3);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+  animation: none;
 }
 
 .footer-btn.primary:hover {
@@ -4226,6 +4678,167 @@ onMounted(() => {
   font-size: 1.125rem;
   font-weight: 500;
   margin: 0;
+}
+
+/* ==================== HEALTH SCORE POPOVER ==================== */
+
+/* Info Button */
+.health-info-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 0.5rem;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.health-info-btn:hover {
+  color: #667eea;
+  transform: scale(1.1);
+}
+
+/* Popover Overlay */
+.health-popover-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Popover Card */
+.health-popover {
+  background: rgba(26, 26, 46, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(102, 126, 234, 0.2);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Popover Header */
+.health-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.health-popover-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.health-popover-close {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.health-popover-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Popover Body */
+.health-popover-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.item-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: #b3b3d1;
+  font-weight: 500;
+}
+
+.item-label span:first-child {
+  color: #ffffff;
+}
+
+.item-pct {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.item-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.item-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Popover Footer */
+.health-popover-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(102, 126, 234, 0.2);
+  font-size: 0.75rem;
+  color: #64748b;
+  text-align: center;
+  font-style: italic;
 }
 
 @keyframes spin {
@@ -5566,6 +6179,7 @@ onMounted(() => {
   vertical-align: middle;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
+
 
 @keyframes spin {
   from { transform: rotate(0deg); }

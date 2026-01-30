@@ -87,7 +87,11 @@
             </svg>
             <div class="stat-content">
               <span class="stat-label">Target Variable</span>
-              <span class="stat-value">{{ selectedTarget || 'Not Set' }}</span>
+              <span class="stat-value">{{ 
+                selectedTarget 
+                  ? (typeof selectedTarget === 'object' && selectedTarget !== null ? selectedTarget.name : selectedTarget)
+                  : 'Not Set' 
+              }}</span>
             </div>
           </div>
           
@@ -709,42 +713,41 @@
                     class="encoding-row"
                     :class="{ active: column.encode }"
                   >
-                    <div class="col-main-info">
-                      <label class="checkbox-label" :class="{ disabled: getEncodingRecommendation(column).method === 'target' }">
-                        <input
-                          type="checkbox"
-                          v-model="column.encode"
-                          @change="toggleColumnEncoding(column)"
-                          :disabled="getEncodingRecommendation(column).method === 'target'"
-                        />
-                        <span class="checkbox-custom"></span>
-                        <span class="col-name">
-                          {{ column.name }}
-                          <span class="category-count">({{ column.unique }} categories)</span>
-                        </span>
-                      </label>
-                      <span class="semantic-type-pill" :class="getColumnSemanticType(column.name)" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 0.5rem;">
-                        {{ getColumnSemanticType(column.name).toUpperCase() }}
+                    <label class="checkbox-label" :class="{ disabled: getEncodingRecommendation(column).method === 'target' }">
+                      <input
+                        type="checkbox"
+                        v-model="column.encode"
+                        @change="toggleColumnEncoding(column)"
+                        :disabled="getEncodingRecommendation(column).method === 'target'"
+                      />
+                      <span class="checkbox-custom"></span>
+                      <span class="col-name">
+                        {{ column.name }}
+                        <span class="category-count">({{ column.unique }} categories)</span>
                       </span>
+                    </label>
+                    <span class="semantic-type-pill" :class="getColumnSemanticType(column.name)" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 0.5rem;">
+                      {{ getColumnSemanticType(column.name).toUpperCase() }}
+                    </span>
 
-                      <!-- Recommendation Badge -->
-                      <div class="recommendation-info">
-                        <span 
-                          class="rec-badge" 
-                          :class="getEncodingRecommendation(column).method"
-                        >
-                          {{ 
-                            getEncodingRecommendation(column).method === 'onehot' ? 'One-Hot' : 
-                            getEncodingRecommendation(column).method === 'label' ? 'Label' : 
-                            getEncodingRecommendation(column).method === 'target' ? 'Target' : 'Ordinal' 
-                          }}
-                        </span>
-                        <span class="rec-reason">{{ getEncodingRecommendation(column).reason }}</span>
-                        <p v-if="getEncodingRecommendation(column).note" class="rec-note" style="color: #8b5cf6; font-weight: 600;">{{ getEncodingRecommendation(column).note }}</p>
-                      </div>
+                    <!-- Recommendation Badge -->
+                    <div class="recommendation-info">
+                      <span 
+                        class="rec-badge" 
+                        :class="getEncodingRecommendation(column).method"
+                      >
+                        {{ 
+                          getEncodingRecommendation(column).method === 'onehot' ? 'One-Hot' : 
+                          getEncodingRecommendation(column).method === 'label' ? 'Label' : 
+                          getEncodingRecommendation(column).method === 'target' ? 'Target' : 'Ordinal' 
+                        }}
+                      </span>
+                      <span class="rec-reason">{{ getEncodingRecommendation(column).reason }}</span>
+                      <p v-if="getEncodingRecommendation(column).note" class="rec-note" style="color: #8b5cf6; font-weight: 600;">{{ getEncodingRecommendation(column).note }}</p>
                     </div>
+
                     
-                    <div class="encoding-select-wrapper" v-if="column.encode && getColumnSemanticType(column.name) === 'categorical'">
+                    <div class="encoding-select-wrapper" v-if="column.encode && (getColumnSemanticType(column.name) === 'categorical' || (getColumnSemanticType(column.name) === 'boolean' && column.type !== 'numerical' && column.type !== 'numeric'))">
                       <select
                         v-model="column.encoding"
                         @change="setEncodingMethod(column.name, column.encoding)"
@@ -755,7 +758,7 @@
                         <option value="ordinal">Ordinal Encoding</option>
                       </select>
                     </div>
-                    <div v-else-if="column.encode && getColumnSemanticType(column.name) === 'boolean'" class="status-msg success" style="color: #10b981; font-size: 0.8rem;">
+                    <div v-else-if="column.encode && getColumnSemanticType(column.name) === 'boolean' && (column.type === 'numerical' || column.type === 'numeric')" class="status-msg success" style="color: #10b981; font-size: 0.8rem;">
                        ✓ Already optimal (0/1)
                     </div>
                   </div>
@@ -1042,6 +1045,9 @@
                   </div>
                 </div>
               </div>
+
+              <!-- Final Decision Matrix -->
+              
             </div>
             
             <template #footer>
@@ -1816,9 +1822,17 @@ const getColumnSemanticType = (columnName) => {
 };
 
 const categoricalColumns = computed(() => {
+  // Get target column name (handle both object and string formats)
+  const targetName = (typeof selectedTarget.value === 'object' && selectedTarget.value !== null) 
+    ? selectedTarget.value.name 
+    : selectedTarget.value;
+  
   return columns.value.filter(col => {
+    // 1. Exclude target column
+    if (col.name === targetName) return false;
+    
     const sType = getColumnSemanticType(col.name);
-    // Explicitly include categorical, boolean, datetime, and other text-based semantic types for encoding
+    // 2. Explicitly include categorical, boolean, datetime, and other text-based semantic types for encoding
     const categoricalTypes = ['categorical', 'boolean', 'datetime', 'email', 'phone', 'url', 'ip_address', 'uuid', 'text'];
     return categoricalTypes.includes(sType) || col.type === 'categorical' || col.type === 'string';
   });
@@ -1863,13 +1877,17 @@ const smoteValidation = computed(() => {
     
     const sType = getColumnSemanticType(col.name);
     
+    // Explicitly allow One-Hot columns (dummies generated by encoding)
+    if (col.isOneHot) return false;
+
     // Allow numeric and boolean (binary 0/1)
     if (['numeric', 'boolean'].includes(sType)) return false;
     
-    // Allow if the raw type is numerical
+    // Allow if the raw type is numerical (redundancy check)
     if (col.type === 'numerical' || col.type === 'numeric') return false;
     
     // Only block if it's explicitly categorical, text, or datetime AND not marked as numeric locally
+    // Note: identifiers are also blockers as they don't hold statistical meaning
     if (['categorical', 'datetime', 'text', 'identifier'].includes(sType)) {
        return true;
     }
@@ -2068,13 +2086,16 @@ function setEncodingMethod(columnName, method) {
 function selectAllCategoricalColumns() {
   categoricalColumns.value.forEach(col => {
     const sType = getColumnSemanticType(col.name);
-    if (sType === 'boolean' || sType === 'identifier') return;
+    const rec = getEncodingRecommendation(col);
+    
+    // Only skip if explicitly an identifier OR if it's a numeric boolean (already 0/1)
+    if (sType === 'identifier' || rec.method === 'keep') return;
 
     const baseCol = columns.value.find(c => c.name === col.name);
     if (baseCol) {
       baseCol.encode = true;
       if (!baseCol.encoding) {
-        baseCol.encoding = getEncodingRecommendation(col).method;
+        baseCol.encoding = rec.method;
       }
     }
   });
@@ -2091,11 +2112,14 @@ function deselectAllCategoricalColumns() {
 function selectRecommendedCategoricalColumns() {
   categoricalColumns.value.forEach(col => {
     const sType = getColumnSemanticType(col.name);
-    if (sType === 'boolean' || sType === 'identifier') return;
+    const rec = getEncodingRecommendation(col);
+    
+    // Skip if identifier OR already optimal (keep)
+    if (sType === 'identifier' || rec.method === 'keep') return;
 
     const baseCol = columns.value.find(c => c.name === col.name);
     if (baseCol) {
-       const rec = getEncodingRecommendation(col);
+       // Only auto-select if highly recommended (not 'target' which has its own tool, unless it's a string-boolean)
        if (rec.method !== 'target' && col.name !== selectedTarget.value) {
          baseCol.encode = true;
          baseCol.encoding = rec.method;
@@ -2191,10 +2215,18 @@ const getEncodingRecommendation = (column) => {
   // 4. Cardinality-based Rules (Fallbacks)
   const sType = getColumnSemanticType(column.name);
   if (sType === 'boolean') {
-    return {
-      method: 'keep',
-      reason: 'Boolean detected; already optimal as 0/1.'
-    };
+    const isActuallyNumeric = column.type === 'numerical' || column.type === 'numeric';
+    if (isActuallyNumeric) {
+      return {
+        method: 'keep',
+        reason: 'Boolean detected; already optimal as 0/1.'
+      };
+    } else {
+      return {
+        method: 'onehot',
+        reason: 'String-based Boolean detected (e.g. Yes/No). Encoding to 0/1 is required.'
+      };
+    }
   }
 
   if (uniqueCount <= 10) {
@@ -2236,7 +2268,7 @@ const getScalingRecommendation = (column) => {
   }
 
   // Rule 1: RobustScaler (Outliers/Skewness)
-  if (hasOutliers || skew > 1.5) {
+  if (hasOutliers || skew > 2) {
     return {
       method: 'robust',
       reason: 'RobustScaler is resistant to outliers and skewed distributions.'
@@ -2447,13 +2479,17 @@ const loadInitialData = async () => {
     
     await Promise.all([
       dataStore.loadData(datasetId.value),
-      fetchSemanticTypes(),
+      fetchSemanticTypes()
+    ]);
+    
+    // Step 4: Sync UI Columns with Metadata (Initially)
+    analyzeColumns();
+
+    // Step 5: Fetch extra stats and imbalance info AFTER columns are initialized
+    await Promise.all([
       fetchCompleteStatistics(),
       checkClassImbalance()
     ]);
-    
-    // Step 4: Sync UI Columns with Metadata
-    analyzeColumns();
 
     // Step 5: Restore View State if Split Applied
     if (preprocessing.value.isSplitApplied) {
@@ -2484,11 +2520,14 @@ const analyzeColumns = () => {
     // Prefer backend semantic type detection
     const backendType = getColumnSemanticType(colName);
     const type = backendType !== 'unknown' 
-      ? (backendType === 'numeric' ? 'numerical' : 'categorical')
+      ? (['numeric', 'boolean'].includes(backendType) ? 'numerical' : 'categorical')
       : detectColumnType(values);
 
     // Restore user selection from store
     const encodingInfo = encodedConfig.find(c => c.name === colName);
+
+    // Preserve existing metrics if available
+    const existingCol = columns.value?.find(c => c.name === colName);
 
     return {
       name: colName,
@@ -2502,7 +2541,8 @@ const analyzeColumns = () => {
       targetEncode: false, // Ensure this is always initialized to false on load/reset
       scale: preprocessing.value.scaledColumns.includes(colName),
       isAlreadyScaled: preprocessing.value.scaledColumns.includes(colName),
-      scalingMethod: preprocessing.value.scalingMethod || 'standard'
+      scalingMethod: preprocessing.value.scalingMethod || 'standard',
+      backendMetrics: existingCol?.backendMetrics || null
     };
   });
 
@@ -2615,6 +2655,9 @@ const confirmResetSplit = () => {
 
   // 3. Re-sync columns with store (which is now clean)
   analyzeColumns();
+  
+  // 4. Re-fetch fresh statistics for recommendations
+  fetchCompleteStatistics();
 
   showResetSplitModal.value = false;
   console.log("🔄 Split reset");
@@ -8118,5 +8161,122 @@ watch(semanticTypes, () => {
   opacity: 0.8;
 }
 
+
+
+/* Recommendation Styles */
+.recommendation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 12px;
+  padding: 8px 12px;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+}
+
+.scaling-rec {
+  border-left-color: #10b981;
+}
+
+.rec-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.rec-badge.standard { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+.rec-badge.robust { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+.rec-badge.minmax { background: rgba(16, 185, 129, 0.1); color: #34d399; }
+.rec-badge.maxabs { background: rgba(139, 92, 246, 0.1); color: #a78bfa; }
+.rec-badge.onehot { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+.rec-badge.label { background: rgba(16, 185, 129, 0.1); color: #34d399; }
+.rec-badge.target { background: rgba(139, 92, 246, 0.1); color: #a78bfa; }
+.rec-badge.ordinal { background: rgba(244, 63, 185, 0.1); color: #f472b6; }
+
+.rec-reason {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.rec-note {
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
+
+/* Decision Matrix Styles */
+.decision-matrix-container {
+  background: rgba(15, 15, 35, 0.4);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.decision-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.decision-matrix th {
+  text-align: left;
+  padding: 1rem 1.5rem;
+  background: rgba(102, 126, 234, 0.05);
+  color: #94a3b8;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.decision-matrix td {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.05);
+  color: #e2e8f0;
+}
+
+.decision-matrix tr:last-child td {
+  border-bottom: none;
+}
+
+.scaling-yes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #10b981;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+}
+
+.scaling-no {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ef4444;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+}
+
+.scaling-optional {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #f59e0b;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+}
 
 </style>

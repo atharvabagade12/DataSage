@@ -280,10 +280,11 @@ const continueToAdvancedPreprocessing = async () => {
 
 // --- Watchers ---
 // Sync local view when global semantic types from backend change
-watch(semanticTypes, () => {
+watch(semanticTypes, (newVal) => {
+    if (!newVal) return; // Guard against null
     console.log("🔄 Semantic types updated in store, re-analyzing targets...");
     processAvailableColumns();
-}, { deep: true });
+}, { immediate: false }); // Remove deep watch to prevent reactivity issues
 
 onMounted(async () => {
   await mlStore.checkBackendConnection();

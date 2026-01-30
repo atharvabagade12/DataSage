@@ -197,26 +197,37 @@ const isLoadingChart = ref(false);
 const chartCanvas = ref(null);
 const chartInstance = ref(null);
 
-watch(() => props.selectedColumn, async (newColumn) => {
-  if (newColumn) {
-    if (newColumn.originalType === "number" || newColumn.originalType === "numerical") {
-      chartType.value = "histogram";
-    } else if (newColumn.originalType === "date") {
-      chartType.value = "bar"; // Dates don't have a special chart in this component yet
-    } else {
-      chartType.value = "doughnut";
+watch(() => props.selectedColumn, async (newColumn, oldColumn) => {
+  if (!newColumn) {
+    // Clear chart when column is deselected
+    if (chartInstance.value) {
+      chartInstance.value.destroy();
+      chartInstance.value = null;
     }
-    
-    console.log("📊 Chart update triggered for:", newColumn.name);
-    console.log("   Has backend distribution:", !!newColumn.distribution);
-
-    await nextTick();
-    await generateChart();
+    return;
   }
-}, { deep: true });
+  
+  // Only update if column actually changed
+  if (oldColumn && newColumn.name === oldColumn.name) return;
+  
+  if (newColumn.originalType === "number" || newColumn.originalType === "numerical") {
+    chartType.value = "histogram";
+  } else if (newColumn.originalType === "date") {
+    chartType.value = "bar"; // Dates don't have a special chart in this component yet
+  } else {
+    chartType.value = "doughnut";
+  }
+  
+  console.log("📊 Chart update triggered for:", newColumn.name);
+  console.log("   Has backend distribution:", !!newColumn.distribution);
 
-watch(chartType, async () => {
-  if (props.selectedColumn) {
+  await nextTick();
+  await generateChart();
+});
+
+watch(chartType, async (newType, oldType) => {
+  // Only regenerate if chart type actually changed and we have a column
+  if (props.selectedColumn && newType !== oldType) {
     await nextTick();
     await generateChart();
   }
@@ -302,19 +313,45 @@ const getImbalanceTooltip = (ratio) => {
 // ============= CHART GENERATION =============
 
 const generateChart = async () => {
-  if (!props.selectedColumn || !chartCanvas.value) return;
+  // Comprehensive null guards
+  if (!props.selectedColumn || !chartCanvas.value) {
+    isLoadingChart.value = false;
+    return;
+  }
+  
+  // Ensure dataset is valid
+  if (!props.dataset || props.dataset.length === 0) {
+    isLoadingChart.value = false;
+    return;
+  }
 
   isLoadingChart.value = true;
 
   try {
+    // Safely destroy existing chart
     if (chartInstance.value) {
-      chartInstance.value.destroy();
+      try {
+        chartInstance.value.destroy();
+      } catch (e) {
+        console.warn('Chart destroy error:', e);
+      }
       chartInstance.value = null;
     }
 
     await new Promise((resolve) => setTimeout(resolve, 100));
 
+    // Double-check canvas still exists after timeout
+    if (!chartCanvas.value) {
+      isLoadingChart.value = false;
+      return;
+    }
+
     const ctx = chartCanvas.value.getContext("2d");
+    if (!ctx) {
+      isLoadingChart.value = false;
+      return;
+    }
+    
     ctx.clearRect(0, 0, chartCanvas.value.width, chartCanvas.value.height);
 
     const rawData = props.dataset.map((row) => row[props.selectedColumn.name]);
