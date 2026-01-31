@@ -108,7 +108,7 @@
       </div>
     </section>
 
-    <!-- Health Score Breakdown Popover (Fixed Position) -->
+    <!-- Health Score Breakdown Clickable option -->
     <div v-if="showQualityPopover" class="health-popover-overlay" @click="showQualityPopover = false">
       <div class="health-popover" @click.stop>
         <div class="health-popover-header">
@@ -1370,6 +1370,58 @@
     </div>
     
     
+    <!-- Datetime Warning Modal -->
+    <Modal v-model="showDateTimeWarningModal" title="Unhandled Datetime Columns Detected" size="md">
+        <div class="space-y-4">
+            <div class="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <span class="text-2xl">⚠️</span>
+                <div>
+                    <h4 class="font-semibold text-yellow-500 mb-1">Feature Engineering Recommended</h4>
+                    <p class="text-sm text-gray-300">
+                        Raw datetime columns cannot be directly used by most machine learning models. 
+                        We noticed you have <strong>{{ datetimeColumns.length }}</strong> unhandled datetime column(s).
+                    </p>
+                </div>
+            </div>
+            
+            <p class="text-gray-400 text-sm">
+                We strongly recommend using the <strong>Datetime Tool</strong> to extract useful features like 
+                <em>Year, Month, Day, Hour, DayOfWeek</em>, etc.
+            </p>
+
+            <div class="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Detected Columns:</p>
+                <div class="flex flex-wrap gap-2">
+                    <span 
+                        v-for="col in datetimeColumns" 
+                        :key="col.name"
+                        class="px-2 py-1 bg-gray-700 rounded text-xs text-gray-200 font-mono"
+                    >
+                        {{ col.name }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <template #footer>
+            <div class="flex justify-between w-full">
+                <Button 
+                    variant="ghost" 
+                    @click="handleProceedAnyway"
+                    class="text-gray-400 hover:text-white"
+                >
+                    Proceed Anyway
+                </Button>
+                <Button 
+                    variant="primary" 
+                    @click="openDateTimeToolFromWarning"
+                >
+                    Use Datetime Tool
+                </Button>
+            </div>
+        </template>
+    </Modal>
+    
   </div>
 </template>
 
@@ -1393,7 +1445,7 @@ const mlStore = useMLDataFlowStore();
 const dataStore = useDataStore();
 const experimentStore = useExperimentStore();
 const { showSuccess, showError, showInfo, showWarning } = useToast();
-const { authenticatedPost } = useAuthenticatedFetch();
+const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch();
 
 // Store Refs
 const { backendConnected } = storeToRefs(mlStore);
@@ -1439,6 +1491,8 @@ const selectedDateTimeColumns = ref([]);
 const selectedDateTimeFeatures = ref(['year', 'month', 'day', 'dayofweek', 'hour', 'is_weekend']);
 const datetimeCyclic = ref(false);
 const datetimeDropOriginal = ref(true);
+const showDateTimeWarningModal = ref(false);
+const ignoreDateTimeWarning = ref(false);
 
 // Column State
 const columns = ref([]);
@@ -1702,6 +1756,12 @@ const proceedToTargetSelection = () => {
         return;
     }
 
+    // 1.5. Warn about unhandled Datetime Columns
+    if (datetimeColumns.value.length > 0 && !ignoreDateTimeWarning.value) {
+        showDateTimeWarningModal.value = true;
+        return;
+    }
+
     // 2. Enforce Missing Values
     if (missingStats.value.totalMissing > 0) {
         showError("Missing Values Detected", "You must handle all missing values before proceeding to next page.");
@@ -1712,25 +1772,40 @@ const proceedToTargetSelection = () => {
     router.push("target-selection");
 };
 
-const exportData = () => {
-    // Simple CSV export of current visual data
-    if (!dataset.value.length) return;
-    const headers = visibleColumns.value.join(",");
-    const rows = filteredRows.value.map(row => 
-        visibleColumns.value.map(col => {
-            const val = row[col];
-            return val === null ? "" : `"${val}"`;
-        }).join(",")
-    ).join("\n");
-    
-    const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows;
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${fileName.value}_preview.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+const exportData = async () => {
+    // Export full dataset from backend (prioritizing in-memory processed data)
+    try {
+        isProcessing.value = true;
+        processingMessage.value = "Preparing download...";
+        
+        const response = await authenticatedGet(`http://localhost:8000/api/export-dataset/${datasetId.value}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Export failed: ${response.statusText} - ${errorText}`);
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${fileName.value || 'dataset'}_full.csv`); // meaningful filename
+        document.body.appendChild(link);
+        link.click();
+        
+        // Cleanup
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        showSuccess('Download Complete', 'Full dataset downloaded successfully');
+        
+    } catch (error) {
+        console.error("Export error:", error);
+        showError('Download Failed', error.message);
+    } finally {
+        isProcessing.value = false;
+        processingMessage.value = "Processing...";
+    }
 };
 
 
@@ -2075,6 +2150,20 @@ const saveSemanticOverrides = async () => {
 const updateMissingStrategy = (name, strategy) => {
     const col = missingColumnsDetailed.value.find(c => c.name === name);
     if(col) col.strategy = strategy;
+};
+
+// --- DateTime Warning Helpers ---
+const handleProceedAnyway = () => {
+    ignoreDateTimeWarning.value = true;
+    showDateTimeWarningModal.value = false;
+    proceedToTargetSelection();
+};
+
+const openDateTimeToolFromWarning = () => {
+    showDateTimeWarningModal.value = false;
+    // Auto-select detected datetime columns for convenience
+    selectedDateTimeColumns.value = datetimeColumns.value.map(c => c.name);
+    showDateTimeModal.value = true;
 };
 
 // --- Watchers ---

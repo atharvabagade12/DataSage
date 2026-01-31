@@ -573,9 +573,21 @@ class TargetEncoder:
         """
         self.problem_type = problem_type
         
-        # ✅ Ensure y is numeric for mean calculation (important for classification)
-        y_numeric = pd.to_numeric(y, errors='coerce')
-        self.global_mean = y_numeric.mean()
+        # ✅ FIX: Handle string targets correctly for classification
+        if problem_type == 'classification':
+            # Use LabelEncoder to convert strings (e.g. 'Yes'/'No') to 0/1 integers
+            le = LabelEncoder()
+            # Handle potential NaNs in target by converting to string first
+            y_clean = y.fillna('Unknown').astype(str)
+            y_numeric = le.fit_transform(y_clean)
+            
+            # If binary, ensures we are predicting the "positive" class (usually 1)
+            # but for target encoding, mean(0,1) is sufficient proxy for probability
+        else:
+            # Regression: safely coerce to numeric
+            y_numeric = pd.to_numeric(y, errors='coerce')
+
+        self.global_mean = np.mean(y_numeric)
         
         # ✅ Fallback if global_mean is NaN (should not happen with valid data)
         if pd.isna(self.global_mean):
@@ -592,14 +604,17 @@ class TargetEncoder:
         if problem_type == 'classification' and y.nunique() > 2:
             # Multiclass encoding: one mapping per class
             self.mappings[column] = {}
-            unique_classes = sorted(y.unique())
-            for cls in unique_classes:
-                y_binary = (y == cls).astype(int)
-                cls_global_mean = y_binary.mean()
+            
+            # Iterate over the numeric codes from LabelEncoder
+            for cls_idx, cls_label in enumerate(le.classes_):
+                # Calculate global mean for this specific class using numeric targets
+                y_binary = (y_numeric == cls_idx).astype(int)
+                cls_global_mean = np.mean(y_binary)
                 if pd.isna(cls_global_mean): cls_global_mean = 0.0
                 
                 # Count occurrences of this class per category
-                stats = data.groupby(column)['target'].apply(lambda x: (x == cls).sum()).reset_index()
+                # data['target'] holds y_numeric (integers)
+                stats = data.groupby(column)['target'].apply(lambda x: (x == cls_idx).sum()).reset_index()
                 counts = data.groupby(column)['target'].count().reset_index()
                 
                 merged = stats.merge(counts, on=column)
@@ -609,8 +624,8 @@ class TargetEncoder:
                 merged['encoded'] = (merged['sum'] + self.smoothing * cls_global_mean) / (merged['count'] + self.smoothing)
                 
                 # Store mapping
-                self.mappings[column][cls] = dict(zip(merged[column], merged['encoded']))
-                self.mappings[column][cls]['_global_mean'] = cls_global_mean
+                self.mappings[column][cls_label] = dict(zip(merged[column], merged['encoded']))
+                self.mappings[column][cls_label]['_global_mean'] = cls_global_mean
         else:
             # Binary classification or Regression
             stats = data.groupby(column)['target'].agg(['count', 'mean'])

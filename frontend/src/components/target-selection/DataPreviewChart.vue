@@ -22,7 +22,7 @@
             <option value="violin">🎻 Violin Plot</option>
           </template>
 
-          <template v-else-if="selectedColumn && (selectedColumn.originalType === 'string' || selectedColumn.originalType === 'categorical')">
+          <template v-else-if="selectedColumn && (selectedColumn.originalType === 'string' || selectedColumn.originalType === 'categorical' || selectedColumn.originalType === 'boolean')">
             <option value="doughnut">🍩 Value Distribution</option>
             <option value="bar">📊 Bar Chart</option>
             <option value="pie">🥧 Pie Chart</option>

@@ -378,7 +378,7 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
         return model_class()
 
 
-def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feature_names=None, feature_registry=None):
+def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feature_names=None, feature_registry=None, target_classes=None):
     """
     Worker function to run training in a separate process.
     Sends progress and results back via a multiprocessing.Queue.
@@ -620,13 +620,33 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
             viz_data['y_test_pred'] = y_pred_test.tolist() if hasattr(y_pred_test, 'tolist') else list(y_pred_test)
             
             # For classification, try to get probability predictions
-            if problem_type == 'classification' and hasattr(model, 'predict_proba'):
-                try:
-                    y_test_proba = model.predict_proba(X_test)
-                    viz_data['y_test_proba'] = y_test_proba.tolist()
-                    viz_data['classes'] = model.classes_.tolist() if hasattr(model, 'classes_') else None
-                except:
-                    viz_data['y_test_proba'] = None
+            if problem_type == 'classification':
+                # Always try to get classes
+                if target_classes:
+                     viz_data['classes'] = target_classes
+                     
+                     # DECODE TARGETS BACK TO ORIGINAL LABELS
+                     # This ensures frontend matches 'classes' (strings) with y values (now strings)
+                     try:
+                         viz_data['y_train_actual'] = [target_classes[int(val)] for val in viz_data['y_train_actual']]
+                         viz_data['y_test_actual'] = [target_classes[int(val)] for val in viz_data['y_test_actual']]
+                         viz_data['y_train_pred'] = [target_classes[int(val)] for val in viz_data['y_train_pred']]
+                         viz_data['y_test_pred'] = [target_classes[int(val)] for val in viz_data['y_test_pred']]
+                     except Exception as e:
+                         print(f"⚠️ Failed to decode target labels: {e}")
+
+                elif hasattr(model, 'classes_'):
+                     viz_data['classes'] = model.classes_.tolist()
+                else:
+                     # Fallback
+                     viz_data['classes'] = np.unique(y_train).tolist()
+
+                if hasattr(model, 'predict_proba'):
+                    try:
+                        y_test_proba = model.predict_proba(X_test)
+                        viz_data['y_test_proba'] = y_test_proba.tolist()
+                    except:
+                        viz_data['y_test_proba'] = None
             
             # For regression, calculate residuals
             if problem_type == 'regression':
@@ -641,13 +661,29 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
             viz_data['y_full_actual'] = y_full.tolist() if hasattr(y_full, 'tolist') else list(y_full)
             viz_data['y_full_pred'] = y_full_pred.tolist() if hasattr(y_full_pred, 'tolist') else list(y_full_pred)
             
-            if problem_type == 'classification' and hasattr(model, 'predict_proba'):
-                try:
-                    y_full_proba = model.predict_proba(X_full)
-                    viz_data['y_full_proba'] = y_full_proba.tolist()
-                    viz_data['classes'] = model.classes_.tolist() if hasattr(model, 'classes_') else None
-                except:
-                    viz_data['y_full_proba'] = None
+            if problem_type == 'classification':
+                 # Always try to get classes
+                if target_classes:
+                     viz_data['classes'] = target_classes
+                     
+                     # DECODE TARGETS BACK TO ORIGINAL LABELS
+                     try:
+                         viz_data['y_full_actual'] = [target_classes[int(val)] for val in viz_data['y_full_actual']]
+                         viz_data['y_full_pred'] = [target_classes[int(val)] for val in viz_data['y_full_pred']]
+                     except Exception as e:
+                         print(f"⚠️ Failed to decode target labels (CV): {e}")
+
+                elif hasattr(model, 'classes_'):
+                     viz_data['classes'] = model.classes_.tolist()
+                else:
+                     viz_data['classes'] = np.unique(y_full).tolist()
+
+                if hasattr(model, 'predict_proba'):
+                    try:
+                        y_full_proba = model.predict_proba(X_full)
+                        viz_data['y_full_proba'] = y_full_proba.tolist()
+                    except:
+                        viz_data['y_full_proba'] = None
             
             if problem_type == 'regression':
                 residuals_full = np.array(y_full) - np.array(y_full_pred)
@@ -663,6 +699,31 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
                 viz_data['feature_importance'] = np.abs(coef).mean(axis=0).tolist()
             else:
                 viz_data['feature_importance'] = np.abs(coef).tolist()
+        else:
+            # FALLBACK: Permutation Importance
+            # This works for any model (SVM, KNN, etc.)
+            try:
+                from sklearn.inspection import permutation_importance
+                
+                # Use a subset for speed if dataset is huge
+                X_val_perm = X_test if len(X_test) < 2000 else X_test[:2000]
+                y_val_perm = y_test if len(y_test) < 2000 else y_test[:2000]
+                
+                print(f"🔄 Calculating permutation importance for {algorithm_name}...")
+                perm_result = permutation_importance(
+                    model, X_val_perm, y_val_perm, 
+                    n_repeats=5, 
+                    random_state=42, 
+                    n_jobs=1
+                )
+                viz_data['feature_importance'] = perm_result.importances_mean.tolist()
+            except Exception as e:
+                print(f"⚠️ Permutation importance failed: {e}")
+                viz_data['feature_importance'] = None
+
+        # Ensure feature names are present for visualization
+        if feature_names and viz_data.get('feature_importance'):
+             viz_data['feature_names'] = feature_names
             
         # ===== FINALIZE & SAVE =====
         from datetime import datetime
@@ -1127,7 +1188,13 @@ async def export_dataset(
         if dataset.user_id != current_user['id']:
             raise HTTPException(status_code=403, detail="Not authorized")
             
-        df = file_service.load_dataframe(dataset.storage_path)
+        # PRIORITIZE IN-MEMORY DATA (This includes unsaved preprocessing steps)
+        if str(dataset_id) in datasets:
+            print(f"Using in-memory dataframe for export (Dataset {dataset_id})")
+            df = datasets[str(dataset_id)]['dataframe']
+        else:
+            print(f"Loading dataframe from disk for export (Dataset {dataset_id})")
+            df = file_service.load_dataframe(dataset.storage_path)
         
         filename = dataset.name.replace(".csv", "") + "_exported.csv"
         
@@ -1506,6 +1573,11 @@ async def get_dataset_statistics(
             # Normalize naming: "numerical" -> "numeric" for frontend consistency
             if sem_type == "numerical":
                 sem_type = "numeric"
+            
+            # [Fix] Force col_type to categorical if semantic type is boolean
+            # This ensures we get value_counts instead of histogram for binary columns
+            if sem_type == "boolean":
+                col_type = "categorical"
             
             # Base stats
             stat_entry = {
@@ -3652,6 +3724,14 @@ async def train_model_websocket(websocket: WebSocket):
         # Extract configuration
         dataset_id = config['dataset_id']
         target_column = config['target_column']
+        # Parse target_column if it's a JSON string
+        if isinstance(target_column, str) and target_column.startswith('{'):
+            try:
+                target_json = json.loads(target_column)
+                target_column = target_json.get('name', target_column)
+                print(f"🎯 [Training] Parsed target_column from JSON: {target_column}")
+            except:
+                pass
         algorithm_name = config['algorithm_name']
         test_size = config.get('test_size', 0.2)
 
@@ -3884,10 +3964,15 @@ async def train_model_websocket(websocket: WebSocket):
             'random_search_cv_folds': config.get('random_search_cv_folds', 5)
         }
         
+        # Prepare target classes for worker
+        target_classes = None
+        if target_encoder:
+            target_classes = target_encoder.classes_.tolist()
+        
         # Start training process
         p = multiprocessing.Process(
             target=training_worker, 
-            args=(worker_config, X_train, X_test, y_train, y_test, result_queue, current_feature_names, dataset_feature_registry)
+            args=(worker_config, X_train, X_test, y_train, y_test, result_queue, current_feature_names, dataset_feature_registry, target_classes)
         )
         active_training_processes[ws_id] = p
         p.start()

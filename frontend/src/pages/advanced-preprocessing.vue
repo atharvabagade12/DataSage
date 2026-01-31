@@ -985,6 +985,9 @@
                   <button @click="selectAllNumericalColumns" class="btn-secondary small">
                     Select All
                   </button>
+                  <button @click="selectRecommendedScaling" class="btn-secondary small">
+                    Select Recommended
+                  </button>
                   <button @click="deselectAllNumericalColumns" class="btn-secondary small">
                     Deselect All
                   </button>
@@ -2966,6 +2969,14 @@ const selectAllNumericalColumns = () => {
     if (!col.scalingMethod) {
       col.scalingMethod = getScalingRecommendation(col).method;
     }
+  });
+};
+
+const selectRecommendedScaling = () => {
+  numericalColumns.value.forEach(col => {
+    const rec = getScalingRecommendation(col);
+    col.scale = true;
+    col.scalingMethod = rec.method;
   });
 };
 
