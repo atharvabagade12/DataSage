@@ -11,7 +11,7 @@ import sys
 import os
 import traceback 
 from typing import Dict, Any, Optional, List
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 import multiprocessing
 import queue
 import time
@@ -4095,6 +4095,25 @@ async def get_model_info(model_id: str):
         raise HTTPException(status_code=404, detail="Model not found")
     
     return trained_models[model_id]
+
+@app.get("/api/models/{model_id}/download")
+async def download_model(model_id: str):
+    """Download the trained model file"""
+    if model_id not in trained_models:
+        raise HTTPException(status_code=404, detail="Model not found")
+    
+    model_info = trained_models[model_id]
+    model_path = model_info.get('model_path')
+    
+    if not model_path or not os.path.exists(model_path):
+        raise HTTPException(status_code=404, detail="Model file not found on server")
+    
+    filename = f"{model_id}.joblib"
+    return FileResponse(
+        path=model_path,
+        filename=filename,
+        media_type='application/octet-stream'
+    )
 
 @app.get("/api/debug")
 async def debug_info():

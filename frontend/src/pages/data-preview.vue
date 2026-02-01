@@ -1085,6 +1085,17 @@
                   </div>
                 </div>
 
+                <!-- NEW: Warning for Low/Medium confidence -->
+                <div v-if="unverifiedFlaggedColumns.length > 0" class="warning-alert" style="margin-bottom: 1.5rem; display: flex; gap: 1rem; background: rgba(245, 158, 11, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.2);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink: 0;">
+                    <path d="M12,2L1,21H23L12,2M12,6L19.53,19H4.47L12,6M11,10V14H13V10H11M11,16V18H13V16H11Z"/>
+                  </svg>
+                  <div>
+                    <strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Action Recommended: {{ unverifiedFlaggedColumns.length }} columns need verification</strong>
+                    <p style="color: #94a3b8; font-size: 0.875rem; margin: 0;">Some columns were detected with Medium or Low confidence. Please verify their semantic types to ensure best results.</p>
+                  </div>
+                </div>
+
                 <div v-if="isDetectingTypes" class="loading-inline" style="display: flex; align-items: center; justify-content: center; padding: 3rem; gap: 1rem; color: #94a3b8;">
                   <div class="spinner-small" style="width: 24px; height: 24px; border: 2px solid rgba(102, 126, 234, 0.2); border-top: 2px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                   <span>Analyzing dataset columns...</span>
@@ -1112,9 +1123,19 @@
                           </span>
                         </td>
                         <td style="padding: 1rem;">
-                          <span :class="['confidence-badge', col.confidence]" style="padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: capitalize;">
-                            {{ col.confidence }}
-                          </span>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span :class="['confidence-badge', col.confidence]" style="padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: capitalize;">
+                              {{ col.confidence }}
+                            </span>
+                            <span v-if="(col.confidence === 'low' || col.confidence === 'medium') && !col.is_override" 
+                                  class="verification-tag" 
+                                  title="Manual check recommended"
+                                  style="color: #fbbf24; display: flex; align-items: center;">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z"/>
+                              </svg>
+                            </span>
+                          </div>
                         </td>
                         <td style="padding: 1rem; color: #94a3b8; font-size: 0.8rem; line-height: 1.4; max-width: 250px;">{{ col.reason }}</td>
                         <td style="padding: 1rem;">
@@ -1484,6 +1505,7 @@ const showDuplicateModal = ref(false);
 const showTypeDetectionModal = ref(false); // Added for type detection tool
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});
+const hasConfirmedUnverifiedFlagged = ref(false); // Track if user was warned about low/medium confidence
 
 // Date/Time State
 const showDateTimeModal = ref(false);
@@ -1612,6 +1634,14 @@ const hasCleanedData = computed(() => {
 
 const datetimeColumns = computed(() => {
     return columns.value.filter(c => getColumnSemanticType(c.name) === 'datetime');
+});
+
+const unverifiedFlaggedColumns = computed(() => {
+    // Flag columns with Low or Medium confidence that haven't been manually overridden
+    return (semanticTypes.value || []).filter(col => 
+        (col.confidence === 'low' || col.confidence === 'medium') && 
+        !col.is_override
+    );
 });
 
 const availableTimeFeatures = [
@@ -2069,6 +2099,7 @@ const getColumnSample = (col) => {
     return dataset.value.slice(0,3).map(r => r[col.name]).join(", ");
 };
 const openTypeDetectionModal = () => {
+    hasConfirmedUnverifiedFlagged.value = false; // Reset warning state when opening modal
     showTypeDetectionModal.value = true;
 };
 const getStrategyDescription = (strategy, type) => {
@@ -2127,6 +2158,19 @@ const saveSemanticOverrides = async () => {
         reason: st.reason,
         is_override: st.is_override || false
     }));
+
+    // New Verification Check: If there are columns with Low/Medium confidence that haven't been touched
+    if (unverifiedFlaggedColumns.value.length > 0 && !hasConfirmedUnverifiedFlagged.value) {
+        showWarning(
+            "Verification Recommended", 
+            `Some columns have low confidence types. Please double-check them. Click Save again to proceed anyway.`
+        );
+        hasConfirmedUnverifiedFlagged.value = true;
+        
+        // Find these columns in the UI and maybe flash them or scroll to them
+        // For now, just stopping the save to let user look at the modal
+        return;
+    }
 
     isDetectingTypes.value = true;
     try {

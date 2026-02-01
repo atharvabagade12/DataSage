@@ -822,23 +822,24 @@
         </section>
       </div>
 
-      <!-- Try Different Configuration Button (Visible after completion) -->
-      <div v-if="isCompleted" class="tweak-params-section">
-        <!-- View Detailed Results Button (NEW) -->
-        <button @click="viewDetailedResults" class="view-results-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M11,9H13V7H11M11,17H13V11H11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
-          </svg>
-          <div class="btn-content">
-            <span class="btn-title">📊 View Detailed Visualizations</span>
-            <span class="btn-subtitle">Analyze model performance with interactive plots</span>
-          </div>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
-            <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
-          </svg>
-        </button>
+      <!-- Visualization and Download Actions (Final Location) -->
+      <div v-if="isCompleted" class="final-actions-section">
+          <button @click="viewDetailedResults" class="view-results-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M11,9H13V7H11M11,17H13V11H11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+            </svg>
+            <span class="btn-title">View Detailed Visualizations</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
+              <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
+            </svg>
+          </button>
 
-        
+          <button @click="downloadModel" class="download-model-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+            </svg>
+            <span class="btn-title">Download Trained Model</span>
+          </button>
       </div>
 
       <!-- Logs Section -->
@@ -1903,6 +1904,40 @@ const viewDetailedResults = () => {
     name: 'model-visualization',
     params: { modelId: lastTrainedModelId.value }
   });
+};
+
+const downloadModel = async () => {
+  if (!lastTrainedModelId.value) {
+    addLog('error', '❌ Model ID not found. Cannot download.');
+    return;
+  }
+
+  addLog('info', '📂 Preparing model for download...');
+  
+  try {
+    const response = await fetch(`http://localhost:8000/api/models/${lastTrainedModelId.value}/download`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download model: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${lastTrainedModelId.value}.joblib`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    addLog('success', '✅ Model downloaded successfully');
+  } catch (error) {
+    console.error('Download error:', error);
+    addLog('error', `❌ Download failed: ${error.message}`);
+  }
 };
 
 const scrollToConfiguration = () => {
@@ -3483,30 +3518,102 @@ onUnmounted(() => {
 .view-results-btn {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  gap: 1.25rem;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 1px solid rgba(102, 126, 234, 0.3);
   color: white;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
-  flex: 1;
-  min-width: 280px;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
 }
 
 .view-results-btn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
-  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+  border-color: rgba(102, 126, 234, 0.6);
 }
 
 .view-results-btn:active {
   transform: translateY(-1px);
 }
 
+.view-results-btn .btn-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.view-results-btn .btn-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.view-results-btn .btn-subtitle {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+}
+
 /* ✅ ADD ALL THESE NEW STYLES AT THE END */
+
+.final-actions-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 0 2rem;
+  flex-wrap: wrap;
+}
+
+.download-model-btn, .view-results-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.view-results-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.download-model-btn {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.view-results-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.download-model-btn:hover {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+  transform: translateY(-2px);
+}
+
+.view-results-btn:active, .download-model-btn:active {
+  transform: translateY(0);
+}
+
+.view-results-btn span, .download-model-btn span {
+  white-space: nowrap;
+}
 
 /* Current Stage Banner */
 .current-stage-banner {
@@ -4051,8 +4158,11 @@ onUnmounted(() => {
 .config-actions {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 2rem;
   padding-top: 2rem;
   border-top: 1px solid rgba(102, 126, 234, 0.2);
+  flex-wrap: wrap;
 }
 
 .start-training-btn {
