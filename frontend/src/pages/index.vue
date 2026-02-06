@@ -5,46 +5,7 @@
         <nav class="nav-content">
           <div class="nav-brand" @click="scrollToTop">
             <div class="brand-logo">
-              <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
-                <defs>
-                  <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-                  </linearGradient>
-                  <linearGradient id="logoAccent" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
-                  </linearGradient>
-                </defs>
-                <!-- Neural network nodes -->
-                <circle cx="20" cy="25" r="3" fill="url(#logoGradient)" opacity="0.9"/>
-                <circle cx="20" cy="40" r="3" fill="url(#logoGradient)" opacity="0.9"/>
-                <circle cx="20" cy="55" r="3" fill="url(#logoGradient)" opacity="0.9"/>
-                
-                <!-- Hidden layer -->
-                <circle cx="40" cy="20" r="4" fill="url(#logoGradient)"/>
-                <circle cx="40" cy="35" r="4" fill="url(#logoGradient)"/>
-                <circle cx="40" cy="50" r="4" fill="url(#logoGradient)"/>
-                <circle cx="40" cy="65" r="4" fill="url(#logoGradient)"/>
-                
-                <!-- Output layer -->
-                <circle cx="60" cy="30" r="4.5" fill="url(#logoAccent)"/>
-                <circle cx="60" cy="50" r="4.5" fill="url(#logoAccent)"/>
-                
-                <!-- Connections -->
-                <line x1="23" y1="25" x2="36" y2="20" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.6"/>
-                <line x1="23" y1="25" x2="36" y2="35" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4"/>
-                <line x1="23" y1="40" x2="36" y2="35" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.6"/>
-                <line x1="23" y1="40" x2="36" y2="50" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.6"/>
-                <line x1="23" y1="55" x2="36" y2="50" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.6"/>
-                <line x1="23" y1="55" x2="36" y2="65" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4"/>
-                
-                <line x1="44" y1="20" x2="56" y2="30" stroke="url(#logoAccent)" stroke-width="2" opacity="0.7"/>
-                <line x1="44" y1="35" x2="56" y2="30" stroke="url(#logoAccent)" stroke-width="2" opacity="0.5"/>
-                <line x1="44" y1="35" x2="56" y2="50" stroke="url(#logoAccent)" stroke-width="2" opacity="0.7"/>
-                <line x1="44" y1="50" x2="56" y2="50" stroke="url(#logoAccent)" stroke-width="2" opacity="0.8"/>
-                <line x1="44" y1="65" x2="56" y2="50" stroke="url(#logoAccent)" stroke-width="2" opacity="0.5"/>
-              </svg>
+              <img src="@/assets/logo.jpeg" alt="DataSage Logo" class="logo-img">
             </div>
             <h1 class="brand-title">DataSage</h1>
           </div>
@@ -72,6 +33,7 @@
       <!-- Hero Section -->
       <section class="hero-section" id="home">
         <div class="hero-background">
+          <div class="hero-grid"></div>
           <div class="gradient-orb orb-1"></div>
           <div class="gradient-orb orb-2"></div>
           <div class="gradient-orb orb-3"></div>
@@ -120,6 +82,14 @@
                 <span>Open Source</span>
               </div>
             </div>
+
+            <div class="live-stats reveal">
+              <div class="stat-ticker">
+                <span class="ticker-label">Datasets Processed:</span>
+                <span class="ticker-value">{{ datasetsCount.toLocaleString() }}+</span>
+              </div>
+              <div class="stat-pulse"></div>
+            </div>
           </div>
   
           <div class="hero-visual">
@@ -133,23 +103,22 @@
                   </div>
                   <div class="window-title">DataSage Dashboard</div>
                 </div>
-                <div class="window-content">
-                  <div class="demo-upload">
-                    <div class="upload-icon">📊</div>
-                    <div class="upload-text">Drop your dataset here</div>
+                <div class="window-content dashboard-grid">
+                  <div class="algorithm-list">
+                    <div class="algo-item" v-for="algo in ['Random Forest', 'XGBoost', 'SVM']" :key="algo">
+                      <span class="algo-dot"></span>
+                      <span class="algo-name">{{ algo }}</span>
+                      <span class="algo-score">{{ (85 + Math.random() * 10).toFixed(1) }}%</span>
+                    </div>
                   </div>
-                  <div class="demo-charts">
-                    <div class="chart-item">
-                      <div class="chart-bar" style="height: 60%"></div>
+                  <div class="metrics-preview">
+                    <div class="metric-card">
+                      <div class="metric-val">94.2%</div>
+                      <div class="metric-label">Avg. Accuracy</div>
                     </div>
-                    <div class="chart-item">
-                      <div class="chart-bar" style="height: 80%"></div>
-                    </div>
-                    <div class="chart-item">
-                      <div class="chart-bar" style="height: 45%"></div>
-                    </div>
-                    <div class="chart-item">
-                      <div class="chart-bar" style="height: 75%"></div>
+                    <div class="pipeline-status">
+                      <div class="status-dot"></div>
+                      <span>Model Transformation Pipeline Active</span>
                     </div>
                   </div>
                 </div>
@@ -160,7 +129,7 @@
       </section>
   
       <!-- Features Section -->
-      <section class="features-section" id="features">
+      <section class="features-section reveal" id="features">
         <div class="section-container">
           <div class="section-header">
             <h2 class="section-title">Everything You Need for Machine Learning</h2>
@@ -171,7 +140,7 @@
           </div>
   
           <div class="features-grid">
-            <div class="feature-card" v-for="feature in features" :key="feature.id">
+            <div class="feature-card reveal" v-for="feature in features" :key="feature.id">
               <div class="feature-icon">
                 <span>{{ feature.icon }}</span>
               </div>
@@ -189,7 +158,7 @@
       </section>
   
       <!-- How It Works Section -->
-      <section class="how-it-works-section" id="how-it-works">
+      <section class="how-it-works-section reveal" id="how-it-works">
         <div class="section-container">
           <div class="section-header">
             <h2 class="section-title">How DataSage Works</h2>
@@ -199,7 +168,7 @@
           </div>
   
           <div class="steps-container">
-            <div class="step-item" v-for="(step, index) in steps" :key="step.id">
+            <div class="step-item reveal" v-for="(step, index) in steps" :key="step.id">
               <div class="step-number">{{ index + 1 }}</div>
               <div class="step-icon">{{ step.icon }}</div>
               <h3 class="step-title">{{ step.title }}</h3>
@@ -210,7 +179,7 @@
       </section>
   
       <!-- Platform Demo Section -->
-      <section class="demo-section" id="demo">
+      <section class="demo-section reveal" id="demo">
         <div class="section-container">
           <div class="demo-content">
             <div class="demo-info">
@@ -293,50 +262,10 @@
         </div>
       </section>
   
-      <!-- Academic Project Section -->
-      <section class="academic-section" id="about">
-        <div class="section-container">
-          <div class="academic-content">
-            <div class="academic-badge">
-              <span>🎓</span>
-              <span>Academic Excellence</span>
-            </div>
-            
-            <h2 class="academic-title">Built as a Final Year Project</h2>
-            <p class="academic-subtitle">
-              DataSage represents the culmination of computer science education, 
-              combining theoretical knowledge with practical application to create 
-              a real-world machine learning platform.
-            </p>
-  
-            <div class="academic-stats">
-              <div class="stat-item">
-                <div class="stat-number">2025</div>
-                <div class="stat-label">Final Year Project</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-number">100%</div>
-                <div class="stat-label">Student Built</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-number">Open</div>
-                <div class="stat-label">Source Code</div>
-              </div>
-            </div>
-  
-            <div class="tech-stack">
-              <div class="tech-item" v-for="tech in techStack" :key="tech.name">
-                <div class="tech-icon">{{ tech.icon }}</div>
-                <div class="tech-name">{{ tech.name }}</div>
-                <div class="tech-desc">{{ tech.desc }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      
   
       <!-- Final CTA Section -->
-      <section class="cta-section">
+      <section class="cta-section reveal">
         <div class="section-container">
           <h2 class="cta-title">Ready to Start Your ML Journey?</h2>
           <p class="cta-subtitle">
@@ -352,7 +281,7 @@
           <div class="cta-assurance">
             <div class="assurance-item">
               <span>✅</span>
-              <span>Free Forever</span>
+              <span>Free to Explore</span>
             </div>
             <div class="assurance-item">
               <span>⚡</span>
@@ -372,40 +301,8 @@
           <div class="footer-section">
             <div class="footer-brand">
               <div class="footer-logo">
-                <div class="brand-logo">
-                  <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
-                    <defs>
-                      <linearGradient id="footerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-                      </linearGradient>
-                      <linearGradient id="footerAccent" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
-                      </linearGradient>
-                    </defs>
-                    <!-- Neural network representation -->
-                    <circle cx="20" cy="30" r="2.5" fill="url(#footerGradient)" opacity="0.9"/>
-                    <circle cx="20" cy="40" r="2.5" fill="url(#footerGradient)" opacity="0.9"/>
-                    <circle cx="20" cy="50" r="2.5" fill="url(#footerGradient)" opacity="0.9"/>
-                    
-                    <circle cx="40" cy="25" r="3" fill="url(#footerGradient)"/>
-                    <circle cx="40" cy="35" r="3" fill="url(#footerGradient)"/>
-                    <circle cx="40" cy="45" r="3" fill="url(#footerGradient)"/>
-                    <circle cx="40" cy="55" r="3" fill="url(#footerGradient)"/>
-                    
-                    <circle cx="60" cy="35" r="3.5" fill="url(#footerAccent)"/>
-                    <circle cx="60" cy="45" r="3.5" fill="url(#footerAccent)"/>
-                    
-                    <!-- Simplified connections -->
-                    <line x1="23" y1="35" x2="37" y2="30" stroke="url(#footerGradient)" stroke-width="1" opacity="0.6"/>
-                    <line x1="23" y1="40" x2="37" y2="40" stroke="url(#footerGradient)" stroke-width="1" opacity="0.6"/>
-                    <line x1="23" y1="45" x2="37" y2="50" stroke="url(#footerGradient)" stroke-width="1" opacity="0.6"/>
-                    
-                    <line x1="43" y1="30" x2="57" y2="35" stroke="url(#footerAccent)" stroke-width="1.5" opacity="0.7"/>
-                    <line x1="43" y1="40" x2="57" y2="40" stroke="url(#footerAccent)" stroke-width="1.5" opacity="0.8"/>
-                    <line x1="43" y1="50" x2="57" y2="45" stroke="url(#footerAccent)" stroke-width="1.5" opacity="0.7"/>
-                  </svg>
+                <div class="brand-logo footer-brand-logo">
+                  <img src="@/assets/logo.jpeg" alt="DataSage Logo" class="logo-img">
                 </div>
                 <h3 class="footer-title">DataSage</h3>
               </div>
@@ -490,6 +387,7 @@ const showDemoModal = ref(false)
 const currentDemoStep = ref(0)
 const processingProgress = ref(0)
 const modelAccuracy = ref(94.2)
+const datasetsCount = ref(12450)
 
 // Data
 const features = ref([
@@ -497,7 +395,7 @@ const features = ref([
     id: 1,
     icon: '📊',
     title: 'Smart Data Processing',
-    description: 'Upload CSV, Excel, or JSON files and let AI handle the cleaning, preprocessing, and feature engineering automatically.',
+    description: 'Upload CSV, Excel, or JSON files and let automated logic handle the cleaning, preprocessing, and feature engineering automatically.',
     highlights: ['Automatic data cleaning', 'Missing value handling', 'Feature scaling & encoding', 'Data quality reports']
   },
   {
@@ -548,7 +446,7 @@ const steps = ref([
     id: 2,
     icon: '⚙️',
     title: 'Automated Processing',
-    description: 'AI handles data cleaning, preprocessing, feature engineering, and prepares your data for machine learning.'
+    description: 'Our algorithms handle data cleaning, preprocessing, feature engineering, and prepare your data for machine learning.'
   },
   {
     id: 3,
@@ -709,6 +607,17 @@ const startDemoAnimation = () => {
   return interval
 }
 
+// Stats counter animation
+const startStatsAnimation = () => {
+  if (!process.client) return null
+  
+  const interval = setInterval(() => {
+    datasetsCount.value += Math.floor(Math.random() * 3) + 1
+  }, 3000)
+  
+  return interval
+}
+
 // ✨ NEW: Handle mobile menu clicks
 const handleMobileMenuClick = async (action) => {
   showMobileMenu.value = false // Close mobile menu first
@@ -747,6 +656,7 @@ const closeMobileMenuOnOutsideClick = (event) => {
 
 // Lifecycle
 let demoInterval = null
+let statsInterval = null
 
 onMounted(() => {
   if (process.client) {
@@ -758,6 +668,12 @@ onMounted(() => {
     
     // Start demo animation
     demoInterval = startDemoAnimation()
+    
+    // Start stats animation
+    statsInterval = startStatsAnimation()
+    
+    // Initialize reveal on scroll
+    initScrollReveal()
     
     console.log('🏠 Index page loaded successfully')
   }
@@ -773,10 +689,40 @@ onUnmounted(() => {
     if (demoInterval) {
       clearInterval(demoInterval)
     }
+    
+    // Clear stats interval
+    if (statsInterval) {
+      clearInterval(statsInterval)
+    }
   }
 })
 
-// ✨ NEW: Expose methods for template usage
+// Scroll Reveal Logic
+function initScrollReveal() {
+  if (!process.client) return
+
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('active')
+        // Once revealed, we can stop observing this element
+        observer.unobserve(entry.target)
+      }
+    })
+  }, observerOptions)
+
+  // Observe all elements with the 'reveal' class
+  document.querySelectorAll('.reveal').forEach(el => {
+    observer.observe(el)
+  })
+}
+
+//Expose methods for template usage
 defineExpose({
   goToDashboard,
   startFreeTrial,
@@ -787,7 +733,8 @@ defineExpose({
   toggleMobileMenu,
   handleMobileMenuClick,
   scrollTo,
-  scrollToTop
+  scrollToTop,
+  initScrollReveal
 })
 </script>
 
@@ -843,19 +790,30 @@ defineExpose({
   }
   
   .brand-logo {
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+    width: 42px;
+    height: 42px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+    overflow: hidden;
   }
   
-  .logo-svg {
-    width: 28px;
-    height: 28px;
+  .logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .footer-brand-logo {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
   
   .brand-title {
@@ -924,8 +882,8 @@ defineExpose({
   }
   
   .nav-btn.primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
   }
   
   .nav-btn.secondary {
@@ -970,13 +928,27 @@ defineExpose({
     inset: 0;
     overflow: hidden;
     z-index: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(102, 126, 234, 0.1) 0%, transparent 80%);
+  }
+
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(102, 126, 234, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(102, 126, 234, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+    mask-image: radial-gradient(circle at 50% 50%, black 30%, transparent 100%);
+    opacity: 0.5;
+    z-index: 0;
   }
   
   .gradient-orb {
     position: absolute;
     border-radius: 50%;
     filter: blur(120px);
-    animation: float 6s ease-in-out infinite;
+    animation: float 10s ease-in-out infinite;
+    z-index: 1;
   }
   
   .orb-1 {
@@ -1010,9 +982,34 @@ defineExpose({
   }
   
   @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
+    0%, 100% { transform: translate(0, 0); }
+    33% { transform: translate(30px, -30px); }
+    66% { transform: translate(-20px, 20px); }
   }
+
+  /* Reveal Animations */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: opacity, transform;
+  }
+
+  .reveal.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Staggered reveals for cards */
+  .features-grid .reveal:nth-child(2) { transition-delay: 0.1s; }
+  .features-grid .reveal:nth-child(3) { transition-delay: 0.2s; }
+  .features-grid .reveal:nth-child(4) { transition-delay: 0.3s; }
+  .features-grid .reveal:nth-child(5) { transition-delay: 0.4s; }
+  .features-grid .reveal:nth-child(6) { transition-delay: 0.5s; }
+
+  .steps-container .reveal:nth-child(2) { transition-delay: 0.15s; }
+  .steps-container .reveal:nth-child(3) { transition-delay: 0.3s; }
+  .steps-container .reveal:nth-child(4) { transition-delay: 0.45s; }
   
   .hero-content-wrapper {
     position: relative;
@@ -1091,8 +1088,8 @@ defineExpose({
   }
   
   .cta-button.primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.6);
   }
   
   .cta-button.secondary {
@@ -1129,6 +1126,48 @@ defineExpose({
     font-weight: 500;
     border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
+  }
+  
+  .live-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    margin-top: 2rem;
+  }
+  
+  .stat-ticker {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .ticker-label {
+    color: rgba(255, 255, 255, 0.6);
+  }
+  
+  .ticker-value {
+    color: #4facfe;
+    font-family: var(--font-mono);
+  }
+  
+  .stat-pulse {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #4ade80;
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 1; }
   }
   
   /* Hero Visual */
@@ -1189,63 +1228,104 @@ defineExpose({
     padding: 2rem;
   }
   
-  .demo-upload {
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  
+  .algorithm-list {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem;
-    border: 2px dashed rgba(102, 126, 234, 0.4);
-    border-radius: 12px;
-    background: linear-gradient(45deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
-    margin-bottom: 2rem;
-  }
-  
-  .upload-icon {
-    font-size: 2.5rem;
-    animation: bounce 2s infinite;
-  }
-  
-  @keyframes bounce {
-    0%, 20%, 53%, 80%, 100% {
-      transform: translate3d(0, 0, 0);
-    }
-    40%, 43% {
-      transform: translate3d(0, -8px, 0);
-    }
-    70% {
-      transform: translate3d(0, -4px, 0);
-    }
-    90% {
-      transform: translate3d(0, -2px, 0);
-    }
-  }
-  
-  .upload-text {
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 500;
-  }
-  
-  .demo-charts {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
     gap: 0.75rem;
   }
   
-  .chart-item {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 1rem 0.5rem;
+  .algo-item {
     display: flex;
-    align-items: flex-end;
-    min-height: 80px;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    transition: all 0.3s ease;
   }
   
-  .chart-bar {
-    width: 100%;
-    background: linear-gradient(to top, #667eea, #764ba2);
-    border-radius: 4px;
-    transition: all 0.8s ease;
+  .algo-item:hover {
+    background: rgba(102, 126, 234, 0.1);
+    transform: translateX(5px);
+  }
+  
+  .algo-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #667eea;
+  }
+  
+  .algo-name {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .algo-score {
+    font-family: var(--font-mono);
+    color: #4ade80;
+    font-weight: 600;
+  }
+  
+  .metrics-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .metric-card {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    padding: 1.5rem;
+    border-radius: 16px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    text-align: center;
+  }
+  
+  .metric-val {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+  
+  .metric-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  
+  .pipeline-status {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.75rem 1rem;
+    border-radius: 20px;
+  }
+  
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: flash 2s infinite;
+  }
+  
+  @keyframes flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
   
   /* Sections */
@@ -1316,9 +1396,10 @@ defineExpose({
   }
   
   .feature-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.2);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3);
     background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(102, 126, 234, 0.4);
   }
   
   .feature-icon {
@@ -1380,6 +1461,13 @@ defineExpose({
     background: rgba(255, 255, 255, 0.03);
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+  }
+  
+  .step-item:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(102, 126, 234, 0.3);
   }
   
   .step-number {
@@ -1580,6 +1668,10 @@ defineExpose({
   
   .academic-content {
     text-align: center;
+    padding: 4rem;
+    background: radial-gradient(circle at center, rgba(102, 126, 234, 0.05) 0%, transparent 70%);
+    border-radius: 30px;
+    border: 1px solid rgba(102, 126, 234, 0.1);
   }
   
   .academic-title {
@@ -1627,40 +1719,7 @@ defineExpose({
     color: rgba(255, 255, 255, 0.7);
   }
   
-  .tech-stack {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 2rem;
-  }
-  
-  .tech-item {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 2rem 1rem;
-    border-radius: 16px;
-    text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.3s ease;
-  }
-  
-  .tech-item:hover {
-    transform: translateY(-4px);
-    background: rgba(255, 255, 255, 0.08);
-  }
-  
-  .tech-icon {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-  }
-  
-  .tech-name {
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-  }
-  
-  .tech-desc {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
-  }
+ 
   
   .cta-title {
     font-size: 3rem;
@@ -1718,7 +1777,7 @@ defineExpose({
   .footer-logo {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
   }
   
   .footer-title {

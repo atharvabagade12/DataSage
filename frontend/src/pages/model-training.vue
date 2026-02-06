@@ -824,21 +824,22 @@
 
       <!-- Visualization and Download Actions (Final Location) -->
       <div v-if="isCompleted" class="final-actions-section">
-          <button @click="viewDetailedResults" class="view-results-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M11,9H13V7H11M11,17H13V11H11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
-            </svg>
-            <span class="btn-title">View Detailed Visualizations</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
-              <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/>
-            </svg>
-          </button>
-
           <button @click="downloadModel" class="download-model-btn">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
             </svg>
             <span class="btn-title">Download Trained Model</span>
+          </button>
+
+          <button @click="viewDetailedResults" class="view-results-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span class="btn-title">View Detailed Visualizations</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="arrow-icon">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
           </button>
       </div>
 
@@ -3515,48 +3516,7 @@ onUnmounted(() => {
   background: rgba(102, 126, 234, 0.3);
 }
 
-.view-results-btn {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  color: white;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  text-align: left;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
-}
-
-.view-results-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-  border-color: rgba(102, 126, 234, 0.6);
-}
-
-.view-results-btn:active {
-  transform: translateY(-1px);
-}
-
-.view-results-btn .btn-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.view-results-btn .btn-title {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.view-results-btn .btn-subtitle {
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 400;
-}
+/* Button styles moved and unified below */
 
 /* ✅ ADD ALL THESE NEW STYLES AT THE END */
 

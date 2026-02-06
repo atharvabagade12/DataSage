@@ -372,7 +372,7 @@ class DataPreprocessor:
                 col_data = self.df[column].astype(str)
                 col_data = col_data.replace('nan', 'Unknown')
                 
-                # ✅ CRITICAL: Create dummies AND convert to int (1/0, not True/False)
+               
                 dummies = pd.get_dummies(col_data, prefix=column, drop_first=True).astype(int)
                 
                 # ✅ Concatenate and drop original column
@@ -394,8 +394,7 @@ class DataPreprocessor:
                 col_data = col_data.replace('nan', 'Unknown')
                 
                 oe = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-                
-                # ✅ Convert to int
+               
                 self.df[column] = oe.fit_transform(col_data.values.reshape(-1, 1)).astype(int)
                 
                 print(f"Ordinal encoded {column}: {oe.categories_[0].tolist()}")
@@ -403,7 +402,7 @@ class DataPreprocessor:
                     'action': 'ordinal_encode',
                     'column': column,
                     'categories': oe.categories_[0].tolist(),
-                    'dtype': 'int'  # ✅ Document dtype
+                    'dtype': 'int'  
                 })
             
             return self.df
@@ -420,7 +419,7 @@ class DataPreprocessor:
         """Scale numerical features"""
         from sklearn.preprocessing import MinMaxScaler
         
-        # ✅ ENFORCE SEMANTIC TYPES: Only allow scaling for numeric columns
+        
         valid_cols = [col for col in columns if self.semantic_types.get(col) == 'numeric']
         
         if not valid_cols:
@@ -448,7 +447,7 @@ class DataPreprocessor:
             columns (list): Datetime columns to process
             features (list): List of features to extract ('year', 'month', 'day', 'dayofweek', 'hour', 'minute', 'second', 'is_weekend', 'timestamp')
             cyclic_encoding (bool): Whether to apply sin/cos transformations to cyclic features
-            drop_original (bool): Whether to drop the original datetime columns
+            drop_original (bool): Whether to drop the original datetime columns 
         """
         for col in columns:
             if col not in self.df.columns:

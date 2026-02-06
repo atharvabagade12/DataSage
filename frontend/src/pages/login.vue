@@ -15,7 +15,6 @@
       <div class="auth-panel">
         <!-- DataSage Brand Header -->
         <div class="brand-header">
-          <!-- Logo -->
           
 
           <!-- Brand Title -->
@@ -515,10 +514,10 @@ const handleRegister = async () => {
   opacity: 0.6;
 }
 
-.logo-svg {
-  width: 50px;
-  height: 50px;
-  filter: drop-shadow(0 4px 8px rgba(102, 126, 234, 0.3));
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand-title-section {
