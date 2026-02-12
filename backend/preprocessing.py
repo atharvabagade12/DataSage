@@ -517,8 +517,10 @@ class DataPreprocessor:
                     # Safe timestamp extraction (returns NaN for NaT)
                     self.df[new_col] = self.df[col].apply(lambda x: x.timestamp() if pd.notnull(x) else np.nan)
                 
-                # Update semantic types if applicable
-                self.semantic_types[new_col] = 'numeric'
+                if feature == 'is_weekend':
+                    self.semantic_types[new_col] = 'boolean'
+                else:
+                    self.semantic_types[new_col] = 'numeric'
                     
             if drop_original:
                 self.df = self.df.drop(columns=[col])

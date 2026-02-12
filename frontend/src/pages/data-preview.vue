@@ -245,11 +245,20 @@
                   <th
                     v-for="column in visibleColumns"
                     :key="column"
-                    class="table-header-cell"
+                    class="table-header-cell clickable-header"
+                    @click="openColumnInsights(column)"
+                    title="Click for detailed column insights"
                   >
                     <div class="header-content">
-                      <span>{{ column }}</span>
-                      <button @click="sortByColumn(column)" class="sort-button">
+                      <div class="header-label-group">
+                        <span class="header-diagnostic-icon">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12,2A10,10 0 1,0 22,12A10,10 0 0,0 12,2M11,17H13V15H11V17M11,13H13V7H11V13Z" />
+                          </svg>
+                        </span>
+                        <span class="column-name-label">{{ column }}</span>
+                      </div>
+                      <button @click.stop="sortByColumn(column)" class="sort-button" title="Sort Column">
                         <svg
                           width="12"
                           height="12"
@@ -1443,6 +1452,14 @@
         </template>
     </Modal>
     
+    <!-- Column Insights Drawer -->
+    <ColumnInsightsDrawer 
+      v-model="showInsightsDrawer"
+      :dataset-id="datasetId"
+      :column-name="selectedInsightsColumn"
+      :refresh-key="insightsRefreshKey"
+    />
+
   </div>
 </template>
 
@@ -1460,6 +1477,7 @@ import { useToast } from '~/composables/useToast';
 import Card from "../components/Card.vue";
 import Button from "../components/Button.vue";
 import Modal from "../components/Modal.vue";
+import ColumnInsightsDrawer from "../components/ColumnInsightsDrawer.vue";
 
 const router = useRouter();
 const mlStore = useMLDataFlowStore();
@@ -1506,6 +1524,11 @@ const showTypeDetectionModal = ref(false); // Added for type detection tool
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});
 const hasConfirmedUnverifiedFlagged = ref(false); // Track if user was warned about low/medium confidence
+
+// --- Column Insights State ---
+const showInsightsDrawer = ref(false);
+const selectedInsightsColumn = ref("");
+const insightsRefreshKey = ref(0);
 
 // Date/Time State
 const showDateTimeModal = ref(false);
@@ -2109,6 +2132,11 @@ const getStrategyDescription = (strategy, type) => {
     return "";
 };
 
+const openColumnInsights = (columnName) => {
+    selectedInsightsColumn.value = columnName;
+    showInsightsDrawer.value = true;
+};
+
 const getColumnSemanticType = (name) => {
     const col = columns.value.find(c => c.name === name);
     return col?.semanticType || 'unknown';
@@ -2182,6 +2210,7 @@ const saveSemanticOverrides = async () => {
         analyzeDataQuality();
         
         showSuccess("Types Saved", `Updated semantic types for ${allTypes.length} columns.`);
+        insightsRefreshKey.value++; // Trigger insights refresh if drawer is open
         showTypeDetectionModal.value = false;
     } catch (e) {
         console.error("Failed to save types", e);
@@ -2236,6 +2265,40 @@ onMounted(() => {
 /* Complete CSS - Same as previously provided with additional fixes */
 
 /* Base Styles - Dark Theme */
+.clickable-header {
+    cursor: pointer;
+    transition: background-color 0.2s;
+    position: relative;
+}
+
+.clickable-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.header-label-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-diagnostic-icon {
+    color: #6366f1;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    display: flex;
+}
+
+.clickable-header:hover .header-diagnostic-icon {
+    opacity: 1;
+}
+
+.column-name-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
 .data-preview {
   min-height: 100vh;
   background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);

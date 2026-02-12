@@ -38,7 +38,8 @@ def detect_semantic_type(series: pd.Series):
         sample = series.dropna().head(10).astype(str)
         date_patterns = [
             r'^\d{4}-\d{2}-\d{2}', r'^\d{2}/\d{2}/\d{4}', r'^\d{4}/\d{2}/\d{2}',
-            r'^\d{2}-\d{2}-\d{4}'
+            r'^\d{2}-\d{2}-\d{4}', r'^\d{4}\.\d{2}\.\d{2}', r'^\d{2}\.\d{2}\.\d{4}',
+            r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
         ]
         is_date = any(all(re.match(p, val) for val in sample) for p in date_patterns)
         if is_date:

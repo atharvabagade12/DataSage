@@ -1783,6 +1783,236 @@ async def get_semantic_types(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/datasets/{dataset_id}/columns/{column_name}/insights")
+async def get_column_insights(
+    dataset_id: str,
+    column_name: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Fetch detailed diagnostic insights for a specific column"""
+    try:
+        # 1. Fetch dataset and verify
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        if dataset.user_id != current_user['id']:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        # 2. Load Dataframe
+        if dataset_id in datasets:
+            df = datasets[dataset_id]['dataframe']
+        else:
+            df = file_service.load_dataframe(dataset.storage_path)
+            datasets[dataset_id] = {
+                'dataframe': df,
+                'filename': dataset.name,
+                'upload_time': dataset.upload_date,
+                'is_processed': dataset.is_processed,
+            }
+
+        if column_name not in df.columns:
+            raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found")
+
+        col_data = df[column_name]
+        clean_data = col_data.dropna()
+        total_rows = len(df)
+        missing_count = int(col_data.isnull().sum())
+        missing_pct = round((missing_count / total_rows) * 100, 2) if total_rows > 0 else 0
+        unique_count = int(col_data.nunique())
+
+        # Semantic type detection (Check overrides first)
+        column_metadata = dataset.column_metadata or {}
+        if str(column_name) in column_metadata:
+            semantic_type = column_metadata[str(column_name)].get("semantic_type", "unknown")
+        else:
+            semantic_type = detect_semantic_type(col_data).get("semantic_type", "unknown")
+
+        # Determine processing path
+        # 1. DateTime takes priority
+        is_datetime = semantic_type.lower() in ["datetime", "date", "timestamp", "time"]
+        
+        # 2. Categorical takes priority over Numeric if explicitly set
+        # This list covers all common non-numeric semantic types
+        is_categorical = semantic_type in [
+            "categorical", "boolean", "identifier", "email", "url", "phone",
+            "gender", "country", "state", "city", "address", "zipcode",
+            "department", "occupation", "company", "color"
+        ]
+        
+        # 3. Numeric if it's either explicitly numeric OR it's numeric data and not categorical/datetime
+        is_numeric = (semantic_type == "numeric") or (
+            pd.api.types.is_numeric_dtype(col_data) and not is_categorical and not is_datetime
+        )
+        
+        # Final decision: Categorical if it's not datetime and not numeric (or explicitly categorical)
+        if not is_datetime and not is_numeric:
+            is_categorical = True
+
+        insights = {
+            "column_name": column_name,
+            "semantic_type": semantic_type,
+            "missing_pct": missing_pct,
+            "unique_count": unique_count,
+            "suggested_actions": []
+        }
+
+        if is_datetime:
+            # Handle DateTime Columns
+            temp_dt = pd.to_datetime(clean_data, errors='coerce')
+            valid_dt = temp_dt.dropna()
+            
+            invalid_count = len(clean_data) - len(valid_dt)
+            
+            # Initialize with basic datetime info
+            insights.update({
+                "type": "datetime",
+                "invalid_count": invalid_count,
+                "min_date": None,
+                "max_date": None,
+                "date_range": "N/A",
+                "granularity": "N/A",
+                "distribution": {"time_frequency": {}}
+            })
+
+            if not valid_dt.empty:
+                min_date = valid_dt.min()
+                max_date = valid_dt.max()
+                date_range = str(max_date - min_date)
+                
+                # Granularity estimation
+                diffs = valid_dt.sort_values().diff().dropna()
+                if not diffs.empty:
+                    median_diff = diffs.median()
+                    granularity = str(median_diff)
+                else:
+                    granularity = "Single value"
+
+                # Frequency distribution (by day or month based on range)
+                days_span = (max_date - min_date).days
+                if days_span < 30:
+                    freq = 'D'
+                elif days_span < 365 * 2:
+                    freq = 'M'
+                else:
+                    freq = 'Y'
+                
+                freq_counts = valid_dt.value_counts().resample(freq).sum().tail(50)
+                
+                insights.update({
+                    "min_date": min_date.isoformat(),
+                    "max_date": max_date.isoformat(),
+                    "date_range": date_range,
+                    "granularity": granularity,
+                    "distribution": {
+                        "time_frequency": {str(k.date()): int(v) for k, v in freq_counts.items()}
+                    }
+                })
+            
+            # Suggested Actions for DateTime
+            if invalid_count > 0:
+                insights["suggested_actions"].append(f"Found {invalid_count} invalid date formats. Consider careful cleaning.")
+            insights["suggested_actions"].append("Extract features like Year, Month, Day, or Hour using Date/Time Handling tool.")
+
+        elif is_numeric:
+            # Handle Numeric Columns
+            q = clean_data.quantile([0, 0.25, 0.5, 0.75, 1]).tolist()
+            iqr = q[3] - q[1]
+            outliers_mask = (clean_data < (q[1] - 1.5 * iqr)) | (clean_data > (q[3] + 1.5 * iqr))
+            outlier_count = int(outliers_mask.sum())
+            outlier_pct = round((outlier_count / len(clean_data)) * 100, 2) if len(clean_data) > 0 else 0
+            
+            mean = float(clean_data.mean())
+            std = float(clean_data.std()) if len(clean_data) > 1 else 0
+            skewness = float(clean_data.skew()) if len(clean_data) > 1 else 0
+            
+            # Skewness Interpretation
+            if abs(skewness) < 0.5:
+                skew_desc = "Symmetric"
+            elif 0.5 <= skewness < 1:
+                skew_desc = "Slightly Right-Skewed"
+            elif skewness >= 1:
+                skew_desc = "Right-Skewed"
+            elif -1 < skewness <= -0.5:
+                skew_desc = "Slightly Left-Skewed"
+            else:
+                skew_desc = "Left-Skewed"
+
+            insights.update({
+                "type": "numeric",
+                "mean": mean,
+                "median": float(clean_data.median()),
+                "std": std,
+                "min": float(clean_data.min()),
+                "max": float(clean_data.max()),
+                "iqr": float(iqr),
+                "skewness": skewness,
+                "skewness_interpretation": skew_desc,
+                "distribution_type": skew_desc,
+                "outlier_pct": outlier_pct,
+                "distribution": {
+                    "histogram": {
+                        "counts": np.histogram(clean_data, bins='auto')[0].tolist(),
+                        "bin_edges": np.histogram(clean_data, bins='auto')[1].tolist()
+                    },
+                    "box_plot": {
+                        "min": q[0], "q1": q[1], "median": q[2], "q3": q[3], "max": q[4]
+                    }
+                }
+            })
+
+            # Suggested Actions
+            if missing_pct > 20:
+                insights["suggested_actions"].append("High missing values. Consider dropping column or using advanced imputation.")
+            elif missing_pct > 0:
+                insights["suggested_actions"].append("Handle missing values using Median/Mean/Mode imputation.")
+
+            if outlier_pct > 5:
+                insights["suggested_actions"].append("Significant outliers detected. Try Capping or Removal in Advanced Prep.")
+            
+            if abs(skewness) > 1:
+                insights["suggested_actions"].append("High skewness detected. Consider Log or Power transformation.")
+
+        else:
+            # Handle Categorical Columns
+            value_counts = col_data.value_counts()
+            most_frequent = str(value_counts.index[0]) if not value_counts.empty else None
+            least_frequent = str(value_counts.index[-1]) if not value_counts.empty else None
+            
+            # Imbalance ratio
+            imbalance_ratio = round(value_counts.iloc[0] / value_counts.iloc[-1], 2) if not value_counts.empty and value_counts.iloc[-1] > 0 else 1
+            
+            # Rare categories (< 1% frequency)
+            rare_count = int((value_counts / total_rows < 0.01).sum())
+
+            insights.update({
+                "type": "categorical",
+                "most_frequent": most_frequent,
+                "least_frequent": least_frequent,
+                "imbalance_ratio": imbalance_ratio,
+                "rare_category_count": rare_count,
+                "distribution": {
+                    "bar_chart": {str(k): int(v) for k, v in value_counts.head(15).items()}
+                }
+            })
+
+            # Suggested Actions
+            if unique_count > (total_rows * 0.5) and semantic_type != "identifier":
+                insights["suggested_actions"].append("High cardinality detected. This may cause overfitting or high memory usage.")
+            
+            if imbalance_ratio > 4:
+                insights["suggested_actions"].append("Significant class imbalance. Consider SMOTE or oversampling.")
+                
+            if rare_count > 0:
+                insights["suggested_actions"].append(f"Found {rare_count} rare categories. Consider grouping them into 'Other'.")
+
+        return insights
+
+    except Exception as e:
+        print(f"Error in get_column_insights: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/datasets/{dataset_id}/semantic-types/override")
 async def override_semantic_types(
     dataset_id: str,
@@ -2119,6 +2349,17 @@ async def check_class_imbalance(
         if not datasets[dataset_id].get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split first")
         
+        # Check problem type (SMOTE checks are for classification only)
+        if datasets[dataset_id].get('problem_type') != 'classification':
+             return {
+                "success": True,
+                "has_imbalance": False,
+                "imbalance_ratio": 1.0,
+                "severity": "balanced",
+                "recommendation": "SMOTE is not applicable for regression tasks (numeric targets).",
+                "message": "Regression problem detected. Skipping class imbalance check."
+            }
+        
         # Get training target data
         if dataset_id not in y_train_storage:
             raise HTTPException(status_code=400, detail="Training data not found")
@@ -2221,6 +2462,13 @@ async def apply_smote(
         
         if dataset_id not in X_train_storage or dataset_id not in y_train_storage:
             raise HTTPException(status_code=400, detail="Training data not found")
+        
+        # Check problem type (SMOTE is for classification only)
+        if datasets[dataset_id].get('problem_type') != 'classification':
+            raise HTTPException(
+                status_code=400,
+                detail="SMOTE can only be applied to classification problems with categorical or discrete targets. Regression tasks are not supported."
+            )
         
         # Get configuration
         sampling_strategy = config.get('sampling_strategy', 'auto')
@@ -4314,7 +4562,7 @@ async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, cu
 
 
 @app.post("/api/datasets/{dataset_id}/preprocessing/datetime")
-async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, current_user: dict = Depends(auth.get_current_user)):
+async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Handle datetime feature extraction"""
     if dataset_id not in datasets:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -4341,6 +4589,37 @@ async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, curre
             'drop_original': request.drop_original,
             'timestamp': datetime.now().isoformat()
         })
+        
+        # Persist semantic types for new columns
+        new_columns = [c for c in df_new.columns if c not in df.columns]
+        if new_columns:
+            # 1. Update In-Memory Metadata
+            if 'column_metadata' not in datasets[dataset_id]:
+                datasets[dataset_id]['column_metadata'] = {}
+            
+            for col in new_columns:
+                if col in processor.semantic_types:
+                    datasets[dataset_id]['column_metadata'][col] = {
+                        "column": col,
+                        "semantic_type": processor.semantic_types[col],
+                        "is_override": True,
+                        "reason": "Feature extraction component",
+                        "updated_at": datetime.now().isoformat()
+                    }
+            
+            # 2. Update Database Metadata
+            dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+            if dataset:
+                dataset_metadata = dataset.column_metadata or {}
+                # Merge new overrides
+                for col in new_columns:
+                    if col in processor.semantic_types:
+                        dataset_metadata[col] = datasets[dataset_id]['column_metadata'][col]
+                
+                dataset.column_metadata = dataset_metadata
+                db.commit()
+                dataset.column_metadata = dataset_metadata
+                db.commit()
         
         return {
             "success": True,

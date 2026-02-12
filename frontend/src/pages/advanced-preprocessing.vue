@@ -1072,7 +1072,7 @@
           <Card 
             class="preprocessing-tool-card" 
             hover 
-            :class="{ disabled: !splitApplied || (!hasClassImbalance && !smoteApplied) }"
+            :class="{ disabled: !splitApplied || (!hasClassImbalance && !smoteApplied) || problemType !== 'classification' }"
             v-if="problemType === 'classification'"
           >
             <div class="tool-header">
@@ -1105,7 +1105,7 @@
               <Button 
                 variant="primary" 
                 @click="showSmoteModal = true" 
-                :disabled="!splitApplied || (!hasClassImbalance && !smoteApplied)"
+                :disabled="!splitApplied || (!hasClassImbalance && !smoteApplied) || problemType !== 'classification'"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
@@ -2710,7 +2710,7 @@ const confirmResetAll = async () => {
 
 // Re-check class imbalance on the backend
 const checkClassImbalance = async () => {
-  // 🛑 GUARD: SMOTE and imbalance checks only apply to classification
+  
   if (problemType.value !== 'classification') {
     console.log("⏭️ Skipping imbalance check: Problem type is", problemType.value);
     return;
@@ -2796,11 +2796,9 @@ const applySmote = async () => {
     if (data.success) {
       console.log("✅ SMOTE applied successfully");
 
-      // Update Data Store (Transient)
-      // Only train data changes
+      
       dataStore.trainPreview = data.train_preview || []; 
-      // Ideally backend returns preview. If not, we might need to fetch it or validation might fail.
-      // Assuming data.train_preview exists as per previous code.
+      
       
       // Update Experiment Store (Persisted)
       experimentStore.setSmoteApplied(true, {
