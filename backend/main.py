@@ -1146,7 +1146,7 @@ async def get_dashboard_stats(
                 total_quality += ds.column_metadata['quality_score']
                 calculated_datasets += 1
                 
-        avg_quality = int(total_quality / calculated_datasets) if calculated_datasets > 0 else 85
+        avg_quality = int(total_quality / calculated_datasets) if calculated_datasets > 0 else 0
         
         # Get latest model accuracy
         latest_model = db.query(ModelModel).filter(ModelModel.user_id == user_id).order_by(ModelModel.created_at.desc()).first()
@@ -1286,7 +1286,7 @@ async def upload_dataset(
             print(f"✅ Initial Quality Score calculated: {quality_info['score']}")
         except Exception as q_err:
             print(f"⚠️ Could not calculate initial quality score: {q_err}")
-            dataset.column_metadata = {"quality_score": 85} # Default
+            dataset.column_metadata = {"quality_score": 0} # Default
 
         db.add(dataset)
         db.commit()
@@ -4779,7 +4779,36 @@ async def save_dataset_version(
             raise HTTPException(status_code=404, detail="Dataset not found in memory or DB")
         
     try:
-        df = datasets[dataset_id]['dataframe']
+        # Reconstruct transformed dataframe if split exists (capture preprocessed state)
+        if (str(dataset_id) in X_train_storage and str(dataset_id) in X_test_storage and 
+            str(dataset_id) in y_train_storage and str(dataset_id) in y_test_storage):
+            
+            print(f"🔄 Reconstructing transformed dataset for saving (Dataset {dataset_id})")
+            X_train = X_train_storage[str(dataset_id)]
+            X_test = X_test_storage[str(dataset_id)]
+            y_train = y_train_storage[str(dataset_id)]
+            y_test = y_test_storage[str(dataset_id)]
+            
+            # Reconstruct transformed train set
+            train_df = X_train.copy()
+            target_name = y_train.name if hasattr(y_train, 'name') else 'target'
+            train_df[target_name] = y_train
+            
+            # Reconstruct transformed test set
+            test_df = X_test.copy()
+            test_df[target_name] = y_test
+            
+            # Concatenate
+            df = pd.concat([train_df, test_df], axis=0)
+            
+            # Convert to dense if sparse columns are present (to avoid Parquet issues with multi-type sparse stores)
+            if hasattr(df, 'sparse'):
+                df = df.sparse.to_dense()
+                
+            print(f"✅ Reconstructed transformed dataset: {len(df)} rows, {len(df.columns)} columns")
+        else:
+            df = datasets[dataset_id]['dataframe']
+
         user_id = current_user['id']
         version_name = request.version_name
         

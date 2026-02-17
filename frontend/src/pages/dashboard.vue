@@ -214,7 +214,6 @@
 
                 <transition name="scale">
                   <div v-if="uploadSuccess" class="upload-success-compact">
-                    <div class="success-icon-wrap">✓</div>
                     <h3>{{ uploadedFile?.filename }} Ready</h3>
                     <button @click.stop="goToPreview" class="launch-btn-premium">Launch Data Lab</button>
                   </div>
@@ -515,11 +514,42 @@ const initCharts = () => {
 
   const sortedModels = [...allModels.value].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).slice(-7)
   
-  const labels = sortedModels.length ? sortedModels.map(m => m.name.split(' ')[0]) : ['M1', 'M2', 'M3', 'M4']
-  const data = sortedModels.length ? sortedModels.map(m => {
+  if (!sortedModels.length) {
+    // Show empty state if no models
+    performanceChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['No Data'],
+        datasets: [{
+          label: 'Accuracy',
+          data: [0],
+          borderColor: 'rgba(106, 106, 138, 0.2)',
+          backgroundColor: 'transparent',
+          fill: true,
+          pointRadius: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false }
+        },
+        scales: {
+          y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { display: false } },
+          x: { grid: { display: false }, ticks: { color: '#6a6a8a' } }
+        }
+      }
+    })
+    return
+  }
+  
+  const labels = sortedModels.map(m => m.name.split(' ')[0])
+  const data = sortedModels.map(m => {
     const acc = m.metrics?.accuracy || m.metrics?.r2 || 0
     return acc <= 1 ? acc * 100 : acc
-  }) : [65, 78, 85, 92]
+  })
 
   performanceChart = new Chart(ctx, {
     type: 'line',
@@ -598,6 +628,7 @@ const processFile = async (file) => {
     const result = await response.json()
     uploadProgress.value = 100
     uploadSuccess.value = true
+    isUploading.value = false // Hide spinner on success
     uploadedFile.value = result
     
     mlStore.setCurrentDataset(result.dataset_id, [], result.filename, result.columns || [])
@@ -913,11 +944,11 @@ onUnmounted(() => performanceChart?.destroy())
 
 /* Immersive Upload Section */
 .upload-immersive-section { display: flex; justify-content: center; margin-top: 2rem; }
-.upload-compact-container { width: 100%; max-width: 600px; padding: 2.5rem; text-align: center; }
+.upload-compact-container { width: 100%; max-width: 800px; padding: 1.5rem 2.5rem; text-align: center; }
 .upload-header-compact h2 { font-size: 1.5rem; font-weight: 800; margin: 0; }
 .upload-header-compact p { color: #6a6a8a; font-size: 0.9rem; margin-top: 8px; }
 
-.upload-compact-zone { margin-top: 2rem; border: 2px dashed rgba(102, 126, 234, 0.3); border-radius: 20px; padding: 3rem 2rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; background: rgba(102, 126, 234, 0.02); }
+.upload-compact-zone { margin-top: 1.5rem; border: 2px dashed rgba(102, 126, 234, 0.3); border-radius: 20px; padding: 2rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; background: rgba(102, 126, 234, 0.02); }
 .upload-compact-zone:hover { border-color: #667eea; background: rgba(102, 126, 234, 0.05); }
 .upload-compact-zone.drag-over { border-color: #10b981; background: rgba(16, 185, 129, 0.05); transform: scale(1.02); }
 
