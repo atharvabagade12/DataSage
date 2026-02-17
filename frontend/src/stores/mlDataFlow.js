@@ -43,6 +43,18 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     // Navigation State
     currentStep: "upload", // upload, preview, target, algorithm, train, results
+
+    // Dashbord Data
+    dashboardStats: {
+      projects: 0,
+      models: 0,
+      dataHealth: 0,
+      bestAccuracy: 0,
+      recentActivityCount: 0
+    },
+    recentActivity: [],
+    allUserDatasets: [],
+    allUserModels: [],
   }),
 
   getters: {
@@ -210,9 +222,9 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     };
     
     console.log('✅ Preprocessing state updated in mlStore');
-  },
+    },
 
-  setCurrentDataset(datasetId, dataset, fileName, columns) {
+    setCurrentDataset(datasetId, dataset, fileName, columns) {
     console.log('📌 Setting current dataset:', datasetId);
 
     // Clear previous experiment flags & state
@@ -251,7 +263,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
       rows: this.dataset.length,
       columns: this.columns.length
     });
-  },
+    },
 
 
     // Verify dataset exists in backend
@@ -403,13 +415,112 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
       console.log("🔄 Store reset");
     },
-
-    // Clear all datasets
     clearAllDatasets() {
       this.registeredDatasets = {};
       this.reset();
       console.log("🗑️ All datasets cleared");
     },
+
+    // ===== DASHBOARD ACTIONS =====
+    async fetchDashboardStats() {
+      try {
+        const token = sessionStorage.getItem('authToken') || 
+                      sessionStorage.getItem('token') || 
+                      localStorage.getItem('authToken') || 
+                      localStorage.getItem('token');
+                      
+        const response = await fetch("http://localhost:8000/api/dashboard/stats", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+          this.dashboardStats = await response.json();
+          return this.dashboardStats;
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch dashboard stats:", error);
+      }
+    },
+
+    async fetchRecentActivity(limit = 10) {
+      try {
+        const token = sessionStorage.getItem('authToken') || 
+                      sessionStorage.getItem('token') || 
+                      localStorage.getItem('authToken') || 
+                      localStorage.getItem('token');
+                      
+        const response = await fetch(`http://localhost:8000/api/dashboard/activity?limit=${limit}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+          this.recentActivity = await response.json();
+          return this.recentActivity;
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch activity:", error);
+      }
+    },
+
+    async fetchAllDatasets() {
+      try {
+        const token = sessionStorage.getItem('authToken') || 
+                      sessionStorage.getItem('token') || 
+                      localStorage.getItem('authToken') || 
+                      localStorage.getItem('token');
+                      
+        const response = await fetch("http://localhost:8000/api/datasets", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+          this.allUserDatasets = await response.json();
+          return this.allUserDatasets;
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch all datasets:", error);
+      }
+    },
+
+    async fetchAllModels() {
+      try {
+        const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+        const response = await fetch("http://localhost:8000/api/models", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+          this.allUserModels = await response.json();
+          return this.allUserModels;
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch all models:", error);
+      }
+    },
+
+    async saveDatasetVersion(datasetId, versionName) {
+      try {
+        const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+        const response = await fetch(`http://localhost:8000/api/datasets/${datasetId}/save-version`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ version_name: versionName })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log("✅ Version saved:", result);
+          // Refresh datasets list
+          await this.fetchAllDatasets();
+          return result;
+        } else {
+          const error = await response.json();
+          throw new Error(error.detail || "Failed to save version");
+        }
+      } catch (error) {
+        console.error("❌ Failed to save version:", error);
+        throw error;
+      }
+    }
   },
 
   // Persist to localStorage

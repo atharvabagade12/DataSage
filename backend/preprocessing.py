@@ -317,10 +317,10 @@ class DataPreprocessor:
             
             outliers_count = ((self.df[col] < lower_bound) | (self.df[col] > upper_bound)).sum()
             
-            if strategy == 'cap':
-                # Winsorization - cap outliers at bounds
+            if strategy == 'cap' or strategy == 'cap_iqr' or strategy == 'cap_percentile':
+                # Winsorization - cap outliers at bounds (IQR)
                 self.df[col] = np.clip(self.df[col], lower_bound, upper_bound)
-                action = 'capped'
+                action = 'capped_iqr'
             else:  # remove
                 self.df = self.df[(self.df[col] >= lower_bound) & (self.df[col] <= upper_bound)]
                 action = 'removed'

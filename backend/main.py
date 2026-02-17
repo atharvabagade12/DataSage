@@ -10,7 +10,8 @@ import io
 import sys
 import os
 import traceback 
-from typing import Dict, Any, Optional, List
+from pydantic import BaseModel
+from typing import Dict, Any, Optional, List, Union
 from fastapi.responses import StreamingResponse, FileResponse
 import multiprocessing
 import queue
@@ -99,6 +100,8 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://localhost:3002",
+        "http://0.0.0.0:3000",
+        "http://[::1]:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -165,6 +168,25 @@ REGRESSION_ALGORITHMS = {
 }
 
 ALGORITHMS = {**CLASSIFICATION_ALGORITHMS, **REGRESSION_ALGORITHMS}
+
+# ===== USER ACTION LOGGING =====
+
+def log_user_action(db: Session, user_id: int, action_type: str, details: dict = None, resource_id: int = None, resource_type: str = None):
+    """Log a user action to the database"""
+    try:
+        from models import UserAction
+        action = UserAction(
+            user_id=user_id,
+            action_type=action_type,
+            action_details=details,
+            resource_id=resource_id,
+            resource_type=resource_type
+        )
+        db.add(action)
+        db.commit()
+    except Exception as e:
+        print(f"⚠️ Failed to log user action: {e}")
+        db.rollback()
 
 # ===== QUALITY SCORING HELPER =====
 ## healthscore in data-preview page
@@ -261,6 +283,12 @@ def detect_problem_type(y: pd.Series) -> str:
 def get_algorithm_for_problem_type(algorithm_name: str, problem_type: str):
     """Get the correct algorithm based on problem type"""
     
+    # Normalize problem type
+    if problem_type and 'classification' in problem_type:
+        problem_type = 'classification'
+    elif problem_type and 'regression' in problem_type:
+        problem_type = 'regression'
+    
     # Define mapping for algorithms with both classifier and regressor variants
     algorithm_mapping = {
         'Random Forest': {
@@ -324,6 +352,12 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
     Initialize algorithm with special handling for variant-based algorithms
     Supports: Naive Bayes variants, SVR, Ridge, Lasso, and all existing algorithms
     """
+    # Normalize problem type
+    if problem_type and 'classification' in problem_type:
+        problem_type = 'classification'
+    elif problem_type and 'regression' in problem_type:
+        problem_type = 'regression'
+        
     # Get base model class
     model_class = get_algorithm_for_problem_type(algorithm_name, problem_type)
     
@@ -386,6 +420,13 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
     try:
         algorithm_name = config['algorithm_name']
         problem_type = config.get('problem_type', 'classification')
+        
+        # Normalize problem type
+        if problem_type and 'classification' in problem_type:
+            problem_type = 'classification'
+        elif problem_type and 'regression' in problem_type:
+            problem_type = 'regression'
+            
         hyperparameters = config.get('hyperparameters', {})
         validation_method = config.get('validation_method', 'train_test_split')
         cv_folds = config.get('cv_folds', 5)
@@ -736,6 +777,11 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
         import joblib
         joblib.dump(model, model_path)
         
+        # ===== LOG ACTION =====
+        # Note: training_worker runs in a separate process, so it doesn't have access to the DB dependency directly.
+        # However, it can return a 'log_action' request in its final result.
+        # Alternatively, we can log the action in the endpoint that handles the training result.
+        
         model_info = {
             'model_id': model_id,
             'model_path': model_path,
@@ -1074,6 +1120,107 @@ async def health_check():
             "timestamp": datetime.now().isoformat()
         }
 
+# ===== DASHBOARD ENDPOINTS =====
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Aggregate dashboard statistics for the current user"""
+    print(f"📊 Dashboard Stats requested by user: {current_user.get('username')}")
+    try:
+        user_id = current_user['id']
+        from models import Dataset as DatasetModel, Model as ModelModel, UserAction
+        
+        dataset_count = db.query(DatasetModel).filter(DatasetModel.user_id == user_id).count()
+        model_count = db.query(ModelModel).filter(ModelModel.user_id == user_id).count()
+        
+        # Calculate average health score
+        total_quality = 0
+        calculated_datasets = 0
+        recent_datasets = db.query(DatasetModel).filter(DatasetModel.user_id == user_id).order_by(DatasetModel.upload_date.desc()).limit(5).all()
+        
+        for ds in recent_datasets:
+            if ds.column_metadata and 'quality_score' in ds.column_metadata:
+                total_quality += ds.column_metadata['quality_score']
+                calculated_datasets += 1
+                
+        avg_quality = int(total_quality / calculated_datasets) if calculated_datasets > 0 else 85
+        
+        # Get latest model accuracy
+        latest_model = db.query(ModelModel).filter(ModelModel.user_id == user_id).order_by(ModelModel.created_at.desc()).first()
+        best_accuracy = 0
+        if latest_model and latest_model.metrics:
+            # Check for various accuracy metric names
+            best_accuracy = latest_model.metrics.get('accuracy', latest_model.metrics.get('r2', 0))
+            
+        return {
+            "projects": dataset_count,
+            "models": model_count,
+            "dataHealth": avg_quality,
+            "bestAccuracy": round(best_accuracy * 100, 1) if best_accuracy <= 1 else round(best_accuracy, 1),
+            "recentActivityCount": db.query(UserAction).filter(UserAction.user_id == user_id).count()
+        }
+    except Exception as e:
+        print(f"❌ Dashboard Stats Error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/dashboard/activity")
+async def get_recent_activity(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Get recent user actions"""
+    print(f"📡 Recent Activity requested by user: {current_user.get('username')}")
+    try:
+        user_id = current_user['id']
+        from models import UserAction
+        
+        actions = db.query(UserAction).filter(UserAction.user_id == user_id).order_by(UserAction.created_at.desc()).limit(limit).all()
+        
+        return [
+            {
+                "id": a.id,
+                "action_type": a.action_type,
+                "details": a.action_details,
+                "resource_id": a.resource_id,
+                "resource_type": a.resource_type,
+                "created_at": a.created_at.isoformat()
+            }
+            for a in actions
+        ]
+    except Exception as e:
+        print(f"❌ Recent Activity Error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/models")
+async def list_models(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """List all models trained by user"""
+    user_id = current_user['id']
+    from models import Model as ModelModel
+    
+    models_db = db.query(ModelModel).filter(ModelModel.user_id == user_id).order_by(ModelModel.created_at.desc()).all()
+    
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "algorithm": m.algorithm,
+            "metrics": m.metrics,
+            "hyperparameters": m.hyperparameters,
+            "createdAt": m.created_at.isoformat(),
+            "dataset_id": m.dataset_id
+        }
+        for m in models_db
+    ]
+
 @app.post("/api/upload-dataset")
 async def upload_dataset(
     file: UploadFile = File(...),
@@ -1104,18 +1251,59 @@ async def upload_dataset(
             size_bytes=os.path.getsize(file_path),
             is_processed=False
         )
+        
+        # 3.1 Calculate Quality Score for Dashboard
+        try:
+            # Quick partial stats for quality score
+            missing_values = {str(col): int(df[col].isnull().sum()) for col in df.columns}
+            duplicates = int(df.duplicated().sum())
+            
+            # Simple Column Stats for quality calculation
+            col_stats = []
+            for col in df.columns:
+                unique_count = int(df[col].nunique())
+                col_stats.append({"name": str(col), "unique": unique_count})
+            
+            # Outlier count (Quick IQR)
+            outliers = 0
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            for col in numeric_cols:
+                v = df[col].dropna()
+                if len(v) > 0:
+                    q1, q3 = v.quantile([0.25, 0.75])
+                    iqr = q3 - q1
+                    outliers += int(((v < (q1 - 1.5 * iqr)) | (v > (q3 + 1.5 * iqr))).sum())
+            
+            partial_stats = {
+                "missing_values": missing_values,
+                "duplicates": duplicates,
+                "outliers": outliers,
+                "column_stats": col_stats
+            }
+            
+            quality_info = calculate_quality_score(df, partial_stats)
+            dataset.column_metadata = {"quality_score": quality_info["score"]}
+            print(f"✅ Initial Quality Score calculated: {quality_info['score']}")
+        except Exception as q_err:
+            print(f"⚠️ Could not calculate initial quality score: {q_err}")
+            dataset.column_metadata = {"quality_score": 85} # Default
+
         db.add(dataset)
         db.commit()
         db.refresh(dataset)
         
         dataset_id = str(dataset.id)
+        
+        # 3.2 Log Action
+        log_user_action(db, user_id, "upload", {"filename": file.filename, "rows": len(df)}, resource_id=dataset.id, resource_type="dataset")
 
         # 3.5 Populate Global Storage
         datasets[dataset_id] = {
             'dataframe': df,
             'filename': file.filename,
             'upload_time': datetime.now(),
-            'is_processed': False
+            'is_processed': False,
+            'user_id': user_id
         }
 
         # 4. Prepare Response
@@ -1388,7 +1576,8 @@ async def ensure_dataset_in_memory(dataset_id: str, db: Session):
             'dataframe': df,
             'filename': dataset.name,
             'upload_time': dataset.upload_date,
-            'is_processed': dataset.is_processed
+            'is_processed': dataset.is_processed,
+            'user_id': dataset.user_id
         }
         
         print(f"✅ Re-hydrated dataset {dataset_id} ({len(df)} rows)")
@@ -1635,7 +1824,7 @@ async def get_dataset_statistics(
                             "outliers_count": int(outliers_mask.sum()),
                             "zeros_pct": float((clean_series == 0).sum() / len(clean_series) * 100) if not clean_series.empty else 0
                         }
-                else:
+                else: 
                     # Calculate value counts for categorical columns
                     top_vals_series = df[col].value_counts()
                     top_15_series = top_vals_series.head(15) 
@@ -1915,63 +2104,137 @@ async def get_column_insights(
             insights["suggested_actions"].append("Extract features like Year, Month, Day, or Hour using Date/Time Handling tool.")
 
         elif is_numeric:
-            # Handle Numeric Columns
-            q = clean_data.quantile([0, 0.25, 0.5, 0.75, 1]).tolist()
-            iqr = q[3] - q[1]
-            outliers_mask = (clean_data < (q[1] - 1.5 * iqr)) | (clean_data > (q[3] + 1.5 * iqr))
-            outlier_count = int(outliers_mask.sum())
-            outlier_pct = round((outlier_count / len(clean_data)) * 100, 2) if len(clean_data) > 0 else 0
-            
-            mean = float(clean_data.mean())
-            std = float(clean_data.std()) if len(clean_data) > 1 else 0
-            skewness = float(clean_data.skew()) if len(clean_data) > 1 else 0
-            
-            # Skewness Interpretation
-            if abs(skewness) < 0.5:
-                skew_desc = "Symmetric"
-            elif 0.5 <= skewness < 1:
-                skew_desc = "Slightly Right-Skewed"
-            elif skewness >= 1:
-                skew_desc = "Right-Skewed"
-            elif -1 < skewness <= -0.5:
-                skew_desc = "Slightly Left-Skewed"
-            else:
-                skew_desc = "Left-Skewed"
+            # Handle Numeric Columns - Robust Decision System
+            n_obs = len(clean_data)
+            if n_obs > 0:
+                # Step 1: Core Statistics
+                q1 = float(clean_data.quantile(0.25))
+                q3 = float(clean_data.quantile(0.75))
+                median = float(clean_data.median())
+                iqr = q3 - q1
+                
+                # Bounds
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+                extreme_lower = q1 - 3 * iqr
+                extreme_upper = q3 + 3 * iqr
+                
+                # Outlier Counts
+                outliers_mask = (clean_data < lower_bound) | (clean_data > upper_bound)
+                extreme_outliers_mask = (clean_data < extreme_lower) | (clean_data > extreme_upper)
+                
+                outlier_count = int(outliers_mask.sum())
+                extreme_outlier_count = int(extreme_outliers_mask.sum())
+                outlier_ratio = outlier_count / n_obs if n_obs > 0 else 0
+                outlier_pct = round(outlier_ratio * 100, 2)
+                
+                # Skewness
+                raw_skewness = float(clean_data.skew()) if n_obs > 1 else 0
+                # Robust skewness = (Q3 + Q1 − 2 × Median) / IQR (if IQR ≠ 0)
+                robust_skewness = (q3 + q1 - 2 * median) / iqr if iqr != 0 else 0
+                skewness_gap = abs(abs(raw_skewness) - abs(robust_skewness))
+                
+                # Step 2 & 3: Severity and Detection
+                skewness_distorted = skewness_gap > 1 and abs(raw_skewness) > 1 and abs(robust_skewness) < 0.5
 
-            insights.update({
-                "type": "numeric",
-                "mean": mean,
-                "median": float(clean_data.median()),
-                "std": std,
-                "min": float(clean_data.min()),
-                "max": float(clean_data.max()),
-                "iqr": float(iqr),
-                "skewness": skewness,
-                "skewness_interpretation": skew_desc,
-                "distribution_type": skew_desc,
-                "outlier_pct": outlier_pct,
-                "distribution": {
-                    "histogram": {
-                        "counts": np.histogram(clean_data, bins='auto')[0].tolist(),
-                        "bin_edges": np.histogram(clean_data, bins='auto')[1].tolist()
-                    },
-                    "box_plot": {
-                        "min": q[0], "q1": q[1], "median": q[2], "q3": q[3], "max": q[4]
+                true_skewness = abs(robust_skewness) > 0.7 and skewness_gap < 0.7
+
+                
+                # Skewness Interpretation (Reporting only)
+                if abs(raw_skewness) < 0.5:
+                    skew_desc = "Symmetric"
+                elif 0.5 <= raw_skewness < 1:
+                    skew_desc = "Slightly Right-Skewed"
+                elif raw_skewness >= 1:
+                    skew_desc = "Right-Skewed"
+                elif -1 < raw_skewness <= -0.5:
+                    skew_desc = "Slightly Left-Skewed"
+                else:
+                    skew_desc = "Left-Skewed"
+
+                # Histogram computation (once)
+                hist_counts, hist_edges = np.histogram(clean_data, bins='auto')
+
+                insights.update({
+                    "type": "numeric",
+                    "mean": float(clean_data.mean()),
+                    "median": median,
+                    "std": float(clean_data.std()) if n_obs > 1 else 0,
+                    "min": float(clean_data.min()),
+                    "max": float(clean_data.max()),
+                    "iqr": iqr,
+                    "raw_skewness": raw_skewness,
+                    "robust_skewness": robust_skewness,
+                    "skewness_gap": skewness_gap,
+                    "skewness_interpretation": skew_desc,
+                    "outlier_pct": outlier_pct,
+                    "outlier_count": outlier_count,
+                    "extreme_outlier_count": extreme_outlier_count,
+                    "outlier_ratio": outlier_ratio,
+                    "distribution": {
+                        "histogram": {
+                            "counts": hist_counts.tolist(),
+                            "bin_edges": hist_edges.tolist()
+                        },
+                        "box_plot": {
+                            "min": float(clean_data.min()), "q1": q1, "median": median, "q3": q3, "max": float(clean_data.max())
+                        }
                     }
-                }
-            })
+                })
 
-            # Suggested Actions
-            if missing_pct > 20:
-                insights["suggested_actions"].append("High missing values. Consider dropping column or using advanced imputation.")
-            elif missing_pct > 0:
-                insights["suggested_actions"].append("Handle missing values using Median/Mean/Mode imputation.")
+                # Step 4: Decision Logic (Cases A-F) with Sample Size Guardrails
+                if n_obs < 30:
+                    insights["suggested_actions"].append("⚠️ Statistical recommendations are unreliable due to small sample size (N < 30). Manual review is recommended before applying transformations.")
+                else:
+                    # Severity Helper Flags
+                    is_highly_skewed = abs(robust_skewness) > 0.7
+                    has_moderate_outliers = outlier_ratio >= 0.02
+                    has_extreme_outliers = extreme_outlier_count > 0
+                    
+                    # Case A: Skewness Driven Primarily by Outliers (Explosion of raw skewness vs robust)
+                    if skewness_distorted:
+                        insights["suggested_actions"].append("Recommend handling extreme outliers first. High raw skewness is likely an outlier-driven distortion (Core distribution is symmetric).")
 
-            if outlier_pct > 5:
-                insights["suggested_actions"].append("Significant outliers detected. Try Capping or Removal in Advanced Prep.")
-            
-            if abs(skewness) > 1:
-                insights["suggested_actions"].append("High skewness detected. Consider Log or Power transformation.")
+                    elif outlier_ratio > 0.15:
+                        insights["suggested_actions"].append(
+                            "High proportion of values flagged as outliers (>15%). "
+                            "This likely indicates a naturally heavy-tailed or zero-inflated distribution, "
+                            "not isolated anomalies. Avoid aggressive capping. Consider transformation or domain review."
+                        )
+
+                    # Case B: Extreme Outliers Present, Low Overall Outlier Ratio   
+                    elif has_extreme_outliers and outlier_ratio < 0.05:
+                        insights["suggested_actions"].append("Recommend outlier capping. Few extreme anomalies are distorting statistics.")
+                        if is_highly_skewed:
+                            insights["suggested_actions"].append("Recommend transformation (Log, Yeo-Johnson, or Box-Cox) due to true distribution skewness.")
+
+                    # Case C: High Robust Skewness, Low Outlier Ratio
+                    elif is_highly_skewed and outlier_ratio < 0.02:
+                        insights["suggested_actions"].append("Recommend transformation (Log, Yeo-Johnson, or Box-Cox). Distribution is naturally skewed (True distribution skewness).")
+
+                    # Case D: High Skewness and Moderate/High Outliers
+                    elif is_highly_skewed and has_moderate_outliers:
+                        insights["suggested_actions"].append("Suggest handling outliers (capping or review) first, then transformation. Both outliers and natural skewness are present.")
+
+                    # Case E: Outliers Present but Low Robust Skewness
+                    elif outlier_ratio > 0.01 and abs(robust_skewness) < 0.3:
+                        insights["suggested_actions"].append("Optional outlier capping. Core distribution is symmetric; outliers are isolated noise.")
+
+                    # Case F: No Significant Issues or Fallback
+                    else:
+                        if outlier_ratio < 0.01 and abs(robust_skewness) < 0.3:
+                            if missing_pct == 0:
+                                insights["suggested_actions"].append("No outlier handling or transformation required. Distribution is stable.")
+                        elif is_highly_skewed: # Catch-all for skewness if other cases missed
+                            insights["suggested_actions"].append("Recommend transformation (Log, Yeo-Johnson, or Box-Cox).")
+                        elif has_moderate_outliers: # Catch-all for outliers
+                            insights["suggested_actions"].append("Recommend handling outliers (capping or review).")
+
+                # Add missing value recommendations (Common across all numeric)
+                if missing_pct > 20:
+                    insights["suggested_actions"].append("High missing values. Consider dropping column or using advanced imputation.")
+                elif missing_pct > 0:
+                    insights["suggested_actions"].append("Handle missing values using Median/Mean/Mode imputation.")
 
         else:
             # Handle Categorical Columns
@@ -2124,6 +2387,20 @@ async def preprocess(
         
         categorical_encoded = False
         encoded_columns = []
+        
+        # ✅ Identify target column to exclude it from bulk processing
+        target_column = None
+        if dataset_id in datasets and 'target_column' in datasets[dataset_id]:
+             target_column = datasets[dataset_id]['target_column']
+        elif 'target_column' in config:
+             target_column = config['target_column']
+             # Handle JSON target
+             if isinstance(target_column, str) and target_column.startswith('{'):
+                 try:
+                     import json
+                     target_json = json.loads(target_column)
+                     target_column = target_json.get('name')
+                 except: pass
 
         for i, step in enumerate(steps, 1):
             step_type = step.get("type")
@@ -2148,6 +2425,12 @@ async def preprocess(
             elif step_type == "handle_outliers":
                 method = step.get("method", "remove")
                 numeric_cols = preprocessor.df.select_dtypes(include=np.number).columns.tolist()
+                
+                # ✅ CRITICAL: Exclude target column from outlier handling
+                if target_column and target_column in numeric_cols:
+                    print(f"  Skipping outlier handling for target column: {target_column}")
+                    numeric_cols.remove(target_column)
+                    
                 if numeric_cols:
                     preprocessor.handle_outliers(numeric_cols, method="iqr", strategy=method)
 
@@ -2162,33 +2445,20 @@ async def preprocess(
                             categorical_encoded = True
                             encoded_columns.append(col)
 
-        # 4. Save Processed Dataset
+        # 4. Update in-memory storage (Managed Versioning)
         processed_df = preprocessor.get_processed_dataframe()
         processed_rows = len(processed_df)
         
-        # Generate filename
-        original_name = dataset.name.replace('.csv', '').replace('.parquet', '')
-        new_filename = f"{original_name}_cleaned"
+        # Update core global storage
+        datasets[dataset_id]['dataframe'] = processed_df
+        datasets[dataset_id]['is_processed'] = True
         
-        # Save to disk
-        file_path = file_service.save_dataframe(processed_df, current_user['id'], new_filename, is_processed=True)
-        
-        # 5. Create DB Record
-        new_dataset = DatasetModel(
-            user_id=current_user['id'],
-            name=new_filename,
-            storage_path=file_path,
-            row_count=processed_rows,
-            column_count=len(processed_df.columns),
-            size_bytes=os.path.getsize(file_path),
-            is_processed=True,
-            parent_dataset_id=dataset.id
-        )
-        db.add(new_dataset)
-        db.commit()
-        db.refresh(new_dataset)
-        
-        new_dataset_id = str(new_dataset.id)
+        # 5. Log Action (Ephemeral)
+        log_user_action(db, current_user['id'], "cleaning_draft", {
+            "dataset_id": dataset_id,
+            "original_rows": original_rows,
+            "processed_rows": processed_rows
+        })
 
         # 6. Prepare Preview
         sample_size = min(200, len(processed_df))
@@ -2221,7 +2491,7 @@ async def preprocess(
             "rows_removed": original_rows - processed_rows,
             "categorical_encoded": categorical_encoded,
             "encoded_columns": encoded_columns,
-            "cleaned_dataset_id": new_dataset_id
+            "cleaned_dataset_id": dataset_id
         }
 
     except Exception as e:
@@ -2287,10 +2557,6 @@ async def export_cleaned_dataset(dataset_id: str):
     
     
     
-
-
-
-
 
 
 
@@ -3169,6 +3435,7 @@ class DateTimeRequest(BaseModel):
     features: List[str]
     cyclic: bool = False
     drop_original: bool = True
+    target_column: Union[str, Dict, None] = None
 
 @app.post("/api/datasets/apply-scaling")
 @app.post("/api/datasets/apply-scaling")
@@ -3886,10 +4153,12 @@ async def get_datasets(
         return [
             {
                 "id": str(d.id),
-                "filename": d.name,
+                "name": d.name,          # Frontend expected name
+                "filename": d.name,      # Backward compatibility
                 "upload_time": d.upload_date.isoformat(),
                 "size_bytes": d.size_bytes,
-                "row_count": d.row_count,
+                "rows": d.row_count,      # Frontend expected rows
+                "row_count": d.row_count, # Backward compatibility
                 "column_count": d.column_count,
                 "is_processed": d.is_processed
             }
@@ -3988,6 +4257,7 @@ async def train_model_websocket(websocket: WebSocket):
         validation_method = config.get('validation_method', 'train_test_split')
         cv_folds = config.get('cv_folds', 5)
         hyperparameters = config.get('hyperparameters', {})
+        problem_type_from_config = config.get('problem_type')
         
         print(f"🚀 Starting training with algorithm: {algorithm_name}")
         print(f"📊 Hyperparameters: {hyperparameters}")
@@ -4110,8 +4380,14 @@ async def train_model_websocket(websocket: WebSocket):
                 
         
         # ===== DETECT PROBLEM TYPE FROM PREPROCESSED DATA =====
-        problem_type = detect_problem_type(y_train)
+        problem_type = problem_type_from_config or detect_problem_type(y_train)
         
+        # ✅ Normalize problem type for internal logic consistency
+        if problem_type and 'classification' in problem_type.lower():
+            problem_type = 'classification'
+        elif problem_type and 'regression' in problem_type.lower():
+            problem_type = 'regression'
+            
         await websocket.send_text(json.dumps({
             'status': 'analyzing',
             'message': f'🔍 Detected: {problem_type.upper()}',
@@ -4120,17 +4396,28 @@ async def train_model_websocket(websocket: WebSocket):
         
         # ===== ENCODE TARGET IF CATEGORICAL =====
         target_encoder = None
-        # Only encode if it's classification AND target is categorical
-        if problem_type == 'classification' and hasattr(y_train, 'dtype') and pd.api.types.is_object_dtype(y_train):
-            target_encoder = LabelEncoder()
-            y_train = target_encoder.fit_transform(y_train.astype(str))
-            y_test = target_encoder.transform(y_test.astype(str))
-            
-            await websocket.send_text(json.dumps({
-                'status': 'preprocessing',
-                'message': f'🏷️ Encoded target: {len(target_encoder.classes_)} classes',
-                'timestamp': datetime.now().timestamp()
-            }))
+        # Robust handling for classification: Ensure labels are discrete
+        if problem_type == 'classification':
+            if hasattr(y_train, 'dtype') and pd.api.types.is_object_dtype(y_train):
+                target_encoder = LabelEncoder()
+                y_train = target_encoder.fit_transform(y_train.astype(str))
+                y_test = target_encoder.transform(y_test.astype(str))
+                
+                await websocket.send_text(json.dumps({
+                    'status': 'preprocessing',
+                    'message': f'🏷️ Encoded target: {len(target_encoder.classes_)} classes',
+                    'timestamp': datetime.now().timestamp()
+                }))
+            elif pd.api.types.is_numeric_dtype(y_train):
+                # Force numeric labels to integers to avoid "continuous" errors from float noise
+                print("   🎯 [Training] Casting numeric classification target to int to ensure discrete labels")
+                # Handle potential NaNs or infs before casting to avoid errors
+                if hasattr(y_train, 'replace'):
+                    y_train = y_train.replace([np.inf, -np.inf], 0).fillna(0).astype(int)
+                    y_test = y_test.replace([np.inf, -np.inf], 0).fillna(0).astype(int)
+                else:
+                    y_train = y_train.astype(int)
+                    y_test = y_test.astype(int)
         
         # ===== CONVERT TO NUMPY IF NEEDED =====
         # Ensure data is in numpy array format for sklearn
@@ -4274,6 +4561,32 @@ async def train_model_websocket(websocket: WebSocket):
                             if 'visualization_data' in update:
                                 visualization_data[model_id] = update['visualization_data']
                             
+                            # Store in DB for persistence
+                            try:
+                                from models import Model as ModelModel
+                                new_model_record = ModelModel(
+                                    user_id=dataset_info.get('user_id') if isinstance(dataset_info, dict) else (dataset_info.user_id if hasattr(dataset_info, 'user_id') else 1),
+                                    dataset_id=int(dataset_id),
+                                    name=f"{algorithm_name} Model",
+                                    algorithm=algorithm_name,
+                                    storage_path=model_info['model_path'],
+                                    metrics=model_info['final_metrics'],
+                                    hyperparameters=model_info['hyperparameters']
+                                )
+                                db.add(new_model_record)
+                                db.commit()
+                                db.refresh(new_model_record)
+                                
+                                # Log Action
+                                log_user_action(db, new_model_record.user_id, "train", {
+                                    "algorithm": algorithm_name, 
+                                    "accuracy": model_info['final_metrics'].get('accuracy', model_info['final_metrics'].get('r2', 0))
+                                }, resource_id=new_model_record.id, resource_type="model")
+                                
+                            except Exception as e:
+                                print(f"⚠️ Failed to save model to DB: {e}")
+                                db.rollback()
+                            
                             await websocket.send_text(json.dumps({
                                 'status': 'completed',
                                 'model_id': model_id,
@@ -4347,18 +4660,42 @@ async def get_model_info(model_id: str):
     return trained_models[model_id]
 
 @app.get("/api/models/{model_id}/download")
-async def download_model(model_id: str):
+async def download_model(
+    model_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Download the trained model file"""
-    if model_id not in trained_models:
-        raise HTTPException(status_code=404, detail="Model not found")
+    model_path = None
+    model_name = "model"
     
-    model_info = trained_models[model_id]
-    model_path = model_info.get('model_path')
+    # 1. Check in-memory storage (most recent)
+    if model_id in trained_models:
+        model_info = trained_models[model_id]
+        model_path = model_info.get('model_path')
     
+    # 2. Check Database if not in memory
+    if not model_path:
+        model_db = db.query(ModelModel).filter(
+            ModelModel.id == model_id,
+            ModelModel.user_id == current_user['id']
+        ).first()
+        
+        if not model_db:
+            # Try UUID string match if ID is string (compatibility)
+            model_db = db.query(ModelModel).filter(
+                ModelModel.user_id == current_user['id']
+            ).all()
+            model_db = next((m for m in model_db if str(m.id) == model_id), None)
+            
+        if model_db:
+            model_path = model_db.storage_path
+            model_name = model_db.name.replace(" ", "_")
+        
     if not model_path or not os.path.exists(model_path):
         raise HTTPException(status_code=404, detail="Model file not found on server")
     
-    filename = f"{model_id}.joblib"
+    filename = f"{model_name}.joblib"
     return FileResponse(
         path=model_path,
         filename=filename,
@@ -4389,8 +4726,6 @@ async def debug_info():
 # PREPROCESSING ENDPOINTS
 # ============================================
 
-from pydantic import BaseModel
-from typing import List, Dict, Union, Any
 
 class DropColumnsRequest(BaseModel):
     columns: List[str]
@@ -4398,12 +4733,17 @@ class DropColumnsRequest(BaseModel):
 class MissingValueRequest(BaseModel):
     strategy: str  # 'droprows', 'fillmean', etc.
     columns: List[str]
+    target_column: Union[str, Dict, None] = None
 
 class OutlierRequest(BaseModel):
     method: str  # 'cap', 'remove'
+    target_column: Union[str, Dict, None] = None
 
 class DuplicateRequest(BaseModel):
     keep: str  # 'first', 'last', 'all'
+
+class SaveVersionRequest(BaseModel):
+    version_name: str
 
 # Helper to save dataset state
 def save_dataset_state(dataset_id: str, df: pd.DataFrame, log_entry: dict = None):
@@ -4424,6 +4764,93 @@ def save_dataset_state(dataset_id: str, df: pd.DataFrame, log_entry: dict = None
     if log_entry:
         datasets[dataset_id]['processing_log'].append(log_entry)
 
+@app.post("/api/datasets/{dataset_id}/save-version")
+async def save_dataset_version(
+    dataset_id: str,
+    request: SaveVersionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Persist the current in-memory state of a dataset as a new version"""
+    if dataset_id not in datasets:
+        # Try to re-hydrate if missing
+        await ensure_dataset_in_memory(dataset_id, db)
+        if dataset_id not in datasets:
+            raise HTTPException(status_code=404, detail="Dataset not found in memory or DB")
+        
+    try:
+        df = datasets[dataset_id]['dataframe']
+        user_id = current_user['id']
+        version_name = request.version_name
+        
+        # 1. Save to disk
+        file_path = file_service.save_dataframe(df, user_id, version_name, is_processed=True)
+        
+        # 2. Fetch parent ID
+        try:
+            parent_id = int(dataset_id)
+        except:
+            parent_id = None
+        
+        # 3. Create DB Record
+        new_dataset = DatasetModel(
+            user_id=user_id,
+            name=version_name,
+            storage_path=file_path,
+            row_count=len(df),
+            column_count=len(df.columns),
+            size_bytes=os.path.getsize(file_path),
+            is_processed=True,
+            parent_dataset_id=parent_id
+        )
+        
+        # 3.1 Calculate Quality Score
+        try:
+            missing_values = {str(col): int(df[col].isnull().sum()) for col in df.columns}
+            duplicates = int(df.duplicated().sum())
+            col_stats = [{"name": str(col), "unique": int(df[col].nunique())} for col in df.columns]
+            
+            outliers = 0
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            for col in numeric_cols:
+                v = df[col].dropna()
+                if len(v) > 0:
+                    q1, q3 = v.quantile([0.25, 0.75])
+                    iqr = q3 - q1
+                    outliers += int(((v < (q1 - 1.5 * iqr)) | (v > (q3 + 1.5 * iqr))).sum())
+            
+            partial_stats = {
+                "missing_values": missing_values, "duplicates": duplicates,
+                "outliers": outliers, "column_stats": col_stats
+            }
+            quality_info = calculate_quality_score(df, partial_stats)
+            new_dataset.column_metadata = {"quality_score": quality_info["score"]}
+        except Exception as q_err:
+            print(f"⚠️ Could not calculate version quality score: {q_err}")
+
+        db.add(new_dataset)
+        db.commit()
+        db.refresh(new_dataset)
+        
+        # 4. Log Action
+        log_user_action(db, user_id, "save_version", {
+            "version_name": version_name,
+            "parent_id": parent_id,
+            "rows": len(df)
+        }, resource_id=new_dataset.id, resource_type="dataset")
+        
+        return {
+            "success": True,
+            "dataset_id": str(new_dataset.id),
+            "name": new_dataset.name,
+            "message": f"Successfully saved version '{version_name}'"
+        }
+        
+    except Exception as e:
+        print(f"Error saving dataset version: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/datasets/{dataset_id}/preprocessing/drop-columns")
 async def drop_columns(dataset_id: str, request: DropColumnsRequest, current_user: dict = Depends(auth.get_current_user)):
     """Drop specified columns"""
@@ -4443,6 +4870,12 @@ async def drop_columns(dataset_id: str, request: DropColumnsRequest, current_use
             'columns': request.columns,
             'timestamp': datetime.now().isoformat()
         })
+        
+        # Log Action
+        log_user_action(db, current_user['id'], "cleaning", {
+            "sub_action": "drop_columns",
+            "columns": request.columns
+        }, resource_id=int(dataset_id), resource_type="dataset")
         
         return {
             "success": True, 
@@ -4467,6 +4900,22 @@ async def handle_missing_values_route(dataset_id: str, request: MissingValueRequ
         # Convert request to expected format {col: strategy}
         strategies = {col: request.strategy for col in request.columns}
         
+        # ✅ Identify and exclude target column
+        target_column = request.target_column
+        if not target_column and dataset_id in datasets:
+             target_column = datasets[dataset_id].get('target_column')
+             
+        if isinstance(target_column, str) and target_column.startswith('{'):
+             try:
+                 import json
+                 target_json = json.loads(target_column)
+                 target_column = target_json.get('name')
+             except: pass
+             
+        if target_column and target_column in strategies:
+            print(f"   Skipping target column '{target_column}' during missing value handling")
+            del strategies[target_column]
+        
         print(f"Applying missing value strategy: {request.strategy} for {len(strategies)} columns")
         
         df_new = processor.handle_missing_values(strategies)
@@ -4477,6 +4926,13 @@ async def handle_missing_values_route(dataset_id: str, request: MissingValueRequ
             'columns': request.columns,
             'timestamp': datetime.now().isoformat()
         })
+        
+        # Log Action
+        log_user_action(db, current_user['id'], "cleaning", {
+            "sub_action": "handle_missing",
+            "strategy": request.strategy,
+            "columns": request.columns
+        }, resource_id=int(dataset_id), resource_type="dataset")
         
         return {
             "success": True,
@@ -4504,6 +4960,22 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, curren
         # Check semantic types to verify they are actually numeric
         if metadata:
             numeric_cols = [c for c in numeric_cols if metadata.get(c, {}).get('semantic_type') == 'numeric']
+            
+        # ✅ Identify and exclude target column
+        target_column = request.target_column
+        if not target_column and dataset_id in datasets:
+             target_column = datasets[dataset_id].get('target_column')
+             
+        if isinstance(target_column, str) and target_column.startswith('{'):
+             try:
+                 import json
+                 target_json = json.loads(target_column)
+                 target_column = target_json.get('name')
+             except: pass
+             
+        if target_column and target_column in numeric_cols:
+            print(f"   Skipping target column '{target_column}' during outlier handling")
+            numeric_cols.remove(target_column)
         
         print(f"Checking outliers in {len(numeric_cols)} numeric columns using {request.method} method")
         
@@ -4523,6 +4995,13 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, curren
             'method': detection_method,
             'timestamp': datetime.now().isoformat()
         })
+        
+        # Log Action
+        log_user_action(db, current_user['id'], "cleaning", {
+            "sub_action": "handle_outliers",
+            "strategy": strategy,
+            "method": detection_method
+        }, resource_id=int(dataset_id), resource_type="dataset")
         
         return {
             "success": True,
@@ -4551,6 +5030,12 @@ async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, cu
             'timestamp': datetime.now().isoformat()
         })
         
+        # Log Action
+        log_user_action(db, current_user['id'], "cleaning", {
+            "sub_action": "remove_duplicates",
+            "strategy": request.keep
+        }, resource_id=int(dataset_id), resource_type="dataset")
+        
         return {
             "success": True,
             "message": "Duplicates removed",
@@ -4574,8 +5059,28 @@ async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, db: S
         
         print(f"Extracting features from {len(request.columns)} datetime columns")
         
+        # ✅ Identify and exclude target column
+        process_columns = list(request.columns)
+        target_column = request.target_column
+        if not target_column and dataset_id in datasets:
+             target_column = datasets[dataset_id].get('target_column')
+             
+        if isinstance(target_column, str) and target_column.startswith('{'):
+             try:
+                 import json
+                 target_json = json.loads(target_column)
+                 target_column = target_json.get('name')
+             except: pass
+             
+        if target_column and target_column in process_columns:
+            print(f"   Skipping target column '{target_column}' during datetime extraction")
+            process_columns.remove(target_column)
+
+        if not process_columns:
+             return {"success": True, "message": "No columns to process (target excluded)", "current_shape": list(df.shape)}
+
         df_new = processor.handle_datetime_features(
-            columns=request.columns,
+            columns=process_columns,
             features=request.features,
             cyclic_encoding=request.cyclic,
             drop_original=request.drop_original

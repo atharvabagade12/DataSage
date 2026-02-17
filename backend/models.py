@@ -52,3 +52,19 @@ class Model(Base):
 
     owner = relationship("User", back_populates="models")
     dataset = relationship("Dataset", back_populates="models")
+
+class UserAction(Base):
+    __tablename__ = "user_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action_type = Column(String, nullable=False) # upload, train, preprocess, delete
+    action_details = Column(JSON, nullable=True) # e.g. {"filename": "data.csv", "accuracy": 0.85}
+    resource_id = Column(Integer, nullable=True) # ID of dataset or model
+    resource_type = Column(String, nullable=True) # "dataset" or "model"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="user_actions")
+
+# Add relationship to User class
+User.user_actions = relationship("UserAction", back_populates="user")

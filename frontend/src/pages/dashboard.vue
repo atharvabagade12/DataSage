@@ -22,10 +22,10 @@
       
       <div class="nav-center">
         <div class="nav-links">
-          <a href="#" class="nav-link active">Dashboard</a>
-          <a href="#" class="nav-link">Projects</a>
-          <a href="#" class="nav-link">Analytics</a>
-          <a href="#" class="nav-link">Models</a>
+          <button @click="activeDashboardTab = 'dashboard'" :class="['nav-link', { active: activeDashboardTab === 'dashboard' }]">Dashboard</button>
+          <button @click="activeDashboardTab = 'projects'" :class="['nav-link', { active: activeDashboardTab === 'projects' }]">Projects</button>
+          <button @click="activeDashboardTab = 'analytics'" :class="['nav-link', { active: activeDashboardTab === 'analytics' }]">Analytics</button>
+          <button @click="activeDashboardTab = 'models'" :class="['nav-link', { active: activeDashboardTab === 'models' }]">Models</button>
         </div>
       </div>
       
@@ -34,11 +34,10 @@
           <div class="user-avatar">{{ userInitials }}</div>
           <div class="user-info">
             <span class="user-name">{{ userName }}</span>
-            
           </div>
-          <button @click="logout" class="logout-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+          <button @click="logout" class="logout-btn" title="Logout">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
             </svg>
           </button>
         </div>
@@ -46,333 +45,399 @@
     </nav>
 
     <!-- Main Content -->
-    <div class="dashboard-content">
-      <!-- Welcome Section -->
-      <div class="welcome-section">
-        <h1>Welcome back, {{ userName }}!</h1>
-        <p>Ready to build some amazing ML models? Let's get started.</p>
-      </div>
+    <div v-if="isLoading" class="loader-container">
+        <div class="premium-loader"></div>
+        <p>Intelligence gathering in progress...</p>
+    </div>
 
-      <!-- Summary Cards Grid -->
-      <div class="cards-grid">
-        <!-- My Projects Card -->
-        <div class="dashboard-card projects-card">
-          <div class="card-header">
-            <div class="card-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
-              </svg>
+    <div v-else class="dashboard-content">
+      <!-- ===== DASHBOARD TAB ===== -->
+      <transition name="fade-slide">
+        <div v-if="activeDashboardTab === 'dashboard'" class="tab-view dashboard-view">
+          <div class="welcome-section">
+            <div class="welcome-text">
+              <h1>Welcome back, <span class="gradient-text">{{ userName }}</span>!</h1>
+              <p>Ready to build some amazing ML models? Let's get started.</p>
             </div>
-            <h3>My Projects</h3>
-          </div>
-          <div class="card-body">
-            <div class="metric-value">{{ stats.projects }}</div>
-            <div class="metric-label">Active Projects</div>
-            <button @click="createNewProject" class="primary-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            <button @click="fetchData(true)" class="refresh-btn-mini" title="Sync Data">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
               </svg>
-              New Project
             </button>
           </div>
-        </div>
 
-        <!-- Recent Datasets Card -->
-        <div class="dashboard-card datasets-card">
-          <div class="card-header">
-            <div class="card-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-              </svg>
-            </div>
-            <h3>Recent Datasets</h3>
-          </div>
-          <div class="card-body">
-            <div v-if="recentDataset" class="dataset-info">
-              <div class="dataset-name">{{ recentDataset.name }}</div>
-              <div class="dataset-meta">
-                {{ recentDataset.rows.toLocaleString() }} rows • {{ recentDataset.columns }} cols
+          <div class="kpi-grid">
+            <div class="kpi-card premium project" @click="activeDashboardTab = 'projects'">
+              <div class="kpi-icon-circle blue">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
               </div>
-              <div class="dataset-date">{{ formatDate(recentDataset.uploadedAt) }}</div>
+              <div class="kpi-info">
+                <div class="kpi-label">My Projects</div>
+                <div class="kpi-value">{{ dashboardStats.projects }}</div>
+                <div class="kpi-sub">Active Datasets</div>
+              </div>
             </div>
-            <div v-else class="no-data">
-              <div class="empty-state">No datasets uploaded yet</div>
-              <button @click="scrollToUpload" class="secondary-btn">Upload Below</button>
+
+            <div class="kpi-card premium dataset">
+              <div class="kpi-icon-circle purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path>
+                </svg>
+              </div>
+              <div class="kpi-info">
+                <div class="kpi-label">Latest Upload</div>
+                <div class="latest-entry" v-if="allDatasets.length">
+                  <div class="entry-name">{{ allDatasets[0].name }}</div>
+                  <div class="entry-meta">{{ allDatasets[0].rows?.toLocaleString() }} rows</div>
+                </div>
+                <div v-else class="latest-entry empty">No data yet</div>
+              </div>
+            </div>
+
+            <div class="kpi-card premium health" @click="activeDashboardTab = 'analytics'">
+              <div class="kpi-icon-circle emerald">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                </svg>
+              </div>
+              <div class="kpi-content-row">
+                <div class="kpi-info">
+                  <div class="kpi-label">Data Health</div>
+                  <div class="health-percentage">{{ dashboardStats.dataHealth }}%</div>
+                  <div class="kpi-sub">Quality Score</div>
+                </div>
+                <div class="health-donut-mini">
+                  <svg viewBox="0 0 36 36" class="circular-chart">
+                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path class="circle" :stroke-dasharray="`${dashboardStats.dataHealth}, 100`" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="kpi-card premium training" @click="activeDashboardTab = 'models'">
+              <div class="kpi-icon-circle indigo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+              </div>
+              <div class="kpi-info">
+                <div class="kpi-label">Models Trained</div>
+                <div class="kpi-value">{{ dashboardStats.models }}</div>
+                <div class="kpi-sub">Total Experiments</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="quick-actions-section">
+            <h2 class="section-title">Quick Actions</h2>
+            <div class="quick-actions-grid">
+              <div class="action-card" @click="triggerFileInput">
+                <div class="action-icon upload">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                  </svg>
+                </div>
+                <div class="action-text">
+                  <h3>Upload Dataset</h3>
+                  <p>Start a new ML experiment</p>
+                </div>
+              </div>
+              
+              <div class="action-card" @click="useSampleData">
+                <div class="action-icon sample">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2H2v10h10V2zM22 12h-10v10h10V12zM12 12H2v10h10V12zM22 2h-10v10h10V2z"/>
+                  </svg>
+                </div>
+                <div class="action-text">
+                  <h3>Sample Data</h3>
+                  <p>Quick start with curated data</p>
+                </div>
+              </div>
+
+              <div class="action-card">
+                <div class="action-icon learn">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5V5A2.5 2.5 0 0 1 6.5 2.5H20"/>
+                  </svg>
+                </div>
+                <div class="action-text">
+                  <h3>Learn DataSage</h3>
+                  <p>Explore guided tutorials</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shrunken Center Upload Section -->
+          <div class="upload-immersive-section">
+            <div class="upload-compact-container glass">
+              <div class="upload-header-compact">
+                <h2>Import Intelligence</h2>
+                <p>CSV or JSON formats supported (Max 1GB)</p>
+              </div>
+              
+              <div ref="uploadSection" class="upload-compact-zone"
+                   :class="{ 'drag-over': dragOver, 'uploading': isUploading, 'success': uploadSuccess }"
+                   @dragover.prevent="dragOver = true"
+                   @dragleave.prevent="dragOver = false"
+                   @drop.prevent="handleDrop"
+                   @click="triggerFileInput">
+                
+                <input type="file" ref="fileInput" class="hidden-input" @change="handleFileSelect" accept=".csv,.json">
+                
+                <div v-if="!isUploading && !uploadSuccess" class="upload-prompt-compact">
+                  <div class="prompt-icon-mini">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="1.5">
+                      <path d="M12 3v12M17 8l-5-5-5 5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    </svg>
+                  </div>
+                  <h3>Drop file to analyze</h3>
+                  <p>or click to browse</p>
+                  <div class="format-badges">
+                    <span>CSV</span>
+                    <span>JSON</span>
+                  </div>
+                </div>
+
+                <div v-if="isUploading" class="upload-progress-compact">
+                  <div class="premium-spinner"></div>
+                  <h3>Analyzing Data...</h3>
+                  <div class="mini-progress-bar">
+                    <div class="fill" :style="{ width: uploadProgress + '%' }"></div>
+                  </div>
+                  <p>{{ uploadMessage }}</p>
+                </div>
+
+                <transition name="scale">
+                  <div v-if="uploadSuccess" class="upload-success-compact">
+                    <div class="success-icon-wrap">✓</div>
+                    <h3>{{ uploadedFile?.filename }} Ready</h3>
+                    <button @click.stop="goToPreview" class="launch-btn-premium">Launch Data Lab</button>
+                  </div>
+                </transition>
+              </div>
             </div>
           </div>
         </div>
+      </transition>
 
-        <!-- Data Health Card -->
-        <div class="dashboard-card health-card">
-          <div class="card-header">
-            <div class="card-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7.07,18.28C7.5,17.38 8.12,16.5 8.91,15.77C9.71,15.04 10.69,14.5 11.71,14.21C9.04,13.3 7,10.79 7,8A5,5 0 0,1 12,3A5,5 0 0,1 17,8C17,10.79 14.96,13.3 12.29,14.21C13.31,14.5 14.29,15.04 15.09,15.77C15.88,16.5 16.5,17.38 16.93,18.28C15.39,19.36 13.72,20 12,20C10.28,20 8.61,19.36 7.07,18.28Z"/>
-              </svg>
+      <!-- ===== PROJECTS TAB ===== -->
+      <transition name="fade-slide">
+        <div v-if="activeDashboardTab === 'projects'" class="tab-view inventory-view">
+          <div class="view-header">
+            <div class="header-main">
+              <h2>Project Inventory</h2>
+              <p>Manage all your uploaded datasets and historical progress</p>
             </div>
-            <h3>Data Health</h3>
-          </div>
-          <div class="card-body">
-            <div class="health-gauge">
-              <svg class="gauge" viewBox="0 0 100 100">
-                <circle class="gauge-bg" cx="50" cy="50" r="40" fill="none" stroke-width="8"/>
-                <circle 
-                  class="gauge-fill" 
-                  cx="50" 
-                  cy="50" 
-                  r="40" 
-                  fill="none" 
-                  stroke-width="8"
-                  :stroke-dasharray="251"
-                  :stroke-dashoffset="251 - (dataHealth / 100) * 251"
-                  transform="rotate(-90 50 50)"
-                />
-                <text x="50" y="50" class="gauge-text" text-anchor="middle" dominant-baseline="middle">
-                  {{ dataHealth }}%
-                </text>
-              </svg>
-            </div>
-            <div class="health-label">Overall Quality</div>
-          </div>
-        </div>
-
-        <!-- Models Trained Card -->
-        <div class="dashboard-card models-card">
-          <div class="card-header">
-            <div class="card-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9,5A4,4 0 0,1 13,9A4,4 0 0,1 9,13A4,4 0 0,1 5,9A4,4 0 0,1 9,5M9,15C11.67,15 17,16.34 17,19V21H1V19C1,16.34 6.33,15 9,15M16.76,5.36C18.78,7.56 18.78,10.61 16.76,12.63L15.08,10.94C15.92,9.76 15.92,8.23 15.08,7.05L16.76,5.36M20.07,2C24,6.05 23.97,12.11 20.07,16.07L18.44,14.44C21.21,11.19 21.21,6.65 18.44,3.63L20.07,2Z"/>
-              </svg>
-            </div>
-            <h3>Models Trained</h3>
-          </div>
-          <div class="card-body">
-            <div class="metric-value">{{ stats.models }}</div>
-            <div class="metric-label">Total Models</div>
-            <div class="sparkline">
-              <svg width="100%" height="30" viewBox="0 0 100 30">
-                <polyline 
-                  :points="sparklinePoints" 
-                  fill="none" 
-                  stroke="url(#sparklineGradient)" 
-                  stroke-width="2"
-                />
-                <defs>
-                  <linearGradient id="sparklineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="#667eea"/>
-                    <stop offset="100%" stop-color="#764ba2"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-            <button @click="trainModel" class="secondary-btn">Train New Model</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Actions Section -->
-      <div class="quick-actions">
-        <h2>Quick Actions</h2>
-        <div class="actions-grid">
-          <button @click="scrollToUpload" class="action-card">
-            <div class="action-icon upload">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-              </svg>
-            </div>
-            <h3>Upload Dataset</h3>
-            <p>Start your ML journey by uploading your data</p>
-          </button>
-
-          <button @click="useSampleData" class="action-card">
-            <div class="action-icon sample">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19,3H5C3.9,3 3,3.9 3,5V19C3,20.1 3.9,21 5,21H19C20.1,21 21,20.1 21,19V5C21,3.9 20.1,3 19,3M19,19H5V5H19V19Z"/>
-              </svg>
-            </div>
-            <h3>Sample Datasets</h3>
-            <p>Try DataSage with pre-loaded sample data</p>
-          </button>
-
-          <button @click="viewTutorials" class="action-card">
-            <div class="action-icon tutorial">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19,3A2,2 0 0,1 21,5V19A2,2 0 0,1 19,21H5A2,2 0 0,1 3,19V5A2,2 0 0,1 5,3H19M12,17L17,12L15.59,10.59L12,14.17L8.41,10.59L7,12L12,17Z"/>
-              </svg>
-            </div>
-            <h3>Learn DataSage</h3>
-            <p>Master ML workflows with guided tutorials</p>
-          </button>
-        </div>
-      </div>
-
-      <!-- Inline Upload Section -->
-      <div ref="uploadSection" class="upload-section">
-        <h2>Ready to Start? Upload Your Dataset</h2>
-        <p class="upload-subtitle">Drop your file below and we'll automatically take you to the data preview</p>
-        
-        <div 
-          class="inline-uploader"
-          :class="{ 
-            'drag-over': dragOver, 
-            'uploading': isUploading,
-            'success': uploadSuccess
-          }"
-          @dragover.prevent="dragOver = true"
-          @dragleave="dragOver = false"
-          @drop.prevent="handleDrop"
-          @click="triggerFileInput"
-        >
-          <input 
-            ref="fileInput" 
-            type="file" 
-            accept=".csv,.xlsx,.xls,.json" 
-            @change="handleFileSelect" 
-            style="display: none;"
-          />
-
-          <!-- Initial State -->
-          <div v-if="!isUploading && !uploadSuccess" class="upload-initial">
-            <div class="upload-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-              </svg>
-            </div>
-            <h3>Drop your dataset here</h3>
-            <p>Or click to browse your files</p>
-            <div class="supported-formats">
-              <span class="format-badge">CSV</span>
-              <span class="format-badge">Excel</span>
-              <span class="format-badge">JSON</span>
-            </div>
+            
           </div>
 
-          <!-- Uploading State -->
-          <div v-if="isUploading" class="upload-processing">
-            <div class="processing-spinner">
-              <svg viewBox="0 0 50 50">
-                <circle 
-                  cx="25" 
-                  cy="25" 
-                  r="20" 
-                  fill="none" 
-                  stroke="#667eea" 
-                  stroke-width="4" 
-                  stroke-linecap="round"
-                  stroke-dasharray="31.416" 
-                  stroke-dashoffset="31.416"
-                >
-                  <animate 
-                    attributeName="stroke-array" 
-                    dur="2s" 
-                    values="0 31.416;15.708 15.708;0 31.416;15.708 15.708;0 31.416"
-                    repeatCount="indefinite"
-                  />
-                  <animate 
-                    attributeName="stroke-dashoffset" 
-                    dur="2s" 
-                    values="0;-15.708;-31.416;-47.124;-62.832" 
-                    repeatCount="indefinite"
-                  />
-                  <animateTransform 
-                    attributeName="transform" 
-                    type="rotate"
-                    dur="2s" 
-                    values="0 25 25;360 25 25" 
-                    repeatCount="indefinite"
-                  />
-                </circle>
-              </svg>
+          <div class="inventory-section glass">
+            <div class="table-container">
+              <table v-if="allDatasets.length">
+                <thead>
+                  <tr>
+                    <th>Dataset Name</th>
+                    <th>Records</th>
+                    <th>Size</th>
+                    <th>State</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="ds in sortedDatasets" :key="ds.id" class="table-row-hover">
+                    <td class="file-name-cell">
+                      <div class="file-icon-mini">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                      </div>
+                      {{ ds.name }}
+                    </td>
+                    <td>{{ ds.rows?.toLocaleString() }}</td>
+                    <td>{{ formatFileSize(ds.size_bytes || ds.size) }}</td>
+                    <td>
+                      <span class="status-pill" :class="{ processed: ds.is_processed || ds.isProcessed }">
+                        {{ (ds.is_processed || ds.isProcessed) ? 'Refined' : 'Initial' }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="action-group-mini">
+                        <button @click="analyzeDataset(ds)" class="btn-table-action">Explore</button>
+                        <button @click="downloadDataset(ds)" class="btn-table-action secondary" title="Download CSV">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="empty-state-view">
+                <div class="empty-illustration">📂</div>
+                <h3>No datasets uploaded</h3>
+                <p>Start by importing your first data project.</p>
+                <button @click="triggerFileInput" class="btn-outline">Upload Now</button>
+              </div>
             </div>
-            <h3>{{ uploadProgress }}% uploading...</h3>
-            <p>{{ uploadMessage }}</p>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: `${uploadProgress}%` }"></div>
-            </div>
-          </div>
-
-          <!-- Success State -->
-          <div v-if="uploadSuccess" class="upload-success">
-            <div class="success-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-              </svg>
-            </div>
-            <h3>Upload successful!</h3>
-            <p>{{ uploadedFile.name }} • {{ uploadedFile.rows.toLocaleString() }} rows</p>
-            <button @click="goToPreview" class="continue-btn">
-              <span>Continue to Preview</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/>
-              </svg>
-            </button>
           </div>
         </div>
-      </div>
+      </transition>
+
+      <!-- ===== ANALYTICS TAB ===== -->
+      <transition name="fade-slide">
+        <div v-if="activeDashboardTab === 'analytics'" class="tab-view analytics-view">
+          <div class="view-header">
+            <div class="header-main">
+              <h2>Data Intelligence Analytics</h2>
+              <p>Explore performance trends and recent system actions</p>
+            </div>
+          </div>
+
+          <div class="analytics-grid">
+            <div class="chart-container-premium glass">
+              <div class="container-header">
+                <h3>Evolution of Accuracy</h3>
+                <span class="status-indicator">Live</span>
+              </div>
+              <div class="chart-wrapper">
+                <canvas ref="performanceChartCanvas"></canvas>
+              </div>
+            </div>
+
+            <div class="activity-container-premium glass">
+              <div class="container-header">
+                <h3>Activity Chronicle</h3>
+                <span class="count-badge">{{ recentActivity.length }} Events</span>
+              </div>
+              <div class="activity-feed">
+                <div v-for="act in recentActivity" :key="act.id" class="activity-item-premium">
+                  <div class="item-icon" :class="act.action_type">
+                    {{ getActionIcon(act.action_type) }}
+                  </div>
+                  <div class="item-content">
+                    <div class="item-title">{{ formatActionTitle(act) }}</div>
+                    <div class="item-meta">{{ getRelativeTime(act.created_at) }}</div>
+                  </div>
+                </div>
+                <div v-if="recentActivity.length === 0" class="empty-activity">
+                    <p>System log is currently empty.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- ===== MODELS TAB ===== -->
+      <transition name="fade-slide">
+        <div v-if="activeDashboardTab === 'models'" class="tab-view models-view">
+          <div class="view-header">
+            <div class="header-main">
+              <h2>Model Leaderboard</h2>
+              <p>Performance comparison of all trained intelligence units</p>
+            </div>
+          </div>
+
+          <div class="inventory-section glass">
+            <div class="table-container">
+              <table v-if="allModels.length">
+                <thead>
+                  <tr>
+                    <th>Model Strategy</th>
+                    <th>Algorithm</th>
+                    <th>Performance Indicators</th>
+                    <th>Configuration</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="model in allModels" :key="model.id" class="table-row-hover">
+                    <td class="model-name-cell">
+                      <div class="model-icon-mini">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        </svg>
+                      </div>
+                      <div class="model-info-stack">
+                        <span class="model-name-text">{{ model.name }}</span>
+                        <span class="model-date-mini">{{ getRelativeTime(model.createdAt) }}</span>
+                      </div>
+                    </td>
+                    <td><span class="algo-badge">{{ model.algorithm }}</span></td>
+                    <td>
+                      <div class="metrics-pill-group">
+                        <div v-for="(val, key) in getBriefMetrics(model)" :key="key" class="metric-pill" :class="getMetricClass(key)">
+                          <span class="metric-label">{{ formatMetricKey(key) }}</span>
+                          <span class="metric-value">{{ formatMetricValue(val) }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="config-badges">
+                        <div v-for="(val, key) in getBriefConfig(model)" :key="key" class="config-badge" :title="`${key}: ${val}`">
+                          {{ key }}: {{ val }}
+                        </div>
+                        <div v-if="Object.keys(model.hyperparameters || {}).length > 3" class="config-badge more">
+                          +{{ Object.keys(model.hyperparameters).length - 3 }} more
+                          <div class="config-tooltip">
+                            <div v-for="(val, key) in getHiddenConfig(model)" :key="key" class="tooltip-item">
+                              <span class="t-key">{{ key }}</span>
+                              <span class="t-val">{{ formatHyperparam(val) }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="action-group-mini">
+                        <button @click="downloadModel(model)" class="btn-table-action secondary" title="Download Model (.joblib)">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="empty-state-view">
+                <div class="empty-illustration">🧠</div>
+                <h3>Brain empty</h3>
+                <p>Train your first model in the Laboratory to see results here.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMLDataFlowStore } from '../stores/mlDataFlow'
 import { useExperimentStore } from '../stores/experiment'
+import Chart from 'chart.js/auto'
 
-const backendConnected = ref(false)
+const router = useRouter()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
 
-// Page Meta
-useHead({
-  title: 'DataSage Dashboard - AI-Powered ML Platform',
-  meta: [
-    { name: 'description', content: 'Your personal machine learning dashboard for building AI models without coding' }
-  ]
-})
-
-// Refs
-const fileInput = ref(null)
-const uploadSection = ref(null)
-
-// User Data
-const userName = computed(() => {
-  try {
-    const user = JSON.parse(sessionStorage.getItem('user') || '{}')
-    return user.username || user.name || 'Data Scientist'
-  } catch {
-    return 'Data Scientist'
-  }
-})
-
-const userInitials = computed(() => {
-  try {
-    const user = JSON.parse(sessionStorage.getItem('user') || '{}')
-    // Use username instead of name for initials
-    const displayName = user.username || user.name || 'Data Scientist'
-    return displayName.split(' ').map(n => n[0]).join('').toUpperCase() || 'DS'
-  } catch {
-    return 'DS'
-  }
-})
-
-
-
-// Dashboard Stats
-const stats = reactive({
-  projects: 3,
-  models: 8,
-  datasets: 5
-})
-
-const dataHealth = ref(87)
-
-// Recent Dataset
-const recentDataset = ref({
-  name: 'customer_analytics.csv',
-  rows: 15420,
-  columns: 18,
-  uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) // 2 days ago
-})
+// Navigation & View State
+const activeDashboardTab = ref('dashboard')
+const isLoading = ref(true)
 
 // Upload State
 const dragOver = ref(false)
@@ -382,905 +447,605 @@ const uploadProgress = ref(0)
 const uploadMessage = ref('')
 const uploadedFile = ref(null)
 
-// Sparkline Data for Models Chart
-const sparklinePoints = computed(() => {
-  const data = [2, 3, 1, 4, 3, 6, 4, 8, 5, 8] // Sample trend data
-  const width = 100
-  const height = 30
-  const maxVal = Math.max(...data)
-  const points = data.map((val, i) => {
-    const x = (i / (data.length - 1)) * width
-    const y = height - (val / maxVal) * height
-    return `${x},${y}`
-  }).join(' ')
-  return points
+// Refs
+const fileInput = ref(null)
+const uploadSection = ref(null)
+const performanceChartCanvas = ref(null)
+let performanceChart = null
+
+// Computed User Data
+const userName = computed(() => {
+  try {
+    const userString = sessionStorage.getItem('user') || localStorage.getItem('user')
+    const user = JSON.parse(userString || '{}')
+    return user.username || user.name || 'Data Scientist'
+  } catch {
+    return 'Data Scientist'
+  }
 })
 
-// Methods
-const createNewProject = () => {
-  navigateTo('/ml-pipeline')
-}
+const userInitials = computed(() => {
+  const name = userName.value
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'DS'
+})
 
-const useSampleData = () => {
-  navigateTo('/ml-pipeline?sample=true')
-}
+// Mapped Stats from Stores
+const dashboardStats = computed(() => mlStore.dashboardStats)
+const recentActivity = computed(() => mlStore.recentActivity)
+const allDatasets = computed(() => mlStore.allUserDatasets)
+const allModels = computed(() => mlStore.allUserModels)
 
-const viewTutorials = () => {
-  console.log('Navigate to tutorials')
-}
+const sortedDatasets = computed(() => {
+  if (!allDatasets.value) return []
+  return [...allDatasets.value].sort((a, b) => {
+    return new Date(b.upload_time) - new Date(a.upload_time)
+  })
+})
 
-const trainModel = () => {
-  navigateTo('/ml-pipeline')
-}
-
-const logout = () => {
-  sessionStorage.clear()
-  navigateTo('/login')
-}
-
-const formatDate = (date) => {
-  return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-    Math.ceil((date - new Date()) / (1000 * 60 * 60 * 24)), 
-    'day'
-  )
-}
-
-// Upload Methods
-const scrollToUpload = () => {
-  uploadSection.value?.scrollIntoView({ behavior: 'smooth' })
-}
-
-const triggerFileInput = () => {
-  if (!isUploading.value && !uploadSuccess.value) {
-    fileInput.value?.click()
+// Data Fetching
+const fetchData = async (isSilent = false) => {
+  if (!isSilent) isLoading.value = true
+  try {
+    await Promise.all([
+      mlStore.fetchDashboardStats(),
+      mlStore.fetchRecentActivity(),
+      mlStore.fetchAllDatasets(),
+      mlStore.fetchAllModels()
+    ])
+    if (activeDashboardTab.value === 'analytics') {
+      nextTick(() => initCharts())
+    }
+  } catch (error) {
+    console.error("Dashboard Sync Error:", error)
+  } finally {
+    if (!isSilent) isLoading.value = false
   }
+}
+
+// Chart Logic
+const initCharts = () => {
+  if (!performanceChartCanvas.value) return
+  if (performanceChart) performanceChart.destroy()
+  
+  const ctx = performanceChartCanvas.value.getContext('2d')
+  
+  const gradient = ctx.createLinearGradient(0, 0, 0, 300)
+  gradient.addColorStop(0, 'rgba(102, 126, 234, 0.4)')
+  gradient.addColorStop(1, 'rgba(102, 126, 234, 0)')
+
+  const sortedModels = [...allModels.value].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).slice(-7)
+  
+  const labels = sortedModels.length ? sortedModels.map(m => m.name.split(' ')[0]) : ['M1', 'M2', 'M3', 'M4']
+  const data = sortedModels.length ? sortedModels.map(m => {
+    const acc = m.metrics?.accuracy || m.metrics?.r2 || 0
+    return acc <= 1 ? acc * 100 : acc
+  }) : [65, 78, 85, 92]
+
+  performanceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Accuracy',
+        data,
+        borderColor: '#667eea',
+        backgroundColor: gradient,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15, 15, 35, 0.9)',
+          padding: 12,
+          displayColors: false
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6a6a8a' } },
+        x: { grid: { display: false }, ticks: { color: '#6a6a8a' } }
+      }
+    }
+  })
+}
+
+// Upload Handling
+const triggerFileInput = () => {
+    if (!isUploading.value && !uploadSuccess.value) fileInput.value?.click()
 }
 
 const handleFileSelect = (e) => {
-  const file = e.target.files?.[0]
-  if (file) processFile(file)
+    const file = e.target.files?.[0]
+    if (file) processFile(file)
 }
 
 const handleDrop = (e) => {
-  dragOver.value = false
-  const file = e.dataTransfer.files?.[0]
-  if (file) processFile(file)
-}
-
-const checkBackendConnection = async () => {
-  try {
-    const response = await fetch('http://localhost:8000/api/health')
-    backendConnected.value = response.ok
-    if (backendConnected.value) {
-      console.log('✅ Backend connected and ready')
-    }
-  } catch (error) {
-    backendConnected.value = false
-    console.warn('⚠️ Backend not available - uploads will not work')
-  }
+    dragOver.value = false
+    const file = e.dataTransfer.files?.[0]
+    if (file) processFile(file)
 }
 
 const processFile = async (file) => {
-  console.log('🚀 Processing file with DIRECT-TO-BACKEND approach:', file.name)
-  
-  // File validation
-  const allowedTypes = ['text/csv', 'application/json', 'text/plain']
-  const maxSize = 1024 * 1024 * 1024 // 1GB for large datasets
-
-  if (!allowedTypes.some(type => file.type === type) && 
-      !file.name.toLowerCase().endsWith('.csv') && 
-      !file.name.toLowerCase().endsWith('.json')) {
-    alert('Please upload a CSV or JSON file')
-    return
-  }
-
-  if (file.size > maxSize) {
-    alert(`File size must be less than ${Math.round(maxSize / (1024 * 1024))}MB`)
-    return
-  }
-  
   isUploading.value = true
   uploadSuccess.value = false
-  uploadProgress.value = 0
+  uploadProgress.value = 10
+  uploadMessage.value = 'Connecting to server...'
   
   try {
-    uploadMessage.value = 'Uploading directly to ML backend...'
-    
     const formData = new FormData()
     formData.append('file', file)
     
-    // ✅ USE THE WORKING ENDPOINT FOR NOW
-    const fileSizeMB = file.size / (1024 * 1024)
-    const endpoint = 'http://localhost:8000/api/upload-dataset' // Always use regular endpoint
-    
-    console.log(`📤 Uploading ${file.name} (${fileSizeMB.toFixed(1)}MB) to ${endpoint}`)
-    
-    // Progress simulation
-    const progressInterval = setInterval(() => {
-      if (uploadProgress.value < 90) {
-        uploadProgress.value += 5
-        uploadMessage.value = `Uploading... ${uploadProgress.value}%`
-      }
-    }, 200)
-    
-    // Upload to backend with better error handling
-    // Get JWT token from sessionStorage or localStorage
     const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
     
-    console.log('🔑 Auth token found:', token ? 'Yes' : 'No')
+    uploadProgress.value = 30
+    uploadMessage.value = 'Uploading stream...'
     
-    const headers = {}
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    
-    const response = await fetch(endpoint, {
+    const response = await fetch('http://localhost:8000/api/upload-dataset', {
       method: 'POST',
-      headers: headers,
+      headers: { 'Authorization': `Bearer ${token}` },
       body: formData
     })
     
-    clearInterval(progressInterval)
-    
-    if (!response.ok) {
-      // Get detailed error message
-      let errorDetail = `HTTP ${response.status}`
-      try {
-        const errorData = await response.json()
-        errorDetail = errorData.detail || errorDetail
-      } catch {
-        const errorText = await response.text()
-        errorDetail = errorText || errorDetail
-      }
-      throw new Error(`Upload failed: ${errorDetail}`)
-    }
+    if (!response.ok) throw new Error('Network intelligence failure')
     
     const result = await response.json()
-    console.log('✅ File uploaded successfully:', result.dataset_id)
-    
     uploadProgress.value = 100
-    uploadMessage.value = 'Upload complete!'
-    
-    // ✅ SAFE DATA EXTRACTION WITH FALLBACKS
-    const lightweightData = {
-      backendDatasetId: result.dataset_id,
-      datasetId: result.dataset_id,
-      fileName: result.filename || file.name,
-      fileSize: file.size,
-      totalRows: result.total_rows || result.shape?.[0] || 0,
-      totalColumns: result.total_columns || result.shape?.[1] || 0,
-      columns: result.columns || [],
-      isLargeDataset: result.is_large_dataset || false,
-      backendAvailable: true,
-      uploadedAt: new Date().toISOString(),
-      processingSteps: [] // Initialize empty steps array
-    }
-    
-    // Store metadata
-    localStorage.setItem('processedData', JSON.stringify(lightweightData))
-    localStorage.setItem('backendDatasetId', result.dataset_id)
-    localStorage.removeItem('uploadedData') // Clean up old data
-
-    // ✅ UPDATE STORES TO PREVENT STALE DATA
-    mlStore.setCurrentDataset(
-      result.dataset_id, 
-      [], // No data yet, will be fetched
-      result.filename || file.name,
-      result.columns || []
-    );
-    experimentStore.setDataset(
-        result.dataset_id,
-        result.filename || file.name,
-        { rows: result.total_rows, columns: result.total_columns }
-    );
-    
-    // Update UI
-    uploadedFile.value = {
-      name: result.filename || file.name,
-      rows: result.total_rows || result.shape?.[0] || 0,
-      columns: result.total_columns || result.shape?.[1] || 0,
-      size: file.size,
-      backendDatasetId: result.dataset_id
-    }
-    
-    isUploading.value = false
     uploadSuccess.value = true
-    console.log('🎉 Upload completed successfully with backend integration!')
+    uploadedFile.value = result
     
+    mlStore.setCurrentDataset(result.dataset_id, [], result.filename, result.columns || [])
+    experimentStore.setDataset(result.dataset_id, result.filename)
+    
+    fetchData(true)
   } catch (error) {
-    console.error('❌ Upload failed:', error)
+    console.error('Core Upload Error:', error)
+    alert('Upload failed: ' + error.message)
     isUploading.value = false
-    uploadSuccess.value = false
-    uploadProgress.value = 0
-    
-    let errorMessage = 'Upload failed: ' + error.message
-    if (error.message.includes('quota') || error.message.includes('storage')) {
-      errorMessage = 'File too large for browser storage. Please try a smaller file or contact support.'
-    }
-    
-    alert(errorMessage)
+  } finally {
+    // Keep success state visible for a moment
   }
 }
 
-
-
-
-
-
-const getFileType = (filename) => {
-  const extension = filename.split('.').pop().toLowerCase()
-  switch (extension) {
-    case 'csv': return 'CSV'
-    case 'json': return 'JSON'
-    case 'xlsx': 
-    case 'xls': return 'XLSX'
-    default: return 'CSV'
-  }
+// UI Helpers
+const getActionIcon = (type) => {
+  const icons = { upload: '📥', train: '🤖', cleaning: '🧹', preprocess: '⚙️' }
+  return icons[type] || '⚡'
 }
 
+const formatActionTitle = (act) => {
+  if (act.action_type === 'upload') return `Uploaded ${act.details?.filename}`
+  if (act.action_type === 'train') return `Trained ${act.details?.algorithm}`
+  return `Applied ${act.action_type}`
+}
 
-const goToPreview = () => {
-  if (!uploadedFile.value) {
-    alert('No file uploaded. Please upload a dataset first.')
-    return
-  }
-  
-  // Check if we have backend dataset ID
-  const processedData = localStorage.getItem('processedData')
-  if (!processedData) {
-    alert('Dataset information not found. Please upload again.')
-    return
-  }
-  
+const formatAccuracy = (m) => {
+  const acc = m.metrics?.accuracy || m.metrics?.r2 || 0
+  return (acc <= 1 ? acc * 100 : acc).toFixed(1)
+}
+
+const getRelativeTime = (dateStr) => {
+  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000)
+  if (diff < 60) return 'Just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
+
+const formatFileSize = (bytes) => {
+  if (!bytes || isNaN(bytes)) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+// Navigation
+const navigateTo = (path) => router.push(path)
+const logout = () => { sessionStorage.clear(); localStorage.clear(); navigateTo('/login') }
+const useSampleData = () => navigateTo('/ml-pipeline?sample=true')
+const analyzeDataset = (ds) => {
+  mlStore.setCurrentDataset(ds.id, [], ds.name, [])
+  experimentStore.setDataset(ds.id, ds.name)
+  navigateTo('/data-preview')
+}
+
+const downloadDataset = async (ds) => {
   try {
-    const data = JSON.parse(processedData)
-    if (!data.backendDatasetId) {
-      alert('Dataset not properly uploaded to backend. Please try uploading again.')
-      return
-    }
+    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
+    const response = await fetch(`http://localhost:8000/api/export-dataset/${ds.id}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
     
-    console.log('✅ Navigating to data preview with backend dataset:', data.backendDatasetId)
-    navigateTo('/data-preview')
+    if (!response.ok) throw new Error('Download failed')
+    
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${ds.name.replace('.csv', '')}_download.csv`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
   } catch (error) {
-    console.error('Error checking dataset info:', error)
-    alert('Error accessing dataset information. Please upload again.')
+    console.error('Download Error:', error)
+    alert('Failed to download dataset: ' + error.message)
   }
 }
 
+const downloadModel = async (model) => {
+  try {
+    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
+    const response = await fetch(`http://localhost:8000/api/models/${model.id}/download`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    if (!response.ok) {
+      const err = await response.json()
+      throw new Error(err.detail || 'Download failed')
+    }
+    
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${model.name.replace(/\s+/g, '_')}.joblib`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+  } catch (error) {
+    console.error('Model Download Error:', error)
+    alert('Failed to download model: ' + error.message)
+  }
+}
 
+const getBriefMetrics = (model) => {
+  if (!model.metrics) return {}
+  const m = model.metrics
+  
+  // Common classification metrics (with fallbacks for different key naming)
+  const acc = m.accuracy ?? m.test_accuracy ?? m.val_accuracy
+  const f1 = m.f1 ?? m.test_f1 ?? m.val_f1 ?? m.weighted_f1 ?? m.macro_f1
+  
+  // Common regression metrics
+  const r2 = m.r2 ?? m.test_r2 ?? m.val_r2
+  const mae = m.mae ?? m.test_mae ?? m.val_mae
+  
+  // Choose relevant pair based on availability
+  if (acc !== undefined) return { acc, f1 }
+  if (r2 !== undefined) return { r2, mae }
+  
+  // Fallback to first two keys
+  const keys = Object.keys(model.metrics).filter(k => k !== 'validation_method').slice(0, 2)
+  const result = {}
+  keys.forEach(k => result[k] = model.metrics[k])
+  return result
+}
+
+const getBriefConfig = (model) => {
+  if (!model.hyperparameters) return {}
+  const important = ['n_estimators', 'max_depth', 'learning_rate', 'C', 'alpha', 'n_neighbors']
+  const result = {}
+  let count = 0
+  
+  for (const key of important) {
+    if (model.hyperparameters[key] !== undefined) {
+      result[key] = model.hyperparameters[key]
+      count++
+      if (count >= 3) break
+    }
+  }
+  
+  // Fallback if none of the important ones found
+  if (count < 3) {
+    for (const key in model.hyperparameters) {
+      if (!result.hasOwnProperty(key)) {
+        result[key] = model.hyperparameters[key]
+        count++
+        if (count >= 3) break
+      }
+    }
+  }
+  
+  return result
+}
+
+const getHiddenConfig = (model) => {
+  if (!model.hyperparameters) return {}
+  const shown = Object.keys(getBriefConfig(model))
+  const hidden = {}
+  Object.keys(model.hyperparameters).forEach(k => {
+    if (!shown.includes(k)) hidden[k] = model.hyperparameters[k]
+  })
+  return hidden
+}
+
+const formatHyperparam = (val) => {
+  if (typeof val === 'number') return val % 1 === 0 ? val : val.toFixed(4)
+  return val
+}
+
+const formatMetricKey = (key) => {
+  const map = { 'acc': 'ACC', 'f1': 'F1', 'r2': 'R²', 'mae': 'MAE', 'mse': 'MSE', 'rmse': 'RMSE' }
+  return map[key] || key.substring(0, 3).toUpperCase()
+}
+
+const formatMetricValue = (val) => {
+  if (val === undefined || val === null) return '-'
+  return typeof val === 'number' ? (val < 1 ? val.toFixed(3) : val.toFixed(1)) : val
+}
+
+const getMetricClass = (key) => {
+  if (['acc', 'f1', 'r2'].includes(key)) return 'positive'
+  if (['mae', 'mse', 'rmse'].includes(key)) return 'neutral'
+  return ''
+}
+
+const viewTraining = (model) => {
+  // Logic to navigate to training results/visualization
+  mlStore.selectedModelId = model.id
+  navigateTo('/model-visualization')
+}
+const goToPreview = () => {
+    if (uploadedFile.value) analyzeDataset({ id: uploadedFile.value.dataset_id, name: uploadedFile.value.filename })
+    else navigateTo('/data-preview')
+}
+
+// Watchers
+watch(activeDashboardTab, (newVal) => {
+  if (newVal === 'analytics') nextTick(() => initCharts())
+})
 
 // Lifecycle
-onMounted(async () => {
-  await checkBackendConnection()
-  console.log('🔍 Debug sessionStorage:')
-  console.log('sessionStorage user:', sessionStorage.getItem('user'))
-  console.log('localStorage user:', localStorage.getItem('user'))
-  console.log('sessionStorage keys:', Object.keys(sessionStorage))
-  console.log('localStorage keys:', Object.keys(localStorage))
-});
+onMounted(() => fetchData())
+onUnmounted(() => performanceChart?.destroy())
 
 </script>
 
 <style scoped>
-/* Base Dashboard Styles (keeping existing styles) */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
 .dashboard {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+  background: #0b0b1a;
+  background-image: 
+    radial-gradient(circle at 0% 0%, rgba(102, 126, 234, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(118, 75, 162, 0.05) 0%, transparent 50%);
   color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Outfit', sans-serif;
 }
 
+/* Glass & Premium Cards */
+.glass {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+}
+
+/* Navigation */
 .dashboard-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 2rem;
-  background: rgba(26, 26, 46, 0.8);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+  padding: 1rem 4rem;
+  background: rgba(11, 11, 26, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 1000;
 }
 
-.nav-left .logo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo-icon { width: 32px; height: 32px; }
+.brand-text { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(to right, #667eea, #764ba2); -webkit-background-clip: text; background-clip:text;-webkit-text-fill-color: transparent; }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
-}
+.nav-links { display: flex; background: rgba(255, 255, 255, 0.03); padding: 4px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
+.nav-link { background: none; border: none; color: #6a6a8a; padding: 10px 24px; border-radius: 10px; cursor: pointer; font-weight: 600; font-family: inherit; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.nav-link.active { background: rgba(102, 126, 234, 0.1); color: #667eea; box-shadow: inset 0 0 10px rgba(102, 126, 234, 0.1); }
+.nav-link:hover:not(.active) { color: #ffffff; }
 
-.brand-text {
-  font-size: 1.5rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+.user-section { display: flex; align-items: center; gap: 1rem; }
+.user-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+.user-name { font-weight: 600; font-size: 0.9rem; color: #b3b3d1; }
+.logout-btn { background: none; border: none; color: #4a4a6a; cursor: pointer; transition: color 0.2s; }
+.logout-btn:hover { color: #ff5757; }
 
-.nav-links {
-  display: flex;
-  gap: 2rem;
-}
-
-.nav-link {
-  color: #b3b3d1;
-  text-decoration: none;
-  font-weight: 500;
-  padding: 0.5rem 0;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s ease;
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: #ffffff;
-  border-bottom-color: #667eea;
-}
-
-.user-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.875rem;
-  color: white;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-
-
-.logout-btn {
-  background: none;
-  border: 1px solid rgba(255, 87, 87, 0.3);
-  color: #ff5757;
-  padding: 0.5rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.logout-btn:hover {
-  background: rgba(255, 87, 87, 0.1);
-  border-color: #ff5757;
-}
-
-.dashboard-content {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
+/* Dashboard Content */
+.dashboard-content { padding: 4rem; max-width: 1400px; margin: 0 auto; }
 
 /* Welcome Section */
-.welcome-section {
-  margin-bottom: 3rem;
-}
+.welcome-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
+.welcome-text h1 { font-size: 2.75rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; }
+.gradient-text { background: linear-gradient(135deg, #667eea, #a88beb); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.welcome-text p { color: #6a6a8a; font-size: 1.1rem; margin-top: 0.5rem; }
+.refresh-btn-mini { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); color: #4a4a6a; padding: 10px; border-radius: 50%; cursor: pointer; transition: all 0.3s; }
+.refresh-btn-mini:hover { color: #667eea; border-color: #667eea; transform: rotate(180deg); }
 
-.welcome-section h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+/* KPI Grid */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 4rem; }
+.kpi-card { padding: 1.75rem; border-radius: 28px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.05); transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); cursor: pointer; position: relative; overflow: hidden; }
+.kpi-card:hover { transform: translateY(-10px); background: rgba(255,255,255,0.04); border-color: rgba(102, 126, 234, 0.3); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
 
-.welcome-section p {
-  color: #b3b3d1;
-  font-size: 1.125rem;
-}
+.kpi-icon-circle { width: 48px; height: 48px; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; transition: transform 0.3s; }
+.kpi-card:hover .kpi-icon-circle { transform: scale(1.1) rotate(-5deg); }
+.kpi-icon-circle.blue { background: rgba(102, 126, 234, 0.1); color: #667eea; }
+.kpi-icon-circle.purple { background: rgba(168, 139, 235, 0.1); color: #a88beb; }
+.kpi-icon-circle.emerald { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.kpi-icon-circle.indigo { background: rgba(129, 140, 248, 0.1); color: #818cf8; }
 
-/* Cards Grid - keeping existing card styles */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-bottom: 3rem;
-}
+.kpi-label { color: #6a6a8a; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.kpi-value { font-size: 2.25rem; font-weight: 800; margin: 0.5rem 0; letter-spacing: -1px; }
+.kpi-sub { font-size: 0.8rem; color: #4a4a6a; }
+.latest-entry { margin-top: 0.5rem; }
+.entry-name { font-weight: 600; font-size: 0.9rem; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry-meta { font-size: 0.75rem; color: #6a6a8a; }
 
-.dashboard-card {
-  background: rgba(26, 26, 46, 0.6);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  border-radius: 16px;
-  padding: 2rem;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.dashboard-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-radius: 16px 16px 0 0;
-}
-
-.dashboard-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.2);
-  border-color: rgba(102, 126, 234, 0.4);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.card-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.card-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  color: #ffffff;
-}
-
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.metric-value {
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: #ffffff;
-  line-height: 1;
-}
-
-.metric-label {
-  color: #b3b3d1;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-/* Dataset Card */
-.dataset-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.dataset-name {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.dataset-meta {
-  color: #b3b3d1;
-  font-size: 0.875rem;
-}
-
-.dataset-date {
-  color: #667eea;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.no-data {
-  text-align: center;
-  padding: 1rem;
-}
-
-.empty-state {
-  color: #b3b3d1;
-  margin-bottom: 1rem;
-}
-
-/* Health Gauge */
-.health-gauge {
-  width: 120px;
-  height: 120px;
-  margin: 0 auto 1rem;
-}
-
-.gauge {
-  width: 100%;
-  height: 100%;
-}
-
-.gauge-bg {
-  stroke: rgba(102, 126, 234, 0.2);
-}
-
-.gauge-fill {
-  stroke: url(#gradient);
-  stroke-linecap: round;
-  transition: stroke-dashoffset 1s ease;
-}
-
-.gauge-text {
-  fill: #ffffff;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.health-label {
-  text-align: center;
-  color: #b3b3d1;
-  font-size: 0.875rem;
-}
-
-/* Sparkline */
-.sparkline {
-  height: 30px;
-  margin: 0.5rem 0;
-}
-
-/* Buttons */
-.primary-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  justify-content: center;
-}
-
-.primary-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-}
-
-.secondary-btn {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.secondary-btn:hover {
-  background: rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
-}
+.kpi-content-row { display: flex; justify-content: space-between; align-items: flex-end; }
+.health-percentage { font-size: 2.25rem; font-weight: 800; color: #10b981; margin: 0.5rem 0; }
+.health-donut-mini { width: 40px; height: 40px; }
+.circular-chart { display: block; margin: 0; max-width: 100%; max-height: 100%; }
+.circle-bg { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 3.8; }
+.circle { fill: none; stroke: #10b981; stroke-width: 3.8; stroke-linecap: round; transition: stroke-dasharray 1s ease; }
 
 /* Quick Actions */
-.quick-actions {
-  margin-bottom: 3rem;
-}
+.section-title { font-size: 1.25rem; font-weight: 800; margin-bottom: 1.5rem; color: #b3b3d1; }
+.quick-actions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 4rem; }
+.action-card { display: flex; gap: 1.25rem; padding: 1.5rem; border-radius: 24px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: all 0.3s; }
+.action-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); transform: scale(1.02); }
 
-.quick-actions h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 1.5rem;
-  color: #ffffff;
-}
+.action-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.action-icon.upload { background: rgba(102, 126, 234, 0.1); color: #667eea; }
+.action-icon.sample { background: rgba(168, 139, 235, 0.1); color: #a88beb; }
+.action-icon.learn { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 
-.actions-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-}
+.action-text h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.action-text p { margin: 4px 0 0; font-size: 0.85rem; color: #6a6a8a; }
 
-.action-card {
-  background: rgba(26, 26, 46, 0.4);
-  border: 1px solid rgba(102, 126, 234, 0.2);
+/* Immersive Upload Section */
+.upload-immersive-section { display: flex; justify-content: center; margin-top: 2rem; }
+.upload-compact-container { width: 100%; max-width: 600px; padding: 2.5rem; text-align: center; }
+.upload-header-compact h2 { font-size: 1.5rem; font-weight: 800; margin: 0; }
+.upload-header-compact p { color: #6a6a8a; font-size: 0.9rem; margin-top: 8px; }
+
+.upload-compact-zone { margin-top: 2rem; border: 2px dashed rgba(102, 126, 234, 0.3); border-radius: 20px; padding: 3rem 2rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; background: rgba(102, 126, 234, 0.02); }
+.upload-compact-zone:hover { border-color: #667eea; background: rgba(102, 126, 234, 0.05); }
+.upload-compact-zone.drag-over { border-color: #10b981; background: rgba(16, 185, 129, 0.05); transform: scale(1.02); }
+
+.prompt-icon-mini { margin-bottom: 1.5rem; color: #667eea; }
+.upload-prompt-compact h3 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.upload-prompt-compact p { color: #5a5a7a; font-size: 0.9rem; margin-top: 4px; }
+.format-badges { display: flex; justify-content: center; gap: 8px; margin-top: 1.5rem; }
+.format-badges span { font-size: 0.7rem; font-weight: 800; color: #4a4a6a; border: 1px solid rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 6px; }
+
+.premium-spinner { width: 40px; height: 40px; border: 3px solid rgba(102, 126, 234, 0.1); border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
+.mini-progress-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 1.5rem 0; overflow: hidden; }
+.mini-progress-bar .fill { height: 100%; background: linear-gradient(to right, #667eea, #a88beb); transition: width 0.4s; }
+
+.success-icon-wrap { width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); color: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 1.5rem; border: 1px solid rgba(16, 185, 129, 0.2); }
+.launch-btn-premium { background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 12px 32px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.3s; margin-top: 1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
+.launch-btn-premium:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4); }
+
+/* Tab Views Common */
+.tab-view { width: 100%; }
+.view-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2.5rem; }
+.header-main h2 { font-size: 2.25rem; font-weight: 900; margin: 0; letter-spacing: -1px; }
+.header-main p { color: #6a6a8a; margin-top: 6px; }
+
+/* Table Styling */
+.table-container { padding: 1.5rem; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 1.25rem 1rem; color: #4a4a6a; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.03); }
+td { padding: 1.5rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.02); color: #b3b3d1; font-size: 0.95rem; }
+.table-row-hover:hover { background: rgba(255, 255, 255, 0.01); }
+
+.file-name-cell, .model-name-cell { display: flex; align-items: center; gap: 12px; font-weight: 600; color: #ffffff; }
+.file-icon-mini, .model-icon-mini { width: 28px; height: 28px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #667eea; }
+
+.status-pill { font-size: 0.7rem; font-weight: 800; padding: 4px 12px; border-radius: 30px; background: rgba(255,255,255,0.03); color: #4a4a6a; text-transform: uppercase; }
+.status-pill.processed { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.1); }
+
+.model-info-stack { display: flex; flex-direction: column; gap: 2px; }
+.model-name-text { font-weight: 600; color: #ffffff; }
+.model-date-mini { font-size: 0.75rem; color: #6a6a8a; }
+
+.metrics-pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.metric-pill { display: flex; align-items: center; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); overflow: hidden; font-size: 0.75rem; }
+.metric-pill.positive { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); }
+.metric-pill.neutral { border-color: rgba(102, 126, 234, 0.3); background: rgba(102, 126, 234, 0.05); }
+.metric-label { padding: 4px 8px; background: rgba(255,255,255,0.02); color: #6a6a8a; font-weight: 800; border-right: 1px solid rgba(255,255,255,0.05); }
+.metric-value { padding: 4px 10px; color: #ffffff; font-weight: 700; }
+.metric-pill.positive .metric-value { color: #10b981; }
+
+.config-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.config-badge { font-size: 0.7rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; background: rgba(168, 139, 235, 0.05); color: #a88beb; border: 1px solid rgba(168, 139, 235, 0.1); position: relative; }
+.config-badge.more { background: rgba(255,255,255,0.03); color: #6a6a8a; border-style: dashed; cursor: help; }
+
+.config-tooltip {
+  position: absolute;
+  bottom: 140%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 15, 30, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(168, 139, 235, 0.3);
+  padding: 12px;
   border-radius: 12px;
-  padding: 1.5rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  display: none;
+  z-index: 100;
+  min-width: 180px;
+}
+.config-badge.more:hover .config-tooltip { display: block; }
+.tooltip-item { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 6px; white-space: nowrap; align-items: center; }
+.tooltip-item:last-child { margin-bottom: 0; }
+.t-key { color: #6a6a8a; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.t-val { color: #ffffff; font-weight: 700; font-size: 0.75rem; background: rgba(168, 139, 235, 0.1); padding: 2px 6px; border-radius: 4px; }
+
+.algo-badge { background: rgba(168, 139, 235, 0.1); color: #a88beb; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+.accuracy-cell-premium { font-weight: 800; color: #10b981; font-size: 1.1rem; }
+
+.btn-table-action { background: none; border: 1px solid rgba(102, 126, 234, 0.3); color: #667eea; padding: 8px 16px; border-radius: 80px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.btn-table-action:hover { background: #667eea; color: white; transform: scale(1.05); }
+.btn-table-action.secondary { border-color: rgba(255, 255, 255, 0.1); color: #6a6a8a; padding: 8px; }
+.btn-table-action.secondary:hover { border-color: #667eea; color: #667eea; background: rgba(102, 126, 234, 0.1); }
+
+.action-group-mini { display: flex; gap: 8px; align-items: center; }
+
+/* Analytics Grid */
+.analytics-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 2rem; }
+.chart-container-premium { padding: 2rem; }
+.chart-wrapper { height: 400px; margin-top: 1.5rem; }
+
+.activity-container-premium { padding: 0; overflow: hidden; }
+.activity-feed { padding: 1.5rem; max-height: 500px; overflow-y: auto; }
+.activity-item-premium { display: flex; gap: 1rem; padding: 1rem; margin-bottom: 0.5rem; border-radius: 16px; transition: background 0.2s; }
+.activity-item-premium:hover { background: rgba(255,255,255,0.02); }
+
+.item-icon { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
+.item-icon.upload { color: #667eea; border-color: rgba(102, 126, 234, 0.2); }
+.item-icon.train { color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+
+.item-title { font-weight: 600; font-size: 0.9rem; color: #ffffff; }
+.item-meta { font-size: 0.75rem; color: #4a4a6a; margin-top: 2px; }
+
+/* Empty States */
+.empty-state-view { text-align: center; padding: 6rem 1rem; }
+.empty-illustration { font-size: 4rem; opacity: 0.2; margin-bottom: 1.5rem; }
+.empty-state-view h3 { font-size: 1.5rem; margin: 0; }
+.empty-state-view p { color: #5a5a7a; margin: 8px 0 2rem; }
+.btn-outline { background: none; border: 1px solid #667eea; color: #667eea; padding: 12px 28px; border-radius: 12px; font-weight: 800; cursor: pointer; }
+
+/* Misc */
+.loader-container p { color: #b3b3d1; font-weight: 500; }
+.hidden-input { display: none; }
+.text-capitalize { text-transform: capitalize; }
+
+/* Transitions */
+.fade-slide-enter-active, .fade-slide-leave-active { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.fade-slide-enter-from { opacity: 0; transform: translateY(20px); }
+.fade-slide-leave-to { opacity: 0; transform: translateY(-20px); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1200px) {
+  .kpi-grid, .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
+  .analytics-grid { grid-template-columns: 1fr; }
 }
 
-.action-card:hover {
-  background: rgba(26, 26, 46, 0.6);
-  border-color: rgba(102, 126, 234, 0.4);
-  transform: translateY(-2px);
-}
-
-.action-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.action-icon.upload {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-
-.action-icon.sample {
-  background: linear-gradient(135deg, #00d4aa, #01a3a4);
-}
-
-.action-icon.tutorial {
-  background: linear-gradient(135deg, #ff9500, #ff5722);
-}
-
-.action-card h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin: 0;
-  color: #ffffff;
-}
-
-.action-card p {
-  color: #b3b3d1;
-  font-size: 0.875rem;
-  margin: 0;
-}
-
-/* NEW: Inline Upload Section */
-.upload-section {
-  margin-top: 4rem;
-  text-align: center;
-}
-
-.upload-section h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.upload-subtitle {
-  color: #b3b3d1;
-  font-size: 1rem;
-  margin-bottom: 2rem;
-}
-
-.inline-uploader {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 3rem 2rem;
-  background: rgba(26, 26, 46, 0.6);
-  backdrop-filter: blur(10px);
-  border: 2px dashed rgba(102, 126, 234, 0.3);
-  border-radius: 16px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.inline-uploader:hover {
-  border-color: rgba(102, 126, 234, 0.6);
-  background: rgba(26, 26, 46, 0.8);
-}
-
-.inline-uploader.drag-over {
-  border-color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
-  transform: scale(1.02);
-}
-
-.inline-uploader.uploading,
-.inline-uploader.success {
-  cursor: default;
-  border-style: solid;
-}
-
-/* Upload States */
-.upload-initial {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.upload-icon {
-  color: #667eea;
-  margin-bottom: 1rem;
-}
-
-.upload-initial h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-}
-
-.upload-initial p {
-  color: #b3b3d1;
-  margin: 0;
-}
-
-.supported-formats {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-  margin-top: 1rem;
-}
-
-.format-badge {
-  padding: 0.5rem 1rem;
-  background: rgba(102, 126, 234, 0.2);
-  color: #667eea;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: 1px solid rgba(102, 126, 234, 0.3);
-}
-
-.upload-processing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.processing-spinner {
-  width: 50px;
-  height: 50px;
-  margin-bottom: 1rem;
-}
-
-.upload-processing h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-}
-
-.upload-processing p {
-  color: #b3b3d1;
-  margin: 0;
-}
-
-.progress-bar {
-  width: 100%;
-  max-width: 300px;
-  height: 8px;
-  background: rgba(102, 126, 234, 0.2);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
-.upload-success {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.success-icon {
-  color: #00d4aa;
-  margin-bottom: 1rem;
-}
-
-.upload-success h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-}
-
-.upload-success p {
-  color: #b3b3d1;
-  margin: 0;
-}
-
-.continue-btn {
-  background: linear-gradient(135deg, #00d4aa, #01a3a4);
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  margin-top: 1rem;
-}
-
-.continue-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 212, 170, 0.4);
-}
-
-/* Responsive Design */
 @media (max-width: 768px) {
-  .dashboard-header {
-    padding: 1rem;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .nav-center {
-    order: -1;
-  }
-
-  .nav-links {
-    gap: 1rem;
-  }
-
-  .dashboard-content {
-    padding: 1rem;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .actions-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .user-info {
-    display: none;
-  }
-
-  .inline-uploader {
-    padding: 2rem 1rem;
-  }
-
-  .supported-formats {
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-  }
+  .dashboard-header { padding: 1rem 2rem; }
+  .nav-links { display: none; }
+  .kpi-grid, .quick-actions-grid { grid-template-columns: 1fr; }
+  .dashboard-content { padding: 2rem; }
 }
 </style>

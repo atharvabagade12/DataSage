@@ -222,6 +222,12 @@
                   class="search-input"
                 />
               </div>
+              <button @click="openVersionModal" class="save-version-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3); margin-right: 0.5rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17,3H5C3.89,3 3,3.9 3,5V19C3,20.1 3.89,21 5,21H19C20.1,21 21,20.1 21,19V7L17,3M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M15,9H5V5H15V9Z" />
+                </svg>
+                Save Version
+              </button>
               <button @click="exportData" class="export-btn">
                 <svg
                   width="16"
@@ -759,7 +765,7 @@
                       </svg>
                       <div>
                         <strong>{{ outlierStats.count }} outliers detected</strong>
-                        <p>Across {{ outlierStats.columns }} numerical columns</p>
+                        
                       </div>
                     </div>
                   </div>
@@ -769,12 +775,13 @@
                   <h4>Select Handling Strategy</h4>
                   
                   <label class="radio-option">
-                    <input type="radio" v-model="outlierStrategy" value="cap" class="native-radio" />
+                    <input type="radio" v-model="outlierStrategy" value="cap_iqr" class="native-radio" />
                     <div class="option-content">
-                      <strong>Cap Outliers (Winsorization)</strong>
-                      <p>Limit extreme values to the 5th and 95th percentiles</p>
+                      <strong>Cap Outliers (IQR Method) - Recommended</strong>
+                      <p>Clip extreme values using IQR bounds</p>
                     </div>
                   </label>
+
                   
                   <label class="radio-option">
                     <input type="radio" v-model="outlierStrategy" value="remove" class="native-radio" />
@@ -1460,6 +1467,37 @@
       :refresh-key="insightsRefreshKey"
     />
 
+    <!-- Save Version Modal -->
+    <Modal v-model="showVersionModal" title="Save Dataset Version" size="sm">
+      <div class="modal-section" style="padding: 1.5rem;">
+        <p class="modal-intro" style="margin-bottom: 1.5rem; color: #b3b3d1; font-size: 0.95rem;">Save the current state of your dataset as a new version in your inventory.</p>
+        <div class="input-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <label for="versionName" style="font-weight: 500; color: white;">Version Name</label>
+          <input 
+            id="versionName"
+            v-model="newVersionName" 
+            type="text" 
+            placeholder="e.g., Cleaned_v1" 
+            class="native-input"
+            @keyup.enter="handleSaveVersion"
+            style="background: rgba(13, 17, 23, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.75rem; color: white; width: 100%;"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 1rem; width: 100%;">
+          <Button variant="ghost" @click="showVersionModal = false">Cancel</Button>
+          <Button 
+            variant="primary" 
+            :loading="isProcessing" 
+            @click="handleSaveVersion"
+            :disabled="!newVersionName"
+          >
+            Save This Version
+          </Button>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -1521,6 +1559,41 @@ const showMissingModal = ref(false);
 const showOutlierModal = ref(false);
 const showDuplicateModal = ref(false);
 const showTypeDetectionModal = ref(false); // Added for type detection tool
+const showVersionModal = ref(false);
+const newVersionName = ref("");
+
+const openVersionModal = () => {
+    // Generate default version name based on current time
+    const now = new Date();
+    const ts = `${now.getHours()}${now.getMinutes()}`;
+    const baseName = (fileName.value || "dataset").split('.')[0];
+    newVersionName.value = `${baseName}_v${ts}`;
+    showVersionModal.value = true;
+};
+
+const handleSaveVersion = async () => {
+    if (!newVersionName.value) return;
+    
+    try {
+        isProcessing.value = true;
+        processingMessage.value = "Saving new version...";
+        
+        const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
+        
+        showSuccess("Version Saved", `Successfully created version: ${result.name}`);
+        showVersionModal.value = false;
+        
+        // Refresh local data if needed, or just let user stay here
+        // Usually, saving a version means creating a NEW record, 
+        // but we keep the user on the current "draft" state.
+    } catch (err) {
+        console.error("Save version error:", err);
+        showError("Save Failed", err.message || "Could not save dataset version");
+    } finally {
+        isProcessing.value = false;
+        processingMessage.value = "Processing...";
+    }
+};
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});
 const hasConfirmedUnverifiedFlagged = ref(false); // Track if user was warned about low/medium confidence
@@ -1550,7 +1623,7 @@ const globalMissingStrategy = ref("droprows");
 
 // Outliers
 const outlierStats = ref({ count: 0, columns: 0 });
-const outlierStrategy = ref("cap");
+const outlierStrategy = ref("cap_iqr");
 
 // Duplicates
 const duplicateStats = ref({ count: 0 });
@@ -1924,6 +1997,7 @@ const confirmResetAllChanges = async () => {
         
         showResetModal.value = false;
         showSuccess("Reset Complete", "Dataset and all configurations reverted to original state.");
+        insightsRefreshKey.value++;
     } catch(e) {
         console.error("Reset failed", e);
         showError("Reset Failed", "Could not revert changes. Please try again.");
@@ -1963,8 +2037,9 @@ const applyMissingStrategies = async () => {
             // Need specific endpoints or a bulk one. 
             // Assuming generic 'handle-missing' endpoint
             await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/missing-values`, {
-                strategy: strategy, // e.g., 'drop' (rows), 'mean', etc. Map frontend strategy to backend
-                columns: cols
+                strategy: strategy, 
+                columns: cols,
+                target_column: experimentStore.targetColumn
             });
         }
         
@@ -1973,6 +2048,7 @@ const applyMissingStrategies = async () => {
         analyzeDataQuality();
         showMissingModal.value = false;
         showSuccess("Missing Values Handled", "Strategies applied successfully.");
+        insightsRefreshKey.value++;
     } catch (e) {
         console.error("Missing handling failed", e);
         showError("Processing Failed", "Failed to handle missing values.");
@@ -1992,7 +2068,8 @@ const applyOutlierHandling = async () => {
     isProcessing.value = true;
     try {
         await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/outliers`, {
-             method: outlierStrategy.value // 'cap', 'remove'
+             method: outlierStrategy.value, // 'cap', 'remove'
+             target_column: experimentStore.targetColumn
         });
         await dataStore.loadData(datasetId.value, true);
         // Refresh local columns
@@ -2000,6 +2077,7 @@ const applyOutlierHandling = async () => {
         analyzeDataQuality();
         showOutlierModal.value = false;
         showSuccess("Outliers Processed", `Outliers handled using ${outlierStrategy.value} method.`);
+        insightsRefreshKey.value++;
     } catch (e) {
          console.error("Outlier handling failed", e);
          showError("Processing Failed", "Failed to handle outliers.");
@@ -2024,6 +2102,7 @@ const applyDuplicateRemoval = async () => {
         analyzeDataQuality();
         showDuplicateModal.value = false;
         showSuccess("Duplicates Removed", "Duplicate removal complete.");
+        insightsRefreshKey.value++;
     } catch (e) {
          console.error("Duplicate removal failed", e);
          showError("Processing Failed", "Failed to remove duplicates.");
@@ -2073,6 +2152,7 @@ const applyDateTimeHandling = async () => {
             analyzeDataQuality();
             showDateTimeModal.value = false;
             showSuccess("Success", `Extracted features from ${selectedDateTimeColumns.value.length} columns.`);
+            insightsRefreshKey.value++;
             
             // Clear selection
             selectedDateTimeColumns.value = [];

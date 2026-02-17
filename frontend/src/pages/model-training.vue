@@ -2108,6 +2108,7 @@ const startTraining = async () => {
       dataset_id: datasetId.value,
       target_column: targetName,
       algorithm_name: modelConfig.value.algorithm.name,
+      problem_type: problemType.value,
       test_size: 1 - splitRatio.value,
       validation_method: validationStrategy.value,
       cv_folds: validationStrategy.value === 'kfold_cv' ? cvFolds.value : undefined,

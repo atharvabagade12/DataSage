@@ -194,6 +194,12 @@
                   class="search-input"
                 />
               </div>
+              <button @click="openVersionModal" class="save-version-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3); margin-right: 0.5rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17,3H5C3.89,3 3,3.9 3,5V19C3,20.1 3.89,21 5,21H19C20.1,21 21,20.1 21,19V7L17,3M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M15,9H5V5H15V9Z" />
+                </svg>
+                Save Version
+              </button>
               <button @click="exportData" class="export-btn">
                 <svg
                   width="16"
@@ -1611,6 +1617,37 @@
         <p>{{ processingMessage }}</p>
       </div>
     </div>
+    <!-- Save Version Modal -->
+    <Modal v-model="showVersionModal" title="Save Dataset Version" size="sm">
+      <div class="modal-section" style="padding: 1.5rem;">
+        <p class="modal-intro" style="margin-bottom: 1.5rem; color: #b3b3d1; font-size: 0.95rem;">Save the current state of your dataset as a new version in your inventory.</p>
+        <div class="input-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <label for="versionName" style="font-weight: 500; color: white;">Version Name</label>
+          <input 
+            id="versionName"
+            v-model="newVersionName" 
+            type="text" 
+            placeholder="e.g., Prepared_v1" 
+            class="native-input"
+            @keyup.enter="handleSaveVersion"
+            style="background: rgba(13, 17, 23, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.75rem; color: white; width: 100%;"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 1rem; width: 100%;">
+          <Button variant="ghost" @click="showVersionModal = false">Cancel</Button>
+          <Button 
+            variant="primary" 
+            :loading="isProcessing" 
+            @click="handleSaveVersion"
+            :disabled="!newVersionName"
+          >
+            Save This Version
+          </Button>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -1692,6 +1729,33 @@ const showResetConfirmModal = ref(false);
 const showResetSplitModal = ref(false);
 const showSmoteModal = ref(false);
 const showTargetEncodingModal = ref(false);
+const showVersionModal = ref(false);
+const newVersionName = ref("");
+
+const openVersionModal = () => {
+    const now = new Date();
+    const ts = `${now.getHours()}${now.getMinutes()}`;
+    const baseName = (fileName.value || "dataset").split('.')[0];
+    newVersionName.value = `${baseName}_v${ts}`;
+    showVersionModal.value = true;
+};
+
+const handleSaveVersion = async () => {
+    if (!newVersionName.value) return;
+    try {
+        isProcessing.value = true;
+        processingMessage.value = "Saving new version...";
+        const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
+        showSuccess("Version Saved", `Successfully created version: ${result.name}`);
+        showVersionModal.value = false;
+    } catch (err) {
+        console.error("Save version error:", err);
+        showError("Save Failed", err.message || "Could not save dataset version");
+    } finally {
+        isProcessing.value = false;
+        processingMessage.value = "Processing...";
+    }
+};
 const targetEncodingApplied = ref(false);
 
 // SMOTE (Local for now, sync to store on apply)

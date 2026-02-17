@@ -50,9 +50,12 @@
               <span class="label">Median</span>
               <span class="value">{{ formatValue(insights.median) }}</span>
             </div>
-            <div class="stat-card">
-              <span class="label">Outliers</span>
-              <span class="value" :class="{ 'warning': insights.outlier_pct > 5 }">{{ insights.outlier_pct }}%</span>
+            <div class="stat-card" :title="`Total Outliers: ${insights.outlier_count}\nExtreme Outliers: ${insights.extreme_outlier_count}`">
+              <span class="label">Outlier Ratio</span>
+              <span class="value" :class="{ 'warning': insights.outlier_pct > 5 }">
+                {{ insights.outlier_pct }}%
+                <small v-if="insights.extreme_outlier_count > 0" class="extreme-badge">!</small>
+              </span>
             </div>
           </template>
           <template v-else-if="insights.type === 'datetime'">
@@ -121,16 +124,27 @@
           <div v-if="insights.type === 'numeric'" class="detailed-metrics">
             <h4>Numeric Summary</h4>
             <div class="metrics-row">
-              <span>Distribution Type:</span> <strong>{{ insights.distribution_type }}</strong>
+              <span>Distribution Type:</span> <strong>{{ insights.skewness_interpretation }}</strong>
+            </div>
+            <div class="metrics-row">
+              <span>Min / Max / Range:</span> <strong>{{ formatValue(insights.min) }} / {{ formatValue(insights.max) }} ({{ formatValue(insights.max - insights.min) }})</strong>
             </div>
             <div class="metrics-row">
               <span>Std Dev / IQR:</span> <strong>{{ formatValue(insights.std) }} / {{ formatValue(insights.iqr) }}</strong>
             </div>
+            <div class="metrics-row divider"></div>
             <div class="metrics-row">
-              <span>Min / Max:</span> <strong>{{ formatValue(insights.min) }} / {{ formatValue(insights.max) }}</strong>
+              <span>Raw Skewness:</span> <strong :class="{ 'warning': Math.abs(insights.raw_skewness) > 1 }">{{ formatValue(insights.raw_skewness) }}</strong>
             </div>
             <div class="metrics-row">
-              <span>Skewness:</span> <strong>{{ formatValue(insights.skewness) }} ({{ insights.skewness_interpretation }})</strong>
+              <span>Robust Skewness:</span> <strong :class="{ 'warning': Math.abs(insights.robust_skewness) > 0.7 }">{{ formatValue(insights.robust_skewness) }}</strong>
+            </div>
+            <div class="metrics-row">
+              <span>Skewness Gap:</span> <strong :title="Math.abs(insights.skewness_gap) > 1 ? 'Distortion likely' : 'Low distortion'">{{ formatValue(insights.skewness_gap) }}</strong>
+            </div>
+            <div class="metrics-row divider"></div>
+            <div class="metrics-row">
+              <span>Outlier / Extreme Counts:</span> <strong>{{ insights.outlier_count }} / {{ insights.extreme_outlier_count }}</strong>
             </div>
           </div>
           <div v-else-if="insights.type === 'datetime'" class="detailed-metrics">
@@ -664,5 +678,23 @@ h2 {
 
 .metrics-row strong.warning {
   color: #f87171;
+}
+
+.metrics-row.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 4px 0;
+  padding: 0;
+}
+
+.extreme-badge {
+  font-size: 0.7rem;
+  background: #ef4444;
+  color: white;
+  padding: 0 4px;
+  border-radius: 4px;
+  vertical-align: super;
+  margin-left: 2px;
+  font-weight: 800;
 }
 </style>

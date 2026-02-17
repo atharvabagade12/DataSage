@@ -1,5 +1,5 @@
 from database import engine, Base
-from models import User, Dataset, Model
+from models import User, Dataset, Model, UserAction
 import time
 import sys
 
