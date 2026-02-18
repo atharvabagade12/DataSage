@@ -89,13 +89,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     async checkBackendConnection() {
       try {
         console.log("🔌 Checking backend connection...");
-
-        const response = await fetch("http://localhost:8000/api/health", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
+        const { authenticatedGet } = useAuthenticatedFetch();
+        const response = await authenticatedGet(`/api/health`);
 
         if (response.ok) {
           this.backendStatus = await response.json();
@@ -281,10 +276,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
       try {
         console.log("🔍 Verifying dataset in backend:", targetId);
-
-        const response = await fetch(
-          `http://localhost:8000/api/datasets/${targetId}`
-        );
+        const { authenticatedGet } = useAuthenticatedFetch();
+        const response = await authenticatedGet(`/api/datasets/${targetId}`);
 
         if (response.ok) {
           const data = await response.json();
@@ -424,14 +417,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     // ===== DASHBOARD ACTIONS =====
     async fetchDashboardStats() {
       try {
-        const token = sessionStorage.getItem('authToken') || 
-                      sessionStorage.getItem('token') || 
-                      localStorage.getItem('authToken') || 
-                      localStorage.getItem('token');
-                      
-        const response = await fetch("http://localhost:8000/api/dashboard/stats", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const { authenticatedGet } = useAuthenticatedFetch();
+        const response = await authenticatedGet(`/api/dashboard/stats`);
         if (response.ok) {
           this.dashboardStats = await response.json();
           return this.dashboardStats;
@@ -443,14 +430,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     async fetchRecentActivity(limit = 10) {
       try {
-        const token = sessionStorage.getItem('authToken') || 
-                      sessionStorage.getItem('token') || 
-                      localStorage.getItem('authToken') || 
-                      localStorage.getItem('token');
-                      
-        const response = await fetch(`http://localhost:8000/api/dashboard/activity?limit=${limit}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const { authenticatedGet } = useAuthenticatedFetch();
+        const response = await authenticatedGet(`/api/dashboard/activity?limit=${limit}`);
         if (response.ok) {
           this.recentActivity = await response.json();
           return this.recentActivity;
@@ -462,14 +443,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     async fetchAllDatasets() {
       try {
-        const token = sessionStorage.getItem('authToken') || 
-                      sessionStorage.getItem('token') || 
-                      localStorage.getItem('authToken') || 
-                      localStorage.getItem('token');
-                      
-        const response = await fetch("http://localhost:8000/api/datasets", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const { authenticatedGet } = useAuthenticatedFetch();
+        const response = await authenticatedGet(`/api/datasets`);
         if (response.ok) {
           this.allUserDatasets = await response.json();
           return this.allUserDatasets;
@@ -481,10 +456,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     async fetchAllModels() {
       try {
-        const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
-        const response = await fetch("http://localhost:8000/api/models", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const { authenticatedGet } = useAuthenticatedFetch();
+        const response = await authenticatedGet(`/api/models`);
         if (response.ok) {
           this.allUserModels = await response.json();
           return this.allUserModels;
@@ -496,15 +469,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
     async saveDatasetVersion(datasetId, versionName) {
       try {
-        const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
-        const response = await fetch(`http://localhost:8000/api/datasets/${datasetId}/save-version`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ version_name: versionName })
-        });
+        const { authenticatedPost } = useAuthenticatedFetch();
+        const response = await authenticatedPost(`/api/datasets/${datasetId}/save-version`, { version_name: versionName });
         
         if (response.ok) {
           const result = await response.json();

@@ -1839,9 +1839,8 @@ const dataQuality = computed(() => {
 
 const checkBackendConnection = async () => {
   try {
-    const response = await fetch('http://localhost:8000/api/health');
+    const response = await authenticatedGet(`/api/health`);
     backendConnected.value = response.ok; // Local ref
-    // mlStore.backendConnected = response.ok; // Removed
     console.log('✅ Backend connected:', backendConnected.value);
   } catch (e) {
     backendConnected.value = false;
@@ -2418,7 +2417,7 @@ const fetchBackendDatasetInfo = async (datasetId) => {
   console.log(`📡 Fetching backend dataset info for ID: ${datasetId}`);
 
   try {
-    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId}`)
+    const response = await authenticatedGet(`/api/datasets/${datasetId}`)
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: Dataset not found in backend`);
@@ -2444,7 +2443,7 @@ const fetchSemanticTypes = async () => {
   if (!datasetId.value) return;
   try {
     isDetectingTypes.value = true;
-    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}/semantic-types`);
+    const response = await authenticatedGet(`/api/datasets/${datasetId.value}/semantic-types`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     semanticTypes.value = data.column_types || [];
@@ -2461,7 +2460,7 @@ const fetchCompleteStatistics = async () => {
 
   try {
     console.log("🔄 Fetching complete statistics for accurate category counts...");
-    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}/statistics`);
+    const response = await authenticatedGet(`/api/datasets/${datasetId.value}/statistics`);
     
     if (!response.ok) {
       console.warn("⚠️ Failed to fetch statistics from backend");
@@ -2648,11 +2647,10 @@ const applySplit = async () => {
       test_size: 1 - splitRatio.value,
       stratify: splitStrategy.value === 'stratified',
       random_state: randomSeed.value || 42,
-      random_state: randomSeed.value || 42,
       target_column: typeof selectedTarget.value === 'object' ? selectedTarget.value.name : selectedTarget.value
     };
 
-    const response = await authenticatedPost('http://localhost:8000/api/split-dataset', payload)
+    const response = await authenticatedPost(`/api/split-dataset`, payload)
 
     if (!response.ok) {
         throw new Error(`Split failed: ${response.statusText}`);
@@ -2789,7 +2787,7 @@ const checkClassImbalance = async () => {
 
   try {
     const response = await authenticatedGet(
-      `http://localhost:8000/api/datasets/${datasetId.value}/check-imbalance?target_column=${targetName}`
+      `/api/datasets/${datasetId.value}/check-imbalance?target_column=${targetName}`
     );
 
     if (!response.ok) {
@@ -2845,7 +2843,7 @@ const applySmote = async () => {
     console.log('🔍 SMOTE Request:', payload);
 
     const response = await authenticatedPost(
-      `http://localhost:8000/api/datasets/${datasetId.value}/apply-smote`,
+      `/api/datasets/${datasetId.value}/apply-smote`,
       payload
     );
 
@@ -2909,7 +2907,7 @@ const resetSmote = async () => {
 
   try {
     const response = await authenticatedPost(
-      `http://localhost:8000/api/datasets/${datasetId.value}/reset-smote`,
+      `/api/datasets/${datasetId.value}/reset-smote`,
       {}
     );
 
@@ -2982,7 +2980,7 @@ const applyScaling = async () => {
 
     console.log('🔍 Scaling Request:', payload);
 
-    const response = await authenticatedPost('http://localhost:8000/api/datasets/apply-scaling', payload)
+    const response = await authenticatedPost(`/api/datasets/apply-scaling`, payload)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -3078,13 +3076,15 @@ const exportData = async () => {
     if (currentSplitView.value === "train" && splitApplied.value) {
       // Export full training dataset from backend
       console.log("📥 Exporting full training dataset from backend...");
-      response = await authenticatedGet(`http://localhost:8000/api/export-train/${datasetId.value}`);
+      response = await authenticatedGet(`/api/export-train/${datasetId.value}`);
       filename = `${fileName.value.replace(".csv", "")}_train.csv`;
       
     } else if (currentSplitView.value === "test" && splitApplied.value) {
       // Export full test dataset from backend
       console.log("📥 Exporting full test dataset from backend...");
-      response = await authenticatedGet(`http://localhost:8000/api/export-test/${datasetId.value}`);
+      const config = useRuntimeConfig();
+      const apiBase = config.public.apiBase || 'http://localhost:8000';
+      response = await authenticatedGet(`${apiBase}/api/export-test/${datasetId.value}`);
       filename = `${fileName.value.replace(".csv", "")}_test.csv`;
       
     } else {
@@ -3146,7 +3146,9 @@ async function applyCategoricalEncoding() {
 
     console.log('🔍 Encoding Request:', payload);
 
-    const response = await authenticatedPost('http://localhost:8000/api/apply-categorical-encoding', payload)
+    const config = useRuntimeConfig();
+    const apiBase = config.public.apiBase || 'http://localhost:8000';
+    const response = await authenticatedPost(`${apiBase}/api/apply-categorical-encoding`, payload)
 
     if (!response.ok) {
        throw new Error(`Encoding failed: ${response.statusText}`);
@@ -3231,7 +3233,9 @@ async function detectAndConfigureTfidf() {
     processingMessage.value = 'Detecting text columns...';
 
     // Step 1: Detect text columns
-    const detectResponse = await authenticatedPost('http://localhost:8000/api/detect-text-columns', {
+    const config = useRuntimeConfig();
+    const apiBase = config.public.apiBase || 'http://localhost:8000';
+    const detectResponse = await authenticatedPost(`${apiBase}/api/detect-text-columns`, {
       dataset_id: datasetId.value
     });
 
@@ -3247,7 +3251,9 @@ async function detectAndConfigureTfidf() {
     if (detectData.text_columns.length > 0) {
       processingMessage.value = 'Configuring TF-IDF parameters...';
 
-      const configResponse = await authenticatedPost('http://localhost:8000/api/configure-tfidf', {
+    const config = useRuntimeConfig();
+    const apiBase = config.public.apiBase || 'http://localhost:8000';
+    const configResponse = await authenticatedPost(`${apiBase}/api/configure-tfidf`, {
         dataset_id: datasetId.value,
         text_columns: detectData.text_columns
       });
@@ -3317,7 +3323,9 @@ async function applyTfidf() {
 
     console.log('🔤 Applying TF-IDF with config:', columnsConfig);
 
-    const response = await authenticatedPost('http://localhost:8000/api/apply-tfidf', {
+    const config = useRuntimeConfig();
+    const apiBase = config.public.apiBase || 'http://localhost:8000';
+    const response = await authenticatedPost(`${apiBase}/api/apply-tfidf`, {
       dataset_id: datasetId.value,
       columns: columnsConfig
     });
@@ -3397,7 +3405,9 @@ async function applyTargetEncoding() {
 
     console.log('🔍 Target Encoding Request:', payload);
 
-    const response = await authenticatedPost('http://localhost:8000/api/apply-target-encoding', payload)
+    const config = useRuntimeConfig();
+    const apiBase = config.public.apiBase || 'http://localhost:8000';
+    const response = await authenticatedPost(`${apiBase}/api/apply-target-encoding`, payload)
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));

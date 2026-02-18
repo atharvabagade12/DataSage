@@ -1916,9 +1916,8 @@ const downloadModel = async () => {
   addLog('info', '📂 Preparing model for download...');
   
   try {
-    const response = await fetch(`http://localhost:8000/api/models/${lastTrainedModelId.value}/download`, {
-      method: 'GET',
-    });
+    const { authenticatedGet } = useAuthenticatedFetch()
+    const response = await authenticatedGet(`/api/models/${lastTrainedModelId.value}/download`);
 
     if (!response.ok) {
       throw new Error(`Failed to download model: ${response.statusText}`);
@@ -2122,7 +2121,8 @@ const startTraining = async () => {
     console.log('📤 Training config:', trainingConfig);
 
     // Connect to WebSocket
-    const wsUrl = `ws://localhost:8000/ws/train-model`;
+    const { resolveWsUrl } = useAuthenticatedFetch();
+    const wsUrl = resolveWsUrl("/ws/train-model");
     console.log('🔌 Connecting to:', wsUrl);
 
     websocket = new WebSocket(wsUrl);
@@ -2538,7 +2538,9 @@ onMounted(async () => {
   if (datasetId.value) {
     try {
       console.log(`🔍 Proactively validating dataset ${datasetId.value}...`);
-      const response = await authenticatedGet(`http://localhost:8000/api/datasets/${datasetId.value}`);
+      const config = useRuntimeConfig();
+      const apiBase = config.public.apiBase || 'http://localhost:8000';
+      const response = await authenticatedGet(`${apiBase}/api/datasets/${datasetId.value}`);
       if (response.ok) {
         console.log("✅ Dataset validated and hydrated in backend memory");
       } else {

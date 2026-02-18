@@ -1901,10 +1901,7 @@ const proceedToTargetSelection = () => {
 const exportData = async () => {
     // Export full dataset from backend (prioritizing in-memory processed data)
     try {
-        isProcessing.value = true;
-        processingMessage.value = "Preparing download...";
-        
-        const response = await authenticatedGet(`http://localhost:8000/api/export-dataset/${datasetId.value}`);
+        const response = await authenticatedGet(`/api/export-dataset/${datasetId.value}`);
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -1955,7 +1952,7 @@ const applyColumnChanges = async () => {
     try {
         const toDrop = getColumnsToRemove().map(c => c.name);
         if (toDrop.length > 0) {
-            await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/drop-columns`, {
+            await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/drop-columns`, {
                 columns: toDrop
             });
             // Reload data
@@ -1979,7 +1976,7 @@ const confirmResetAllChanges = async () => {
     processingMessage.value = "Resetting dataset to original state...";
     try {
         // 1. Backend Reset
-        await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/reset`, {});
+        await authenticatedPost(`/api/datasets/${datasetId.value}/reset`, {});
         
         // 2. Clear Experiment Store (Resets other pages too)
         experimentStore.resetExperiment();
@@ -2036,7 +2033,7 @@ const applyMissingStrategies = async () => {
         for (const [strategy, cols] of Object.entries(strategies)) {
             // Need specific endpoints or a bulk one. 
             // Assuming generic 'handle-missing' endpoint
-            await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/missing-values`, {
+            await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/missing-values`, {
                 strategy: strategy, 
                 columns: cols,
                 target_column: experimentStore.targetColumn
@@ -2067,7 +2064,7 @@ const applyOutlierHandling = async () => {
 
     isProcessing.value = true;
     try {
-        await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/outliers`, {
+        await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/outliers`, {
              method: outlierStrategy.value, // 'cap', 'remove'
              target_column: experimentStore.targetColumn
         });
@@ -2094,7 +2091,7 @@ const applyDuplicateRemoval = async () => {
         if (duplicateStrategy.value === 'keep_last') keepStrategy = 'last';
         else if (duplicateStrategy.value === 'remove_all') keepStrategy = 'all';
 
-        await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/remove-duplicates`, {
+        await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/remove-duplicates`, {
              keep: keepStrategy
         });
         await dataStore.loadData(datasetId.value, true);
@@ -2136,7 +2133,7 @@ const applyDateTimeHandling = async () => {
     processingMessage.value = "Extracting datetime features...";
     
     try {
-        const response = await authenticatedPost(`http://localhost:8000/api/datasets/${datasetId.value}/preprocessing/datetime`, {
+        const response = await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/datetime`, {
             dataset_id: datasetId.value,
             columns: selectedDateTimeColumns.value,
             features: selectedDateTimeFeatures.value,

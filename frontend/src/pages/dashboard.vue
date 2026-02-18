@@ -89,8 +89,8 @@
               <div class="kpi-info">
                 <div class="kpi-label">Latest Upload</div>
                 <div class="latest-entry" v-if="allDatasets.length">
-                  <div class="entry-name">{{ allDatasets[0].name }}</div>
-                  <div class="entry-meta">{{ allDatasets[0].rows?.toLocaleString() }} rows</div>
+                  <div class="entry-name">{{ sortedDatasets[0].name }}</div>
+                  <div class="entry-meta">{{ sortedDatasets[0].rows?.toLocaleString() }} rows</div>
                 </div>
                 <div v-else class="latest-entry empty">No data yet</div>
               </div>
@@ -314,17 +314,21 @@
 
             <div class="activity-container-premium glass">
               <div class="container-header">
+                
                 <h3>Activity Chronicle</h3>
                 <span class="count-badge">{{ recentActivity.length }} Events</span>
               </div>
-              <div class="activity-feed">
+              <div class="activity-feed custom-scrollbar">
                 <div v-for="act in recentActivity" :key="act.id" class="activity-item-premium">
-                  <div class="item-icon" :class="act.action_type">
-                    {{ getActionIcon(act.action_type) }}
+                  <div class="item-icon-wrapper" :class="act.action_type">
+                    <div class="icon-inner" v-html="getActionIcon(act.action_type)"></div>
                   </div>
                   <div class="item-content">
-                    <div class="item-title">{{ formatActionTitle(act) }}</div>
-                    <div class="item-meta">{{ getRelativeTime(act.created_at) }}</div>
+                    <div class="item-header">
+                      <div class="item-title">{{ formatActionTitle(act) }}</div>
+                      <div class="item-timestamp">{{ getRelativeTime(act.created_at) }}</div>
+                    </div>
+                    <div class="item-subtext" v-if="act.details?.filename">Targeting {{ act.details.filename }}</div>
                   </div>
                 </div>
                 <div v-if="recentActivity.length === 0" class="empty-activity">
@@ -603,10 +607,8 @@ const handleDrop = (e) => {
 }
 
 const processFile = async (file) => {
+  const { authenticatedFetch, authenticatedGet } = useAuthenticatedFetch()
   isUploading.value = true
-  uploadSuccess.value = false
-  uploadProgress.value = 10
-  uploadMessage.value = 'Connecting to server...'
   
   try {
     const formData = new FormData()
@@ -617,9 +619,8 @@ const processFile = async (file) => {
     uploadProgress.value = 30
     uploadMessage.value = 'Uploading stream...'
     
-    const response = await fetch('http://localhost:8000/api/upload-dataset', {
+    const response = await authenticatedFetch(`/api/upload-dataset`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
       body: formData
     })
     
@@ -646,8 +647,13 @@ const processFile = async (file) => {
 
 // UI Helpers
 const getActionIcon = (type) => {
-  const icons = { upload: '📥', train: '🤖', cleaning: '🧹', preprocess: '⚙️' }
-  return icons[type] || '⚡'
+  const icons = { 
+    upload: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>`, 
+    train: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`, 
+    cleaning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`, 
+    preprocess: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>` 
+  }
+  return icons[type] || `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
 }
 
 const formatActionTitle = (act) => {
@@ -689,10 +695,8 @@ const analyzeDataset = (ds) => {
 
 const downloadDataset = async (ds) => {
   try {
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
-    const response = await fetch(`http://localhost:8000/api/export-dataset/${ds.id}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const { authenticatedGet } = useAuthenticatedFetch()
+    const response = await authenticatedGet(`/api/export-dataset/${ds.id}`)
     
     if (!response.ok) throw new Error('Download failed')
     
@@ -713,10 +717,8 @@ const downloadDataset = async (ds) => {
 
 const downloadModel = async (model) => {
   try {
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
-    const response = await fetch(`http://localhost:8000/api/models/${model.id}/download`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const { authenticatedGet } = useAuthenticatedFetch()
+    const response = await authenticatedGet(`/api/models/${model.id}/download`)
     
     if (!response.ok) {
       const err = await response.json()
@@ -1037,17 +1039,78 @@ td { padding: 1.5rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.02); c
 .chart-container-premium { padding: 2rem; }
 .chart-wrapper { height: 400px; margin-top: 1.5rem; }
 
-.activity-container-premium { padding: 0; overflow: hidden; }
-.activity-feed { padding: 1.5rem; max-height: 500px; overflow-y: auto; }
-.activity-item-premium { display: flex; gap: 1rem; padding: 1rem; margin-bottom: 0.5rem; border-radius: 16px; transition: background 0.2s; }
-.activity-item-premium:hover { background: rgba(255,255,255,0.02); }
+.activity-container-premium { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.activity-feed { padding: 1.5rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
 
-.item-icon { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
-.item-icon.upload { color: #667eea; border-color: rgba(102, 126, 234, 0.2); }
-.item-icon.train { color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+.activity-item-premium { 
+  display: flex; 
+  gap: 1.25rem; 
+  padding: 1.25rem; 
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 20px; 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
 
-.item-title { font-weight: 600; font-size: 0.9rem; color: #ffffff; }
-.item-meta { font-size: 0.75rem; color: #4a4a6a; margin-top: 2px; }
+.activity-item-premium:hover { 
+  background: rgba(255, 255, 255, 0.05); 
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateX(4px);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.activity-item-premium::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: #667eea;
+  transition: height 0.3s ease;
+  border-radius: 0 4px 4px 0;
+}
+
+.activity-item-premium:hover::before {
+  height: 60%;
+}
+
+.item-icon-wrapper { 
+  width: 48px; 
+  height: 48px; 
+  border-radius: 16px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.activity-item-premium:hover .item-icon-wrapper {
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.item-icon-wrapper.upload { color: #667eea; background: rgba(102, 126, 234, 0.1); border-color: rgba(102, 126, 234, 0.2); }
+.item-icon-wrapper.train { color: #10b981; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+.item-icon-wrapper.cleaning { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+.item-icon-wrapper.preprocess { color: #8b5cf6; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); }
+
+.item-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.item-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.item-title { font-weight: 700; font-size: 0.95rem; color: #ffffff; letter-spacing: -0.01em; }
+.item-timestamp { font-size: 0.75rem; color: #6a6a8a; font-weight: 500; }
+.item-subtext { font-size: 0.8rem; color: #4a4a6a; margin-top: 4px; }
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.01); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(102, 126, 234, 0.2); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(102, 126, 234, 0.4); }
 
 /* Empty States */
 .empty-state-view { text-align: center; padding: 6rem 1rem; }

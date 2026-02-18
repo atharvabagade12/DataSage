@@ -6,15 +6,53 @@
  */
 
 export const useAuthenticatedFetch = () => {
+  const config = useRuntimeConfig()
+  
+  // Central source of truth for API Base
+  // It is CRITICAL that there are no hardcoded localhost fallbacks here
+  // which might override the environment variables picked up by Nuxt.
+  const apiBase = config.public.apiBase || ''
+  
+  console.log('🔌 [AuthenticatedFetch] Initialized with apiBase:', apiBase || '(empty - will use relative or default)')
+
+  /**
+   * Helper to resolve the final URL
+   */
+  const resolveUrl = (url) => {
+    // If it's already an absolute URL (starts with http), return as is
+    if (url.startsWith('http')) return url
+    
+    // Ensure URL starts with / if not empty
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`
+    
+    // If apiBase is empty, we probably have a configuration issue on Vercel
+    // but we'll try to fallback to a sensible default ONLY if absolutely necessary
+    const base = apiBase || 'http://localhost:8000'
+    
+    const finalUrl = `${base}${normalizedUrl}`
+    
+    // Debug log to help troubleshoot Vercel connectivity
+    if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined') {
+        console.log(`📡 [AuthenticatedFetch] Request: ${finalUrl}`)
+    }
+    
+    return finalUrl
+  }
+
   /**
    * Make an authenticated fetch request
-   * @param {string} url - The URL to fetch
-   * @param {RequestInit} options - Fetch options (method, body, headers, etc.)
+   * @param {string} url - The URL to fetch (relative to apiBase, e.g., '/api/auth/login')
+   * @param {RequestInit} options - Fetch options
    * @returns {Promise<Response>} - The fetch response
    */
   const authenticatedFetch = async (url, options = {}) => {
+    const finalUrl = resolveUrl(url)
+    
     // Get JWT token from storage
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
+    const token = sessionStorage.getItem('token') || 
+                  sessionStorage.getItem('authToken') || 
+                  localStorage.getItem('token') || 
+                  localStorage.getItem('authToken')
     
     // Merge headers with authentication
     const headers = {
@@ -26,8 +64,11 @@ export const useAuthenticatedFetch = () => {
       headers['Authorization'] = `Bearer ${token}`
     }
     
-    // Make the request with authentication
-    return fetch(url, {
+    // Add ngrok skip header (safe to include even for non-ngrok URLs)
+    headers['ngrok-skip-browser-warning'] = 'true'
+    
+    // Make the request
+    return fetch(finalUrl, {
       ...options,
       headers
     })
@@ -35,9 +76,6 @@ export const useAuthenticatedFetch = () => {
 
   /**
    * Make an authenticated POST request with JSON body
-   * @param {string} url - The URL to post to
-   * @param {object} data - The data to send as JSON
-   * @returns {Promise<Response>} - The fetch response
    */
   const authenticatedPost = async (url, data) => {
     return authenticatedFetch(url, {
@@ -51,8 +89,6 @@ export const useAuthenticatedFetch = () => {
 
   /**
    * Make an authenticated GET request
-   * @param {string} url - The URL to get
-   * @returns {Promise<Response>} - The fetch response
    */
   const authenticatedGet = async (url) => {
     return authenticatedFetch(url, {
@@ -60,9 +96,33 @@ export const useAuthenticatedFetch = () => {
     })
   }
 
+  /**
+   * Helper to resolve the final WebSocket URL
+   */
+  const resolveWsUrl = (url) => {
+    // If it's already an absolute URL, return as is
+    if (url.startsWith('ws')) return url
+    
+    // Ensure URL starts with / if not empty
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`
+    
+    // Resolve base from apiBase
+    let base = apiBase || 'http://localhost:8000'
+    
+    // Convert http(s) to ws(s)
+    const wsBase = base.replace(/^http/, 'ws')
+    
+    const finalUrl = `${wsBase}${normalizedUrl}`
+    
+    console.log(`🔌 [AuthenticatedFetch] WebSocket: ${finalUrl}`)
+    return finalUrl
+  }
+
   return {
     authenticatedFetch,
     authenticatedPost,
-    authenticatedGet
+    authenticatedGet,
+    resolveUrl,
+    resolveWsUrl
   }
 }

@@ -23,28 +23,16 @@ export const useDataStore = defineStore('data', {
       if (!datasetId) return;
       if (!force && this.isLoaded && this.lastFetchedId === datasetId) return;
       
+      const { authenticatedGet } = useAuthenticatedFetch();
+      
       try {
         console.log('🔄 DataStore: Fetching data for', datasetId);
         
-        // Use direct fetch with auth header manually
-        // Check both sessionStorage and localStorage, and common keys
-        const token = sessionStorage.getItem('token') || 
-                      sessionStorage.getItem('authToken') || 
-                      localStorage.getItem('token') || 
-                      localStorage.getItem('authToken');
-                      
-        const headers = { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        };
-
-        console.log("🛠️ DataStore: Fetching with token:", token ? "Found (length " + token.length + ")" : "MISSING");
-
-        // Parallel Fetch
+        // Parallel Fetch using central utility
         const [previewRes, typesRes, statsRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/datasets/${datasetId}?limit=200`, { headers }),
-          fetch(`http://localhost:8000/api/datasets/${datasetId}/semantic-types`, { headers }),
-          fetch(`http://localhost:8000/api/datasets/${datasetId}/statistics`, { headers })
+          authenticatedGet(`/api/datasets/${datasetId}?limit=200`),
+          authenticatedGet(`/api/datasets/${datasetId}/semantic-types`),
+          authenticatedGet(`/api/datasets/${datasetId}/statistics`)
         ]);
 
         if (previewRes.ok) {
@@ -107,22 +95,12 @@ export const useDataStore = defineStore('data', {
     async saveSemanticTypes(datasetId, overrides) {
       if (!datasetId || !overrides || overrides.length === 0) return;
       
+      const { authenticatedPost } = useAuthenticatedFetch();
+      
       try {
         console.log('📤 DataStore: Saving semantic type overrides for', datasetId);
         
-        const token = sessionStorage.getItem('token') || 
-                      sessionStorage.getItem('authToken') || 
-                      localStorage.getItem('token') || 
-                      localStorage.getItem('authToken');
-                      
-        const response = await fetch(`http://localhost:8000/api/datasets/${datasetId}/semantic-types/override`, {
-          method: 'POST',
-          headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(overrides)
-        });
+        const response = await authenticatedPost(`/api/datasets/${datasetId}/semantic-types/override`, overrides);
 
         if (!response.ok) {
           throw new Error(`Failed to save semantic types: ${response.statusText}`);

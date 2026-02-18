@@ -1,7 +1,29 @@
 import { defineStore } from 'pinia'
 
+interface User {
+  id: string;
+  username: string;
+  email: string;
+}
+
+interface LoginResponse {
+  success: boolean;
+  user: User;
+  token?: string;
+  access_token?: string;
+  message?: string;
+}
+
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+}
+
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
+  state: (): AuthState => ({
     user: null,
     token: null,
     isAuthenticated: false,
@@ -16,53 +38,38 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    // Login action
-    // In your auth store (stores/auth.ts), update the login function:
-    async login(credentials) {
+    async login(credentials: any) {
+      const { authenticatedPost } = useAuthenticatedFetch()
       this.isLoading = true
       this.error = null
     
       try {
         console.log('🚀 Auth store: Starting login...')
-        
-        // ✅ CORRECT FORMAT - Backend expects ONLY username and password
         const payload = {
           username: credentials.username || credentials.email,
           password: credentials.password
-          
         }
         
-        console.log('📡 Sending payload to backend:', payload)
+        const response = await authenticatedPost(`/api/auth/login`, payload)
         
-        const response = await $fetch('http://localhost:8000/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)  // ✅ Send correct format
-        })
-    
-        console.log('✅ Auth store: Login response:', response)
-    
-        if (response && response.success) {
-          // Set auth state
-          this.user = response.user
-          this.token = response.token || response.access_token
+        // Handle both fetch Response and direct JSON if it was already parsed (though authenticatedPost returns Response)
+        const data = response instanceof Response ? await response.json() : response
+
+        if (data && (data.success || data.access_token)) {
+          this.user = data.user
+          this.token = data.token || data.access_token || null
           this.isAuthenticated = true
     
-          // Store in session storage
-          if (process.client) {
-            sessionStorage.setItem('user', JSON.stringify(response.user))
-            sessionStorage.setItem('token', response.token || response.access_token)
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('user', JSON.stringify(data.user))
+            sessionStorage.setItem('token', this.token || '')
           }
     
-          return { success: true, user: response.user }
+          return { success: true, user: data.user }
         } else {
-          throw new Error(response?.message || 'Login failed')
+          throw new Error(data?.message || 'Login failed')
         }
-    
-      } catch (error) {
-        console.error('❌ Auth store: Login error:', error)
+      } catch (error: any) {
         this.error = error.message || 'Connection failed'
         this.isAuthenticated = false
         return { success: false, error: this.error }
@@ -71,14 +78,10 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-
     async register(username: string, email: string, password: string) {
+      const { authenticatedPost } = useAuthenticatedFetch()
       try {
-        const response = await fetch('http://localhost:8000/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, email, password })
-        })
+        const response = await authenticatedPost(`/api/auth/register`, { username, email, password })
         
         if (!response.ok) {
           const error = await response.json()
@@ -90,46 +93,30 @@ export const useAuthStore = defineStore('auth', {
         throw new Error(error.message || 'Registration failed')
       }
     },
-    // Signup action
-    async signup(userData) {
+
+    async signup(userData: any) {
       this.isLoading = true
       this.error = null
-    
       try {
-        console.log('🚀 Auth store: Starting signup...')
-        console.log('🔍 Input userData:', userData)  // ← Add this
-        
         const payload = {
           username: userData.username,
           email: userData.email,
           password: userData.password
         }
+        const { authenticatedPost } = useAuthenticatedFetch()
+        const response = await authenticatedPost(`/api/auth/register`, payload)
         
-        console.log('📡 Sending payload:', payload)  // ← Add this
-        console.log('📡 Payload JSON:', JSON.stringify(payload))  // ← Add this
-        
-        const response = await $fetch('http://localhost:8000/api/auth/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)
-        })
-    
-        console.log('✅ Auth store: Register response:', response)
-    
-        if (response && response.success) {
-          // Auto-login after signup
+        const data = response instanceof Response ? await response.json() : response
+
+        if (data && (data.success || data.status === 'success')) {
           return await this.login({
-            username: userData.username,  // ✅ Use username for login
+            username: userData.username,
             password: userData.password
           })
         } else {
-          throw new Error(response?.message || 'Registration failed')
+          throw new Error(data?.message || 'Registration failed')
         }
-    
-      } catch (error) {
-        console.error('❌ Auth store: Register error:', error)
+      } catch (error: any) {
         this.error = error.message || 'Connection failed'
         return { success: false, error: this.error }
       } finally {
@@ -137,46 +124,33 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // Logout action
     async logout() {
+      const { authenticatedPost } = useAuthenticatedFetch()
       try {
-        await $fetch('http://localhost:8000/api/auth/logout', {
-          method: 'POST'
-        })
+        await authenticatedPost(`/api/auth/logout`, {})
       } catch (error) {
         console.warn('Logout API call failed:', error)
       }
-
-      // Clear state regardless of API response
       this.user = null
       this.token = null
       this.isAuthenticated = false
       this.error = null
-
-      // Clear session storage
-      if (process.client) {
+      if (typeof window !== 'undefined') {
         sessionStorage.removeItem('user')
         sessionStorage.removeItem('token')
       }
     },
 
-    // Restore session
     restoreSession() {
-      if (process.client) {
+      if (typeof window !== 'undefined') {
         const user = sessionStorage.getItem('user')
         const token = sessionStorage.getItem('token')
-
         if (user && token) {
-          this.user = JSON.parse(user)
+          this.user = JSON.parse(user) as User
           this.token = token
           this.isAuthenticated = true
         }
       }
-    },
-
-    // Clear error
-    clearError() {
-      this.error = null
     }
   }
 })

@@ -225,7 +225,8 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-const API_BASE = 'http://localhost:8000/api/auth'
+const { authenticatedPost } = useAuthenticatedFetch();
+const API_BASE = `/api/auth`
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -283,13 +284,9 @@ const handleLogin = async () => {
   loginError.value = ''
   
   try {
-    const response = await fetch(`${API_BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: loginForm.username,
-        password: loginForm.password
-      })
+    const response = await authenticatedPost(`${API_BASE}/login`, {
+      username: loginForm.username,
+      password: loginForm.password
     })
     
     if (!response.ok) {
@@ -319,14 +316,10 @@ const handleRegister = async () => {
   registerSuccess.value = false
   
   try {
-    const response = await fetch(`${API_BASE}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: registerForm.username,
-        email: registerForm.email,
-        password: registerForm.password
-      })
+    const response = await authenticatedPost(`${API_BASE}/register`, {
+      username: registerForm.username,
+      email: registerForm.email,
+      password: registerForm.password
     })
     
     if (!response.ok) {
@@ -341,7 +334,10 @@ const handleRegister = async () => {
       try {
         const loginResponse = await fetch(`${API_BASE}/login`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
           body: JSON.stringify({
             username: registerForm.username,
             password: registerForm.password

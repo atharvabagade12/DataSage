@@ -198,11 +198,12 @@ let chartInstance = null;
 const fetchInsights = async () => {
   if (!props.columnName || !props.datasetId) return;
   
+  const { authenticatedGet } = useAuthenticatedFetch();
   loading.value = true;
   insights.value = null;
   
   try {
-    const response = await authenticatedGet(`http://localhost:8000/api/datasets/${encodeURIComponent(props.datasetId)}/columns/${encodeURIComponent(props.columnName)}/insights`);
+    const response = await authenticatedGet(`/api/datasets/${encodeURIComponent(props.datasetId)}/columns/${encodeURIComponent(props.columnName)}/insights`);
     if (response.ok) {
       insights.value = await response.json();
       nextTick(() => {

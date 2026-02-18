@@ -262,7 +262,7 @@ const continueToAdvancedPreprocessing = async () => {
 
     // 2. Notify Backend
     try {
-        await authenticatedPost('http://localhost:8000/api/set-target', {
+        await authenticatedPost(`/api/set-target`, {
             dataset_id: datasetId.value,
             target_column: selectedColumn.value.name,
             problem_type: probType

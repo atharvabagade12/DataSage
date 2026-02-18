@@ -711,10 +711,12 @@ import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useExperimentStore } from "@/stores/experiment";
 import { useDataStore } from "@/stores/data";
+import { useAuthenticatedFetch } from "@/composables/useAuthenticatedFetch";
 
 const router = useRouter();
 const experimentStore = useExperimentStore();
 const dataStore = useDataStore();
+const { authenticatedGet } = useAuthenticatedFetch();
 
 const { 
   datasetId, 
@@ -778,19 +780,7 @@ const showDistributionsPreview = ref(false);
 const checkBackendConnection = async () => {
   try {
     console.log(" Checking backend connection...");
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
-    const response = await fetch("http://localhost:8000/api/health", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
+    const response = await authenticatedGet(`/api/health`);
 
     if (response.ok) {
       const data = await response.json();

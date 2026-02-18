@@ -577,19 +577,15 @@ export const useMLPipeline = () => {
 
     try {
       // Call standalone ML server for detection
-      const response = await $fetch(
-        "http://localhost:8000/api/detect-problem-type",
-        {
-          method: "POST",
-          body: {
-            dataset_id: pipelineState.sessionId,
-            target_column: pipelineState.targetColumn,
-          },
-        }
-      );
+      const { authenticatedPost } = useAuthenticatedFetch();
+      const response = await authenticatedPost(`/api/detect-problem-type`, {
+        dataset_id: pipelineState.sessionId,
+        target_column: pipelineState.targetColumn,
+      });
 
-      pipelineState.problemType = response.problemType;
-      pipelineState.targetColumnType = response.targetType;
+      const data = response instanceof Response ? await response.json() : response;
+      pipelineState.problemType = data.problemType;
+      pipelineState.targetColumnType = data.targetType;
 
       console.log("🎯 Problem type detected:", response.problemType);
     } catch (error) {
@@ -711,38 +707,33 @@ export const useMLPipeline = () => {
 
       updateProcessing(25, "Uploading file...");
 
-      const response = await $fetch(
-        "http://localhost:8000/api/upload-dataset",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const { authenticatedFetch } = useAuthenticatedFetch();
+      const response = await authenticatedFetch(`/api/upload-dataset`, {
+        method: "POST",
+        body: formData,
+      });
 
+      const data = response instanceof Response ? await response.json() : response;
       updateProcessing(75, "Processing dataset...");
 
       // Update pipeline state with dataset info
       updateState({
-        dataset: response.sample_data,
-        datasetInfo: response.statistics,
+        dataset: data.sample_data,
+        datasetInfo: data.statistics,
         datasetName: file.name,
         datasetSize: file.size,
-        datasetColumns: response.columns,
+        datasetColumns: data.columns,
         datasetShape: {
-          rows: response.shape?.[0] || 0,
-          columns: response.shape?.[1] || 0,
+          rows: data.shape?.[0] || 0,
+          columns: data.shape?.[1] || 0,
         },
-        dataTypes: response.dtypes,
-        missingValues: response.missing_values,
+        dataTypes: data.dtypes,
+        missingValues: data.missing_values,
         duplicateRows: 0,
-        sessionId: response.dataset_id,
+        sessionId: data.dataset_id,
       });
 
-      updateProcessing(100, "Dataset uploaded successfully!");
-
-      setTimeout(stopProcessing, 1000);
-
-      return response;
+      return data;
     } catch (error) {
       stopProcessing();
       addError("Failed to upload dataset", error.message);
@@ -774,28 +765,28 @@ export const useMLPipeline = () => {
         // outliers: { columns: [], method: 'iqr', strategy: 'cap' }
       };
 
-      const response = await $fetch("http://localhost:8000/api/preprocess", {
-        method: "POST",
-        body: payload,
-      });
+      const { authenticatedPost } = useAuthenticatedFetch();
+      const response = await authenticatedPost(`/api/preprocess`, payload);
 
       updateProcessing(80, "Finalizing preprocessing...");
+      
+      const data = response instanceof Response ? await response.json() : response;
 
       updateState({
         preprocessingComplete: true,
         preprocessingConfig: config,
-        dataset: response.preview,
-        datasetInfo: response.summary,
+        dataset: data.preview,
+        datasetInfo: data.summary,
         datasetShape: {
-          rows: response.shape?.[0] || 0,
-          columns: response.shape?.[1] || 0,
+          rows: data.shape?.[0] || 0,
+          columns: data.shape?.[1] || 0,
         },
       });
 
       updateProcessing(100, "Preprocessing completed!");
       setTimeout(stopProcessing, 1000);
 
-      return response;
+      return data;
     } catch (error) {
       stopProcessing();
       addError("Preprocessing failed", error.message);
@@ -817,7 +808,8 @@ export const useMLPipeline = () => {
 
     try {
       updateProcessing(10, "Preparing training data...");
-      const ws = new WebSocket("ws://localhost:8000/ws/train-model");
+      const { resolveWsUrl } = useAuthenticatedFetch()
+      const ws = new WebSocket(resolveWsUrl("/ws/train-model"));
 
       const result = await new Promise((resolve, reject) => {
         ws.onopen = () => {

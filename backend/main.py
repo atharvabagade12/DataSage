@@ -92,21 +92,57 @@ app = FastAPI(
     description="Production-ready ML backend with proper dataset management"
 )
 
-#  CORS CONFIGURATION 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://0.0.0.0:3000",
-        "http://[::1]:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from fastapi import Response
+import os
+
+# 1. Define allowed origins clearly
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://0.0.0.0:3000",
+    "http://[::1]:3000",
+    "https://datasage-ui.vercel.app"
+]
+
+@app.middleware("http")
+async def manual_cors_middleware(request, call_next):
+    origin = request.headers.get("origin")
+    
+    # Handle preflight (OPTIONS) requests manually
+    if request.method == "OPTIONS":
+        print(f"🛠️ MANUAL CORS: Handling OPTIONS for {request.url.path} from {origin}")
+        response = Response(status_code=204)
+        # Always return the origin that requested it if it's in our allowed list or ends with .vercel.app
+        if origin and (origin in ALLOWED_ORIGINS or origin.endswith(".vercel.app") or "localhost" in origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, ngrok-skip-browser-warning, X-Requested-With"
+        response.headers["Access-Control-Max-Age"] = "86400"
+        return response
+
+    # Handle actual requests
+    response = await call_next(request)
+    
+    # Inject CORS headers into every response
+    if origin:
+        if origin in ALLOWED_ORIGINS or origin.endswith(".vercel.app") or "localhost" in origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, ngrok-skip-browser-warning, X-Requested-With"
+    
+    return response
+
+# Note: We are REMOVING the standard CORSMiddleware to prevent interference
 
 # ✅ IMPORT AUTH ROUTER
 try:
@@ -4149,7 +4185,7 @@ async def get_datasets(
 ):
     """List all datasets for current user - Persisted"""
     try:
-        datasets = db.query(DatasetModel).filter(DatasetModel.user_id == current_user['id']).all()
+        datasets = db.query(DatasetModel).filter(DatasetModel.user_id == current_user['id']).order_by(DatasetModel.upload_date.desc()).all()
         return [
             {
                 "id": str(d.id),

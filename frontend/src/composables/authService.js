@@ -1,22 +1,26 @@
 export const useAuth = () => {
   const router = useRouter()
+  const { authenticatedFetch, authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
   
-  const API_BASE = 'http://localhost:8000/api/auth'
+  const API_BASE = `/api/auth`
   
   // Get stored token
   const getToken = () => {
-    return localStorage.getItem('authToken')
+    return localStorage.getItem('authToken') || sessionStorage.getItem('token')
   }
   
   // Store token
   const setToken = (token) => {
     localStorage.setItem('authToken', token)
+    sessionStorage.setItem('token', token)
   }
   
   // Remove token
   const clearToken = () => {
     localStorage.removeItem('authToken')
     localStorage.removeItem('user')
+    sessionStorage.removeItem('token')
+    sessionStorage.removeItem('user')
     sessionStorage.clear()
   }
   
@@ -27,10 +31,8 @@ export const useAuth = () => {
   
   // Register user
   const register = async (username, email, password) => {
-    const response = await fetch(`${API_BASE}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
+    const response = await authenticatedPost(`${API_BASE}/register`, { 
+      username, email, password 
     })
     
     if (!response.ok) {
@@ -43,10 +45,8 @@ export const useAuth = () => {
   
   // Login user
   const login = async (username, password) => {
-    const response = await fetch(`${API_BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+    const response = await authenticatedPost(`${API_BASE}/login`, { 
+      username, password 
     })
     
     if (!response.ok) {
@@ -57,7 +57,7 @@ export const useAuth = () => {
     const data = await response.json()
     
     // Store token and user data
-    setToken(data.access_token)
+    setToken(data.access_token || data.token)
     localStorage.setItem('user', JSON.stringify(data.user))
     sessionStorage.setItem('user', JSON.stringify(data.user))
     
@@ -66,19 +66,10 @@ export const useAuth = () => {
   
   // Logout user
   const logout = async () => {
-    const token = getToken()
-    
-    if (token) {
-      try {
-        await fetch(`${API_BASE}/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-      } catch (error) {
-        console.error('Logout error:', error)
-      }
+    try {
+      await authenticatedPost(`${API_BASE}/logout`, {})
+    } catch (error) {
+      console.error('Logout error:', error)
     }
     
     clearToken()
@@ -87,18 +78,8 @@ export const useAuth = () => {
   
   // Verify token
   const verifyToken = async () => {
-    const token = getToken()
-    
-    if (!token) return false
-    
     try {
-      const response = await fetch(`${API_BASE}/verify-token`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      
+      const response = await authenticatedPost(`${API_BASE}/verify-token`, {})
       return response.ok
     } catch {
       return false
