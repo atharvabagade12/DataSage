@@ -356,6 +356,7 @@
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useAuthenticatedFetch } from '@/composables/useAuthenticatedFetch';
 import Chart from 'chart.js/auto';
 
 const route = useRoute();
@@ -410,7 +411,8 @@ const fetchVisualizationData = async () => {
   }
   
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/get-visualization-data/${modelId}`);
+    const { authenticatedGet } = useAuthenticatedFetch();
+    const response = await authenticatedGet(`/api/get-visualization-data/${modelId}`);
     const data = await response.json();
     
     if (data.success) {

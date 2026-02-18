@@ -332,16 +332,9 @@ const handleRegister = async () => {
     // Auto-login after 2 seconds
     setTimeout(async () => {
       try {
-        const loginResponse = await fetch(`${API_BASE}/login`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({
+        const loginResponse = await authenticatedPost(`${API_BASE}/login`, {
             username: registerForm.username,
             password: registerForm.password
-          })
         })
         
         if (loginResponse.ok) {

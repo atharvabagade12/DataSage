@@ -13,7 +13,10 @@ export const useAuthenticatedFetch = () => {
   // which might override the environment variables picked up by Nuxt.
   const apiBase = config.public.apiBase || ''
   
-  console.log('🔌 [AuthenticatedFetch] Initialized with apiBase:', apiBase || '(empty - will use relative or default)')
+  if (process.client) {
+    console.log('🔌 [AuthenticatedFetch] Raw Config:', config.public)
+    console.log('🔌 [AuthenticatedFetch] Resolved apiBase:', apiBase)
+  }
 
   /**
    * Helper to resolve the final URL
@@ -25,9 +28,8 @@ export const useAuthenticatedFetch = () => {
     // Ensure URL starts with / if not empty
     const normalizedUrl = url.startsWith('/') ? url : `/${url}`
     
-    // If apiBase is empty, we probably have a configuration issue on Vercel
-    // but we'll try to fallback to a sensible default ONLY if absolutely necessary
-    const base = apiBase || 'http://localhost:8000'
+    // Use the config value, or an empty string to allow relative requests if intended
+    const base = apiBase
     
     const finalUrl = `${base}${normalizedUrl}`
     
@@ -107,7 +109,7 @@ export const useAuthenticatedFetch = () => {
     const normalizedUrl = url.startsWith('/') ? url : `/${url}`
     
     // Resolve base from apiBase
-    let base = apiBase || 'http://localhost:8000'
+    let base = apiBase
     
     // Convert http(s) to ws(s)
     const wsBase = base.replace(/^http/, 'ws')

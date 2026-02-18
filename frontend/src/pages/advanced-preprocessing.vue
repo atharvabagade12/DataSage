@@ -3082,15 +3082,13 @@ const exportData = async () => {
     } else if (currentSplitView.value === "test" && splitApplied.value) {
       // Export full test dataset from backend
       console.log("📥 Exporting full test dataset from backend...");
-      const config = useRuntimeConfig();
-      const apiBase = config.public.apiBase || 'http://localhost:8000';
-      response = await authenticatedGet(`${apiBase}/api/export-test/${datasetId.value}`);
+      response = await authenticatedGet(`/api/export-test/${datasetId.value}`);
       filename = `${fileName.value.replace(".csv", "")}_test.csv`;
       
     } else {
       // Export full original dataset from backend
       console.log("📥 Exporting full original dataset from backend...");
-      response = await authenticatedGet(`http://localhost:8000/api/export-dataset/${datasetId.value}`);
+      response = await authenticatedGet(`/api/export-dataset/${datasetId.value}`);
       filename = fileName.value;
     }
 
@@ -3146,9 +3144,7 @@ async function applyCategoricalEncoding() {
 
     console.log('🔍 Encoding Request:', payload);
 
-    const config = useRuntimeConfig();
-    const apiBase = config.public.apiBase || 'http://localhost:8000';
-    const response = await authenticatedPost(`${apiBase}/api/apply-categorical-encoding`, payload)
+    const response = await authenticatedPost(`/api/apply-categorical-encoding`, payload)
 
     if (!response.ok) {
        throw new Error(`Encoding failed: ${response.statusText}`);
@@ -3233,9 +3229,7 @@ async function detectAndConfigureTfidf() {
     processingMessage.value = 'Detecting text columns...';
 
     // Step 1: Detect text columns
-    const config = useRuntimeConfig();
-    const apiBase = config.public.apiBase || 'http://localhost:8000';
-    const detectResponse = await authenticatedPost(`${apiBase}/api/detect-text-columns`, {
+    const detectResponse = await authenticatedPost(`/api/detect-text-columns`, {
       dataset_id: datasetId.value
     });
 
@@ -3251,9 +3245,7 @@ async function detectAndConfigureTfidf() {
     if (detectData.text_columns.length > 0) {
       processingMessage.value = 'Configuring TF-IDF parameters...';
 
-    const config = useRuntimeConfig();
-    const apiBase = config.public.apiBase || 'http://localhost:8000';
-    const configResponse = await authenticatedPost(`${apiBase}/api/configure-tfidf`, {
+    const configResponse = await authenticatedPost(`/api/configure-tfidf`, {
         dataset_id: datasetId.value,
         text_columns: detectData.text_columns
       });
@@ -3323,9 +3315,7 @@ async function applyTfidf() {
 
     console.log('🔤 Applying TF-IDF with config:', columnsConfig);
 
-    const config = useRuntimeConfig();
-    const apiBase = config.public.apiBase || 'http://localhost:8000';
-    const response = await authenticatedPost(`${apiBase}/api/apply-tfidf`, {
+    const response = await authenticatedPost(`/api/apply-tfidf`, {
       dataset_id: datasetId.value,
       columns: columnsConfig
     });
@@ -3405,9 +3395,7 @@ async function applyTargetEncoding() {
 
     console.log('🔍 Target Encoding Request:', payload);
 
-    const config = useRuntimeConfig();
-    const apiBase = config.public.apiBase || 'http://localhost:8000';
-    const response = await authenticatedPost(`${apiBase}/api/apply-target-encoding`, payload)
+    const response = await authenticatedPost(`/api/apply-target-encoding`, payload)
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));

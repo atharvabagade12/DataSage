@@ -2538,9 +2538,7 @@ onMounted(async () => {
   if (datasetId.value) {
     try {
       console.log(`🔍 Proactively validating dataset ${datasetId.value}...`);
-      const config = useRuntimeConfig();
-      const apiBase = config.public.apiBase || 'http://localhost:8000';
-      const response = await authenticatedGet(`${apiBase}/api/datasets/${datasetId.value}`);
+      const response = await authenticatedGet(`/api/datasets/${datasetId.value}`);
       if (response.ok) {
         console.log("✅ Dataset validated and hydrated in backend memory");
       } else {

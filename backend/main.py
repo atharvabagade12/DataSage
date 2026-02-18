@@ -96,6 +96,7 @@ from fastapi import Response
 import os
 
 # 1. Define allowed origins clearly
+env_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -105,6 +106,14 @@ ALLOWED_ORIGINS = [
     "http://[::1]:3000",
     "https://datasage-ui.vercel.app"
 ]
+# Add origins from environment if provided
+if env_origins:
+    ALLOWED_ORIGINS.extend([o.strip() for o in env_origins if o.strip()])
+
+# Support FRONTEND_URL for legacy/consistency
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url and frontend_url not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(frontend_url)
 
 @app.middleware("http")
 async def manual_cors_middleware(request, call_next):
