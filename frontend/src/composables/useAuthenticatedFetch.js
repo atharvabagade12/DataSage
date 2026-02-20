@@ -9,13 +9,14 @@ export const useAuthenticatedFetch = () => {
   const config = useRuntimeConfig()
   
   // Central source of truth for API Base
-  // It is CRITICAL that there are no hardcoded localhost fallbacks here
-  // which might override the environment variables picked up by Nuxt.
-  const apiBase = config.public.apiBase || ''
+  // Checks for BOTH the correct NUXT_PUBLIC_API_BASE and the typo NUXT_PUBLIC_BASE_API
+  const apiBase = config.public.apiBase || config.public.baseApi || ''
   
   if (process.client) {
-    console.log('🔌 [AuthenticatedFetch] Raw Config:', config.public)
-    console.log('🔌 [AuthenticatedFetch] Resolved apiBase:', apiBase)
+    if (config.public.baseApi && !config.public.apiBase) {
+      console.warn('⚠️ [AuthenticatedFetch] Using fallback baseApi. Please fix your Vercel env var to NUXT_PUBLIC_API_BASE for consistency.')
+    }
+    console.log('🔌 [AuthenticatedFetch] Resolved apiBase:', apiBase || '(relative path)')
   }
 
   /**
@@ -120,10 +121,20 @@ export const useAuthenticatedFetch = () => {
     return finalUrl
   }
 
+  /**
+   * Make an authenticated DELETE request
+   */
+  const authenticatedDelete = async (url) => {
+    return authenticatedFetch(url, {
+      method: 'DELETE'
+    })
+  }
+
   return {
     authenticatedFetch,
     authenticatedPost,
     authenticatedGet,
+    authenticatedDelete,
     resolveUrl,
     resolveWsUrl
   }

@@ -47,13 +47,18 @@ class FileService:
         return file_path
 
     def load_dataframe(self, file_path: str) -> pd.DataFrame:
-        """Load dataframe from disk"""
+        """Load dataframe from disk based on extension"""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
             
-        if file_path.endswith('.csv'):
+        ext = file_path.lower()
+        if ext.endswith('.csv'):
             return pd.read_csv(file_path)
-        elif file_path.endswith('.parquet'):
+        elif ext.endswith('.parquet'):
             return pd.read_parquet(file_path)
+        elif ext.endswith('.json'):
+            return pd.read_json(file_path)
+        elif ext.endswith('.xlsx') or ext.endswith('.xls'):
+            return pd.read_excel(file_path)
         else:
-            raise ValueError("Unsupported file format")
+            raise ValueError(f"Unsupported file format: {os.path.basename(file_path)}")

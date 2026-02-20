@@ -177,7 +177,7 @@
             <div class="upload-compact-container glass">
               <div class="upload-header-compact">
                 <h2>Import Intelligence</h2>
-                <p>CSV or JSON formats supported (Max 1GB)</p>
+                <p>Support for CSV, JSON, Parquet & Excel (Max 1GB)</p>
               </div>
               
               <div ref="uploadSection" class="upload-compact-zone"
@@ -187,7 +187,7 @@
                    @drop.prevent="handleDrop"
                    @click="triggerFileInput">
                 
-                <input type="file" ref="fileInput" class="hidden-input" @change="handleFileSelect" accept=".csv,.json">
+                <input type="file" ref="fileInput" class="hidden-input" @change="handleFileSelect" accept=".csv,.json,.parquet,.xlsx,.xls">
                 
                 <div v-if="!isUploading && !uploadSuccess" class="upload-prompt-compact">
                   <div class="prompt-icon-mini">
@@ -198,14 +198,16 @@
                   <h3>Drop file to analyze</h3>
                   <p>or click to browse</p>
                   <div class="format-badges">
-                    <span>CSV</span>
-                    <span>JSON</span>
+                    <span class="fmt-csv">CSV</span>
+                    <span class="fmt-json">JSON</span>
+                    <span class="fmt-excel">Excel</span>
+                    <span class="fmt-parquet">Parquet</span>
                   </div>
                 </div>
 
                 <div v-if="isUploading" class="upload-progress-compact">
                   <div class="premium-spinner"></div>
-                  <h3>Analyzing Data...</h3>
+                  <h3>Uploading Data...</h3>
                   <div class="mini-progress-bar">
                     <div class="fill" :style="{ width: uploadProgress + '%' }"></div>
                   </div>
@@ -214,7 +216,7 @@
 
                 <transition name="scale">
                   <div v-if="uploadSuccess" class="upload-success-compact">
-                    <h3>{{ uploadedFile?.filename }} Ready</h3>
+                    <h3>{{ uploadedFile?.filename }} is Ready</h3>
                     <button @click.stop="goToPreview" class="launch-btn-premium">Launch Data Lab</button>
                   </div>
                 </transition>
@@ -230,7 +232,13 @@
           <div class="view-header">
             <div class="header-main">
               <h2>Project Inventory</h2>
-              <p>Manage all your uploaded datasets and historical progress</p>
+              <div class="inventory-header-stats">
+                <p>Manage all your uploaded datasets and historical progress</p>
+                <div class="dataset-limit-pill" :class="{ 'warning': allDatasets.length >= 12, 'danger': allDatasets.length >= 15 }">
+                  <span class="count">{{ allDatasets.length }}</span>
+                  <span class="limit">/ 15 Datasets</span>
+                </div>
+              </div>
             </div>
             
           </div>
@@ -275,6 +283,12 @@
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                           </svg>
                         </button>
+                        <button @click="deleteDataset(ds)" class="btn-table-action danger" title="Delete Dataset">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          </svg>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -314,9 +328,8 @@
 
             <div class="activity-container-premium glass">
               <div class="container-header">
-                
                 <h3>Activity Chronicle</h3>
-                <span class="count-badge">{{ recentActivity.length }} Events</span>
+                <span class="count-badge">Last {{ recentActivity.length }} Events</span>
               </div>
               <div class="activity-feed custom-scrollbar">
                 <div v-for="act in recentActivity" :key="act.id" class="activity-item-premium">
@@ -326,7 +339,9 @@
                   <div class="item-content">
                     <div class="item-header">
                       <div class="item-title">{{ formatActionTitle(act) }}</div>
-                      <div class="item-timestamp">{{ getRelativeTime(act.created_at) }}</div>
+                      <div class="item-timestamp" :title="new Date(act.created_at).toLocaleString()">
+                        {{ getRelativeTime(act.created_at) }}
+                      </div>
                     </div>
                     <div class="item-subtext" v-if="act.details?.filename">Targeting {{ act.details.filename }}</div>
                   </div>
@@ -424,6 +439,37 @@
         </div>
       </transition>
     </div>
+
+    <!-- ===== CUSTOM DELETE MODAL ===== -->
+    <transition name="modal-fade">
+      <div v-if="showDeleteModal" class="modal-overlay" @click.self="cancelDelete">
+        <div class="modal-container glass">
+          <div class="modal-header">
+            <div class="warning-icon-animate">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"></path>
+              </svg>
+            </div>
+            <h2>Destroy Intelligence?</h2>
+          </div>
+          
+          <div class="modal-body">
+            <p>You are about to permanently purge <span class="highlight-name">{{ datasetToDelete?.name }}</span> from the ecosystem.</p>
+            <div class="warning-box">
+              <p>This action will also incinerate all associated trained models and processed versions. This cannot be undone.</p>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button @click="cancelDelete" class="btn-modal secondary" :disabled="isDeleting">Abort Mission</button>
+            <button @click="confirmDelete" class="btn-modal danger" :disabled="isDeleting">
+              <span v-if="!isDeleting">Confirm Purge</span>
+              <span v-else class="spinner-mini"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -432,6 +478,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useRouter } from 'vue-router'
 import { useMLDataFlowStore } from '../stores/mlDataFlow'
 import { useExperimentStore } from '../stores/experiment'
+import axios from 'axios'
 import Chart from 'chart.js/auto'
 
 const router = useRouter()
@@ -455,6 +502,11 @@ const fileInput = ref(null)
 const uploadSection = ref(null)
 const performanceChartCanvas = ref(null)
 let performanceChart = null
+
+// Modal States
+const showDeleteModal = ref(false)
+const datasetToDelete = ref(null)
+const isDeleting = ref(false)
 
 // Computed User Data
 const userName = computed(() => {
@@ -607,29 +659,51 @@ const handleDrop = (e) => {
 }
 
 const processFile = async (file) => {
-  const { authenticatedFetch, authenticatedGet } = useAuthenticatedFetch()
+  const { resolveUrl } = useAuthenticatedFetch()
   isUploading.value = true
+  uploadSuccess.value = false
+  uploadProgress.value = 0
+  uploadMessage.value = 'Preparing upload...'
   
   try {
     const formData = new FormData()
     formData.append('file', file)
     
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
+    // Get JWT token from storage consistently with useAuthenticatedFetch
+    const token = sessionStorage.getItem('token') || 
+                  sessionStorage.getItem('authToken') || 
+                  localStorage.getItem('token') || 
+                  localStorage.getItem('authToken')
     
-    uploadProgress.value = 30
-    uploadMessage.value = 'Uploading stream...'
+    const finalUrl = resolveUrl(`/api/upload-dataset`)
     
-    const response = await authenticatedFetch(`/api/upload-dataset`, {
-      method: 'POST',
-      body: formData
+    const response = await axios.post(finalUrl, formData, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          uploadProgress.value = percentCompleted
+          
+          if (percentCompleted < 100) {
+            const uploadedKB = Math.round(progressEvent.loaded / 1024)
+            const totalKB = Math.round(progressEvent.total / 1024)
+            uploadMessage.value = `Uploading stream... (${uploadedKB} KB / ${totalKB} KB)`
+          } else {
+            uploadMessage.value = 'Gathering Intelligence... (Analyzing data structure)'
+          }
+        } else {
+          uploadMessage.value = 'Uploading stream...'
+        }
+      }
     })
     
-    if (!response.ok) throw new Error('Network intelligence failure')
-    
-    const result = await response.json()
+    const result = response.data
     uploadProgress.value = 100
     uploadSuccess.value = true
-    isUploading.value = false // Hide spinner on success
+    isUploading.value = false 
     uploadedFile.value = result
     
     mlStore.setCurrentDataset(result.dataset_id, [], result.filename, result.columns || [])
@@ -638,10 +712,9 @@ const processFile = async (file) => {
     fetchData(true)
   } catch (error) {
     console.error('Core Upload Error:', error)
-    alert('Upload failed: ' + error.message)
+    const errorMsg = error.response?.data?.detail || error.message || 'Network intelligence failure'
+    alert('Upload failed: ' + errorMsg)
     isUploading.value = false
-  } finally {
-    // Keep success state visible for a moment
   }
 }
 
@@ -668,8 +741,13 @@ const formatAccuracy = (m) => {
 }
 
 const getRelativeTime = (dateStr) => {
-  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000)
-  if (diff < 60) return 'Just now'
+  if (!dateStr) return '-'
+  const now = new Date()
+  const past = new Date(dateStr)
+  const diff = Math.floor((now - past) / 1000)
+  
+  if (diff < 5) return 'Just now'
+  if (diff < 60) return `${diff}s ago`
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
@@ -691,6 +769,43 @@ const analyzeDataset = (ds) => {
   mlStore.setCurrentDataset(ds.id, [], ds.name, [])
   experimentStore.setDataset(ds.id, ds.name)
   navigateTo('/data-preview')
+}
+
+const deleteDataset = (ds) => {
+  datasetToDelete.value = ds
+  showDeleteModal.value = true
+}
+
+const cancelDelete = () => {
+  if (isDeleting.value) return
+  showDeleteModal.value = false
+  datasetToDelete.value = null
+}
+
+const confirmDelete = async () => {
+  if (!datasetToDelete.value || isDeleting.value) return
+  
+  isDeleting.value = true
+  try {
+    const { authenticatedDelete } = useAuthenticatedFetch()
+    const response = await authenticatedDelete(`/api/datasets/${datasetToDelete.value.id}`)
+    
+    if (!response.ok) {
+      const err = await response.json()
+      throw new Error(err.detail || 'Purge failed')
+    }
+    
+    // Refresh data
+    await fetchData(true)
+    showDeleteModal.value = false
+    datasetToDelete.value = null
+    // alert('Intelligence purged successfully') // Optional: already visible in feed
+  } catch (error) {
+    console.error('Purge Error:', error)
+    alert('Failed to purge data: ' + error.message)
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 const downloadDataset = async (ds) => {
@@ -958,11 +1073,15 @@ onUnmounted(() => performanceChart?.destroy())
 .upload-prompt-compact h3 { font-size: 1.25rem; font-weight: 700; margin: 0; }
 .upload-prompt-compact p { color: #5a5a7a; font-size: 0.9rem; margin-top: 4px; }
 .format-badges { display: flex; justify-content: center; gap: 8px; margin-top: 1.5rem; }
-.format-badges span { font-size: 0.7rem; font-weight: 800; color: #4a4a6a; border: 1px solid rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 6px; }
+.format-badges span { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; transition: all 0.3s; }
+.format-badges span.fmt-csv { background: rgba(102, 126, 234, 0.1); color: #667eea; border: 1px solid rgba(102, 126, 234, 0.2); }
+.format-badges span.fmt-json { background: rgba(168, 139, 235, 0.1); color: #a88beb; border: 1px solid rgba(168, 139, 235, 0.2); }
+.format-badges span.fmt-excel { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
+.format-badges span.fmt-parquet { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
 
 .premium-spinner { width: 40px; height: 40px; border: 3px solid rgba(102, 126, 234, 0.1); border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
 .mini-progress-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 1.5rem 0; overflow: hidden; }
-.mini-progress-bar .fill { height: 100%; background: linear-gradient(to right, #667eea, #a88beb); transition: width 0.4s; }
+.mini-progress-bar .fill { height: 100%; background: linear-gradient(to right, #667eea, #a88beb); transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px rgba(102, 126, 234, 0.5); }
 
 .success-icon-wrap { width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); color: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 1.5rem; border: 1px solid rgba(16, 185, 129, 0.2); }
 .launch-btn-premium { background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 12px 32px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.3s; margin-top: 1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
@@ -1031,16 +1150,259 @@ td { padding: 1.5rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.02); c
 .btn-table-action:hover { background: #667eea; color: white; transform: scale(1.05); }
 .btn-table-action.secondary { border-color: rgba(255, 255, 255, 0.1); color: #6a6a8a; padding: 8px; }
 .btn-table-action.secondary:hover { border-color: #667eea; color: #667eea; background: rgba(102, 126, 234, 0.1); }
+.btn-table-action.danger { border-color: rgba(239, 68, 68, 0.1); color: #4a4a6a; padding: 8px; }
+.btn-table-action.danger:hover { border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+.inventory-header-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-top: 8px;
+  gap: 1rem;
+}
+
+.dataset-limit-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 30px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.dataset-limit-pill.warning {
+  border-color: rgba(244, 158, 11, 0.3);
+  background: rgba(244, 158, 11, 0.05);
+}
+
+.dataset-limit-pill.danger {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+  animation: pulse-border 2s infinite;
+}
+
+.dataset-limit-pill .count {
+  color: #667eea;
+}
+
+.dataset-limit-pill.warning .count { color: #f59e0b; }
+.dataset-limit-pill.danger .count { color: #ef4444; }
+
+.dataset-limit-pill .limit {
+  color: #6a6a8a;
+  font-size: 0.75rem;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Custom Delete Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(5, 5, 15, 0.85);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1.5rem;
+}
+
+.modal-container {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(15, 15, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  padding: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.modal-header {
+  margin-bottom: 2rem;
+}
+
+.warning-icon-animate {
+  width: 64px;
+  height: 64px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  animation: shake 2s infinite ease-in-out;
+}
+
+.modal-header h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff, #ef4444);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+.modal-body {
+  margin-bottom: 2.5rem;
+  color: #b3b3d1;
+  line-height: 1.6;
+}
+
+.highlight-name {
+  color: #ffffff;
+  font-weight: 700;
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.warning-box {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.1);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.warning-box p {
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-modal {
+  flex: 1;
+  padding: 14px 24px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-modal.secondary {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #b3b3d1;
+}
+
+.btn-modal.secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.btn-modal.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(239, 68, 68, 0.25);
+}
+
+.btn-modal.danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.35);
+}
+
+.btn-modal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.spinner-mini {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* Animations */
+.modal-fade-enter-active, .modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-fade-enter-from, .modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-active .modal-container {
+  animation: modal-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modal-pop {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-4px) rotate(-1deg); }
+  75% { transform: translateY(2px) rotate(1deg); }
+}
 
 .action-group-mini { display: flex; gap: 8px; align-items: center; }
 
 /* Analytics Grid */
 .analytics-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 2rem; }
-.chart-container-premium { padding: 2rem; }
-.chart-wrapper { height: 400px; margin-top: 1.5rem; }
+.chart-container-premium { padding: 0; }
+.chart-wrapper { height: 400px; margin-top: 1.5rem; padding: 0 2rem 2rem; }
 
-.activity-container-premium { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
-.activity-feed { padding: 1.5rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
+.activity-container-premium { display: flex; flex-direction: column; overflow: hidden; }
+.activity-feed { padding: 1.5rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+
+.container-header {
+  padding: 1.5rem 2rem 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.container-header h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.count-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border-radius: 8px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
 
 .activity-item-premium { 
   display: flex; 

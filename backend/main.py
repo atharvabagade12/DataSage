@@ -1233,7 +1233,7 @@ async def get_recent_activity(
                 "details": a.action_details,
                 "resource_id": a.resource_id,
                 "resource_type": a.resource_type,
-                "created_at": a.created_at.isoformat()
+                "created_at": a.created_at.isoformat() + "Z"
             }
             for a in actions
         ]
@@ -1272,19 +1272,44 @@ async def upload_dataset(
     db: Session = Depends(get_db),
     current_user: dict = Depends(auth.get_current_user)
 ):
-    """Upload and analyze CSV dataset - Persisted"""
+    """Upload and analyze CSV dataset - Persisted with 15-dataset limit"""
     try:
+        user_id = current_user['id']
+        
+        # 0. Check dataset limit (15 max)
+        dataset_count = db.query(DatasetModel).filter(DatasetModel.user_id == user_id).count()
+        if dataset_count >= 15:
+            print(f"⚠️ User {user_id} reached dataset limit (15). Blocked upload.")
+            raise HTTPException(
+                status_code=400, 
+                detail="Dataset limit reached (15 max). Please delete old datasets to upload new ones."
+            )
+
         print(f"Receiving file upload: {file.filename}")
         
         # 1. Save file to disk
-        user_id = current_user['id']
         file_path = await file_service.save_dataset(file, user_id)
         
-        # 2. Read DataFrame for analysis
-        if file_path.endswith('.csv'):
-            df = pd.read_csv(file_path)
-        else:
-            df = pd.read_parquet(file_path)
+        # 2. Read DataFrame for analysis based on file extension
+        ext = file.filename.lower()
+        try:
+            if ext.endswith('.csv'):
+                df = pd.read_csv(file_path)
+            elif ext.endswith('.parquet'):
+                df = pd.read_parquet(file_path)
+            elif ext.endswith('.json'):
+                df = pd.read_json(file_path)
+            elif ext.endswith('.xlsx') or ext.endswith('.xls'):
+                df = pd.read_excel(file_path)
+            else:
+                # Fallback to CSV if extension is unknown but might be a text file
+                df = pd.read_csv(file_path)
+        except Exception as e:
+            # Clean up file if reading fails
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            print(f"❌ Failed to parse uploaded file {file.filename}: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to parse as {ext.split('.')[-1].upper()}: {str(e)}")
             
         # 3. Create DB Record
         dataset = DatasetModel(
@@ -4211,6 +4236,70 @@ async def get_datasets(
         ]
     except Exception as e:
         print(f"Error listing datasets: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/datasets/{dataset_id}")
+async def delete_dataset(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Delete a dataset and its associated file, models, and versions"""
+    try:
+        user_id = current_user['id']
+        dataset = db.query(DatasetModel).filter(DatasetModel.id == dataset_id, DatasetModel.user_id == user_id).first()
+        
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # 1. Delete associated models (physical files first)
+        models_to_delete = db.query(ModelModel).filter(ModelModel.dataset_id == dataset_id).all()
+        for model in models_to_delete:
+            if model.storage_path and os.path.exists(model.storage_path):
+                try:
+                    os.remove(model.storage_path)
+                except Exception as me:
+                    print(f"⚠️ Error removing model file {model.storage_path}: {me}")
+            db.delete(model)
+        
+        # 2. Delete child versions (recursive cleanup)
+        child_versions = db.query(DatasetModel).filter(DatasetModel.parent_dataset_id == dataset_id).all()
+        for version in child_versions:
+            # We recursively call or just handle one level if that's the limit
+            if version.storage_path and os.path.exists(version.storage_path):
+                try:
+                    os.remove(version.storage_path)
+                except Exception as ve:
+                    print(f"⚠️ Error removing version file {version.storage_path}: {ve}")
+            db.delete(version)
+            
+        # 3. Delete physical file of the dataset itself
+        if dataset.storage_path and os.path.exists(dataset.storage_path):
+            try:
+                os.remove(dataset.storage_path)
+            except Exception as fe:
+                print(f"⚠️ Error removing file {dataset.storage_path}: {fe}")
+        
+        # 4. Cleanup in-memory cache
+        ds_id_str = str(dataset_id)
+        if ds_id_str in datasets:
+            del datasets[ds_id_str]
+            
+        # 5. Log the action
+        log_user_action(db, user_id, "delete", {"filename": dataset.name}, resource_id=dataset_id, resource_type="dataset")
+        
+        # 6. Delete from database
+        db.delete(dataset)
+        db.commit()
+        
+        return {"success": True, "message": "Dataset and all associated data deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting dataset: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -460,7 +460,7 @@ class DataPreprocessor:
             try:
                 # errors='coerce' will turn out-of-bounds or invalid dates into NaT
                 # format='mixed' handles multiple date formats automatically
-                self.df[col] = pd.to_datetime(self.df[col], errors='coerce', format='mixed')
+                self.df[col] = pd.to_datetime(self.df[col], errors='coerce', format='mixed', utc=True)
             except Exception as e:
                 print(f"❌ Critical error converting {col} to datetime: {e}")
                 continue

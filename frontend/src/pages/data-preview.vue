@@ -54,7 +54,8 @@
             </svg>
             <div class="stat-content">
               <span class="stat-label">Dataset</span>
-              <span class="stat-value" :title="fileName">{{ fileName }}</span>
+              <span v-if="isLoading" class="skeleton-text medium"></span>
+              <span v-else class="stat-value" :title="fileName">{{ fileName }}</span>
             </div>
           </div>
           
@@ -64,7 +65,8 @@
             </svg>
             <div class="stat-content">
               <span class="stat-label">Rows</span>
-              <span class="stat-value">{{ displayedRowCount.toLocaleString() }}</span>
+              <span v-if="isLoading" class="skeleton-text mini"></span>
+              <span v-else class="stat-value">{{ displayedRowCount.toLocaleString() }}</span>
             </div>
           </div>
           
@@ -74,7 +76,8 @@
             </svg>
             <div class="stat-content">
               <span class="stat-label">Columns</span>
-              <span class="stat-value">{{ dataInfo.columns }}</span>
+              <span v-if="isLoading" class="skeleton-text mini"></span>
+              <span v-else class="stat-value">{{ dataInfo.columns }}</span>
             </div>
           </div>
           
@@ -84,7 +87,8 @@
             </svg>
             <div class="stat-content">
               <span class="stat-label">Health Score</span>
-              <div class="quality-indicator-wrapper">
+              <div v-if="isLoading" class="skeleton-text small"></div>
+              <div v-else class="quality-indicator-wrapper">
                 <div class="quality-indicator" :class="getHealthLevel(dataQuality.score)">
                   <div class="quality-score-main">
                     <span>{{ dataQuality.score }}% Quality</span>
@@ -245,7 +249,13 @@
           </div>
 
           <div class="data-table-wrapper">
-            <table class="data-table">
+            <div v-if="isLoading" class="table-loading-state">
+              <div class="loading-animation">
+                <div class="pulse-bar" v-for="i in 5" :key="i"></div>
+              </div>
+              <p>Analyzing intelligence stream...</p>
+            </div>
+            <table v-else class="data-table">
               <thead>
                 <tr>
                   <th
@@ -6457,6 +6467,83 @@ onMounted(() => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Skeleton Loaders */
+.skeleton-text {
+  height: 1.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-text::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-text.mini { width: 60px; }
+.skeleton-text.small { width: 100px; }
+.skeleton-text.medium { width: 160px; }
+
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Table Loading State */
+.table-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  min-height: 400px;
+}
+
+.loading-animation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 2rem;
+}
+
+.pulse-bar {
+  width: 6px;
+  height: 40px;
+  background: linear-gradient(to bottom, #667eea, #764ba2);
+  border-radius: 10px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.pulse-bar:nth-child(2) { animation-delay: 0.1s; }
+.pulse-bar:nth-child(3) { animation-delay: 0.2s; }
+.pulse-bar:nth-child(4) { animation-delay: 0.3s; }
+.pulse-bar:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.table-loading-state p {
+  color: #b3b3d1;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 </style>
