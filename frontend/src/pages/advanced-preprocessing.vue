@@ -1648,6 +1648,51 @@
         </div>
       </template>
     </Modal>
+    <!-- Navigation Save Modal -->
+    <Modal v-model="showNavigationModal" title="Unsaved Preprocessing Steps" size="sm">
+      <div class="modal-section" style="padding: 1.5rem;">
+        <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem;">
+          <div style="background: rgba(251, 191, 36, 0.1); color: #fbbf24; padding: 0.75rem; border-radius: 50%;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style="color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;">Wait! You have unsaved changes.</h3>
+            <p style="color: #b3b3d1; margin: 0; font-size: 0.95rem; line-height: 1.5;">
+              You've applied preprocessing steps but haven't saved this version of the dataset. Would you like to save it before leaving?
+            </p>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; width: 100%;">
+          <Button 
+            variant="primary" 
+            @click="handleSaveAndLeave"
+            style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
+          >
+            Save Version & Continue
+          </Button>
+          <div style="display: flex; gap: 0.75rem;">
+            <Button 
+              variant="ghost" 
+              @click="showNavigationModal = false"
+              style="flex: 1;"
+            >
+              Stay on Page
+            </Button>
+            <Button 
+              variant="ghost" 
+              @click="handleDiscardAndLeave"
+              style="flex: 1; color: #ef4444; border-color: rgba(239, 68, 68, 0.2);"
+            >
+              Still Continue
+            </Button>
+          </div>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -1656,7 +1701,7 @@
 <script setup>
 
 import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useExperimentStore } from "~/stores/experiment";
 import { useDataStore } from "~/stores/data";
@@ -1740,6 +1785,35 @@ const openVersionModal = () => {
     showVersionModal.value = true;
 };
 
+// Navigation Guard State
+const isDirty = ref(false);
+const showNavigationModal = ref(false);
+const pendingRoute = ref(null);
+
+onBeforeRouteLeave((to, from, next) => {
+  if (isDirty.value) {
+    pendingRoute.value = to;
+    showNavigationModal.value = true;
+    next(false);
+  } else {
+    next();
+  }
+});
+
+const handleDiscardAndLeave = () => {
+  isDirty.value = false;
+  showNavigationModal.value = false;
+  if (pendingRoute.value) {
+    router.push(pendingRoute.value);
+  }
+};
+
+const handleSaveAndLeave = async () => {
+  showNavigationModal.value = false;
+  openVersionModal();
+  // We'll need to update handleSaveVersion to check for pendingRoute
+};
+
 const handleSaveVersion = async () => {
     if (!newVersionName.value) return;
     try {
@@ -1748,6 +1822,14 @@ const handleSaveVersion = async () => {
         const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
         showSuccess("Version Saved", `Successfully created version: ${result.name}`);
         showVersionModal.value = false;
+        isDirty.value = false;
+        
+        // If we were trying to navigate, continue now
+        if (pendingRoute.value) {
+          const target = pendingRoute.value;
+          pendingRoute.value = null;
+          router.push(target);
+        }
     } catch (err) {
         console.error("Save version error:", err);
         showError("Save Failed", err.message || "Could not save dataset version");
@@ -2407,7 +2489,7 @@ const disableTool = (toolName) => {
 
 
 
-// ==================== FETCH BACKEND DATASET INFO ====================
+// ==================== FETCH BACKEND DATASET INFO 
 const fetchBackendDatasetInfo = async (datasetId) => {
   if (!datasetId) {
     console.error('❌ No dataset ID provided');
@@ -2679,6 +2761,7 @@ const applySplit = async () => {
 
       showSuccess('Split Applied', `Train: ${data.train_size} | Test: ${data.test_size}`);
       addPreprocessingStep('Train/Test Split');
+      isDirty.value = true;
 
       // Update Imbalance Check for SMOTE Availability
       if (problemType.value === 'classification') {
@@ -2727,6 +2810,7 @@ const confirmResetSplit = () => {
   showResetSplitModal.value = false;
   console.log("🔄 Split reset");
   showSuccess('Split Reset', 'All transformations have been cleared');
+  isDirty.value = false;
 };
 
 // Reset all transformations
@@ -2760,6 +2844,7 @@ const confirmResetAll = async () => {
     
     console.log("🔄 All transformations reset");
     showSuccess('Reset Complete', 'Dataset returned to original state');
+    isDirty.value = false;
   } catch (error) {
     console.error('❌ Reset error:', error);
     showError('Reset Failed', error.message);
@@ -2870,10 +2955,22 @@ const applySmote = async () => {
          samples_added: data.samples_added,
          new_train_rows: data.new_samples
       });
+
+      // Update global row count in experimentStore
+      // Note: While SMOTE only impacts training set, for consistency in later status cards
+      // we reflect the synthetic increase in the global metadata.
+      const originalTotalRows = experimentStore.datasetSize?.rows || 0;
+      experimentStore.updateDatasetMetadata({
+        size: {
+          rows: originalTotalRows + data.samples_added,
+          columns: columns.value.length
+        }
+      });
       
       // Update mlStore for correct row count display
       if (mlStore.isSplit) {
         mlStore.splitInfo.trainRows = data.new_samples;
+        mlStore.splitInfo.testRows = testData.value.length; // Ensure test rows are preserved
       }
       
       // Update UI
@@ -2885,6 +2982,7 @@ const applySmote = async () => {
       );
 
       addPreprocessingStep('SMOTE Analysis');
+      isDirty.value = true;
       await checkClassImbalance();
       showSmoteModal.value = false;
 
@@ -3009,6 +3107,7 @@ const applyScaling = async () => {
       showSuccess( 'Scaling Applied', `Scaled ${columnsToScale.length} columns.`);
       addPreprocessingStep('Feature Scaling');
       showScalingModal.value = false;
+      isDirty.value = true;
 
     } else {
       throw new Error(data.error || "Scaling failed");
@@ -3203,6 +3302,7 @@ async function applyCategoricalEncoding() {
       
       addPreprocessingStep('Categorical Encoding');
       showEncodingModal.value = false;
+      isDirty.value = true;
 
     } else {
       throw new Error(data.detail || data.message || 'Encoding failed');
@@ -3353,6 +3453,7 @@ async function applyTfidf() {
         final_feature_count: data.final_feature_count
       }
     });
+    isDirty.value = true;
 
   } catch (error) {
     console.error('❌ TF-IDF application error:', error);
@@ -3456,6 +3557,7 @@ async function applyTargetEncoding() {
       
       addPreprocessingStep('Target Encoding');
       showTargetEncodingModal.value = false;
+      isDirty.value = true;
     } else {
       throw new Error(data.detail || 'Target encoding failed');
     }

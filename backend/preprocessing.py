@@ -456,7 +456,6 @@ class DataPreprocessor:
                 
             print(f"Processing datetime column: {col}")
             
-            # Ensure it's datetime (with robust error handling for out-of-bounds dates)
             try:
                 # errors='coerce' will turn out-of-bounds or invalid dates into NaT
                 # format='mixed' handles multiple date formats automatically

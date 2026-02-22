@@ -1970,6 +1970,10 @@ const applyColumnChanges = async () => {
             // Refresh local columns
             processColumns();
             analyzeDataQuality();
+            
+            // Sync with Experiment Store
+            experimentStore.setDroppedColumns(toDrop);
+            
             showSuccess("Columns Dropped", `Removed ${toDrop.length} columns successfully.`);
         }
         showColumnModal.value = false;
@@ -2053,6 +2057,10 @@ const applyMissingStrategies = async () => {
         await dataStore.loadData(datasetId.value, true);
         processColumns();
         analyzeDataQuality();
+
+        // Sync with Experiment Store
+        experimentStore.setMissingValuesApplied(true);
+
         showMissingModal.value = false;
         showSuccess("Missing Values Handled", "Strategies applied successfully.");
         insightsRefreshKey.value++;
@@ -2082,6 +2090,10 @@ const applyOutlierHandling = async () => {
         // Refresh local columns
         processColumns();
         analyzeDataQuality();
+
+        // Sync with Experiment Store
+        experimentStore.setOutliersApplied(true);
+
         showOutlierModal.value = false;
         showSuccess("Outliers Processed", `Outliers handled using ${outlierStrategy.value} method.`);
         insightsRefreshKey.value++;
@@ -2107,6 +2119,10 @@ const applyDuplicateRemoval = async () => {
         await dataStore.loadData(datasetId.value, true);
         processColumns();
         analyzeDataQuality();
+
+        // Sync with Experiment Store
+        experimentStore.setDuplicatesApplied(true);
+
         showDuplicateModal.value = false;
         showSuccess("Duplicates Removed", "Duplicate removal complete.");
         insightsRefreshKey.value++;
@@ -2157,6 +2173,10 @@ const applyDateTimeHandling = async () => {
             await dataStore.loadData(datasetId.value, true);
             processColumns();
             analyzeDataQuality();
+
+            // Sync with Experiment Store
+            experimentStore.setDateTimeApplied(true);
+
             showDateTimeModal.value = false;
             showSuccess("Success", `Extracted features from ${selectedDateTimeColumns.value.length} columns.`);
             insightsRefreshKey.value++;

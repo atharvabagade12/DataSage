@@ -823,10 +823,16 @@ const loadDataFromPreviousSteps = () => {
     
     // Preprocessing Steps Visualization
     const steps = [];
+    if (storePreprocessing.value.droppedColumns?.length > 0) steps.push(`Dropped Columns (${storePreprocessing.value.droppedColumns.length})`);
+    if (storePreprocessing.value.isMissingValuesApplied) steps.push("Missing Values Handled");
+    if (storePreprocessing.value.isOutliersApplied) steps.push("Outliers Handled");
+    if (storePreprocessing.value.isDuplicatesApplied) steps.push("Duplicates Removed");
+    if (storePreprocessing.value.isDateTimeApplied) steps.push("DateTime Features Extracted");
+    
     if (storePreprocessing.value.isSplitApplied) steps.push("Train/Test Split");
-    if (storePreprocessing.value.encodingApplied) steps.push(`Categorical Encoding (${storePreprocessing.value.encodedColumns?.length || 0})`);
-    if (storePreprocessing.value.scalingApplied) steps.push(`Feature Scaling`); // Can add details if needed
-    if (storePreprocessing.value.smoteApplied) steps.push(`SMOTE (${storePreprocessing.value.smoteInfo?.samples_added || 0} samples)`);
+    if (storePreprocessing.value.isEncodingApplied) steps.push(`Categorical Encoding (${storePreprocessing.value.encodedColumns?.length || 0})`);
+    if (storePreprocessing.value.isScalingApplied) steps.push(`Feature Scaling`);
+    if (storePreprocessing.value.smote?.applied) steps.push(`SMOTE (${storePreprocessing.value.smote?.samples_added || 0} samples)`);
     
     preprocessingSteps.value = steps;
 

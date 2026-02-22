@@ -36,7 +36,13 @@ export const useExperimentStore = defineStore('experiment', {
       
       // Feature Selection
       selectedFeatures: [],
-      droppedColumns: []
+      droppedColumns: [],
+      
+      // Data Cleaning & Feature Engineering (from Preview)
+      isMissingValuesApplied: false,
+      isOutliersApplied: false,
+      isDuplicatesApplied: false,
+      isDateTimeApplied: false
     },
     
     // Model Configuration (Flattened for easier reactivity in components)
@@ -149,6 +155,26 @@ export const useExperimentStore = defineStore('experiment', {
     updateSmote(config) {
       this.preprocessing.smote = { ...this.preprocessing.smote, ...config };
     },
+
+    setMissingValuesApplied(status) {
+      this.preprocessing.isMissingValuesApplied = status;
+    },
+
+    setOutliersApplied(status) {
+      this.preprocessing.isOutliersApplied = status;
+    },
+
+    setDuplicatesApplied(status) {
+      this.preprocessing.isDuplicatesApplied = status;
+    },
+
+    setDateTimeApplied(status) {
+      this.preprocessing.isDateTimeApplied = status;
+    },
+
+    setDroppedColumns(columns) {
+      this.preprocessing.droppedColumns = columns;
+    },
     
     // Model Actions
     setAlgorithm(algo) {
@@ -187,7 +213,11 @@ export const useExperimentStore = defineStore('experiment', {
           kNeighbors: 5
         },
         selectedFeatures: [],
-        droppedColumns: []
+        droppedColumns: [],
+        isMissingValuesApplied: false,
+        isOutliersApplied: false,
+        isDuplicatesApplied: false,
+        isDateTimeApplied: false
       };
     },
     
