@@ -121,3 +121,23 @@ def detect_semantic_type(series: pd.Series):
         "confidence": "high" if unique_ratio < 0.05 else "medium",
         "reason": f"Defaulted to categorical (unique ratio: {unique_ratio:.2f})"
     }
+
+def get_effective_semantic_types(df: pd.DataFrame, column_metadata: dict) -> dict:
+    """
+    Merge backend auto-detection with user-defined overrides.
+    Returns a mapping of column_name -> semantic_type string.
+    """
+    effective_types = {}
+    metadata = column_metadata or {}
+    
+    for col in df.columns:
+        # 1. Check for manual override in metadata
+        if col in metadata and metadata[col].get("is_override"):
+            effective_types[col] = metadata[col].get("semantic_type")
+            continue
+            
+        # 2. Fallback to auto-detection
+        detection = detect_semantic_type(df[col])
+        effective_types[col] = detection.get("semantic_type", "unknown")
+        
+    return effective_types

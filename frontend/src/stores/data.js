@@ -14,6 +14,7 @@ export const useDataStore = defineStore('data', {
     // Status
     isLoaded: false,
     isTypesVerified: false,
+    isAutoVerified: false,
     lastFetchedId: null
   }),
   
@@ -67,7 +68,8 @@ export const useDataStore = defineStore('data', {
         if (typesRes.ok) {
            const types = await typesRes.json();
            this.semanticTypes = types.column_types || [];
-           this.isTypesVerified = types.is_verified || false;
+           this.isAutoVerified = types.is_auto_verified || false;
+           this.isTypesVerified = types.is_verified || this.isAutoVerified || false;
         }
 
         if (statsRes.ok) {

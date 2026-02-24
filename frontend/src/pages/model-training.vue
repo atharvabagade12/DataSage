@@ -1,55 +1,9 @@
 <template>
   <div class="model-training">
-    <!-- Navigation Header -->
-    <nav class="training-header">
-      <div class="nav-left">
-        <button @click="goBack" class="back-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-            />
-          </svg>
-          Back to Algorithm Selection
-        </button>
-        <div class="breadcrumb">
-          <span>DataSage</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span class="current">Model Training</span>
-        </div>
-      </div>
+    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
+    
+    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
 
-      <div class="header-status" v-if="backendConnected !== null">
-        <div class="status-indicator" :class="{ connected: backendConnected }">
-          <div class="status-dot"></div>
-          <span class="status-text">{{
-            backendConnected ? "Backend Connected" : "Backend Offline"
-          }}</span>
-        </div>
-      </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <div class="hero-section">
-      <div class="hero-content">
-        
-        <h1>Model Training</h1>
-        <p>Training your {{ problemType }} model with advanced features</p>
-
-        <div class="training-summary" v-if="modelConfig">
-          <span class="summary-item"
-            >{{ formatNumber(datasetStats.rows) }} samples</span
-          >
-          <span class="summary-divider">•</span>
-          <span class="summary-item">{{
-            modelConfig.algorithm?.name || "Unknown"
-          }}</span>
-          <span class="summary-divider">•</span>
-          <span class="summary-item">{{ getValidationMethodDisplay() }}</span>
-        </div>
-      </div>
-    </div>
 
     
     <div class="preprocessing-summary" v-if="preprocessingInfo">

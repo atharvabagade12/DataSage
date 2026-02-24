@@ -1,104 +1,9 @@
 <template>
   <div class="data-preview">
-    <!-- Navigation Header -->
-    <nav class="preview-header">
-      <div class="nav-left">
-        <button @click="goBack" class="back-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-            />
-          </svg>
-          Back to Target Selection
-        </button>
-        <div class="breadcrumb">
-          <span>DataSage</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span class="current">Advanced Preprocessing</span>
-        </div>
-      </div>
+    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
+    
+    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
 
-      <div class="backend-status" v-if="backendConnected !== null">
-        <div
-          class="status-indicator"
-          :class="{
-            connected: backendConnected,
-            disconnected: !backendConnected,
-          }"
-        >
-          <div class="status-dot"></div>
-          <span class="status-text">
-            {{ backendConnected ? "ML Backend Ready" : "Frontend Mode" }}
-          </span>
-        </div>
-      </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="hero-section">
-      <div class="hero-content">
-        <!-- Centered Header -->
-        <div class="hero-header-centered">
-          <h1 class="gradient-text">Advanced Preprocessing</h1>
-          <p class="hero-subtitle">Split, scale, and engineer features for optimal model training</p>
-        </div>
-        
-        <!-- Stats Grid -->
-        <div class="dataset-summary">
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Dataset</span>
-              <span class="stat-value" :title="fileName">{{ fileName }}</span>
-            </div>
-          </div>
-          
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3,3H21V21H3V3M5,5V19H19V5H5M7,7H17V9H7V7M7,11H17V13H7V11M7,15H17V17H7V15Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Rows</span>
-              <span class="stat-value" v-if="!splitApplied">{{ totalRows.toLocaleString() }}</span>
-              <span class="stat-value" v-else>
-                {{ (trainRows + testRows).toLocaleString() }}
-                <span v-if="smoteApplied" style="color: #10b981; font-size: 0.85em;"> (+{{ (trainRows - Math.floor(totalRows * splitRatio)).toLocaleString() }})</span>
-              </span>
-            </div>
-          </div>
-          
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2,2H8V4H16V2H22V8H20V16H22V22H16V20H8V22H2V16H4V8H2V2M16,8V6H8V8H6V16H8V18H16V16H18V8H16M4,4V6H6V4H4M18,4V6H20V4H18M4,18V20H6V18H4M18,18V20H20V18H18Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Columns</span>
-              <span class="stat-value">{{ totalColumns }}</span>
-            </div>
-          </div>
-          
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Target Variable</span>
-              <span class="stat-value">{{ 
-                selectedTarget 
-                  ? (typeof selectedTarget === 'object' && selectedTarget !== null ? selectedTarget.name : selectedTarget)
-                  : 'Not Set' 
-              }}</span>
-            </div>
-          </div>
-          
-          
-        </div>
-      </div>
-    </section>
 
     <div v-if="showBackendWarning" class="backend-warning">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -1648,51 +1553,6 @@
         </div>
       </template>
     </Modal>
-    <!-- Navigation Save Modal -->
-    <Modal v-model="showNavigationModal" title="Unsaved Preprocessing Steps" size="sm">
-      <div class="modal-section" style="padding: 1.5rem;">
-        <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem;">
-          <div style="background: rgba(251, 191, 36, 0.1); color: #fbbf24; padding: 0.75rem; border-radius: 50%;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
-            </svg>
-          </div>
-          <div>
-            <h3 style="color: white; margin: 0 0 0.5rem 0; font-size: 1.1rem;">Wait! You have unsaved changes.</h3>
-            <p style="color: #b3b3d1; margin: 0; font-size: 0.95rem; line-height: 1.5;">
-              You've applied preprocessing steps but haven't saved this version of the dataset. Would you like to save it before leaving?
-            </p>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; width: 100%;">
-          <Button 
-            variant="primary" 
-            @click="handleSaveAndLeave"
-            style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
-          >
-            Save Version & Continue
-          </Button>
-          <div style="display: flex; gap: 0.75rem;">
-            <Button 
-              variant="ghost" 
-              @click="showNavigationModal = false"
-              style="flex: 1;"
-            >
-              Stay on Page
-            </Button>
-            <Button 
-              variant="ghost" 
-              @click="handleDiscardAndLeave"
-              style="flex: 1; color: #ef4444; border-color: rgba(239, 68, 68, 0.2);"
-            >
-              Still Continue
-            </Button>
-          </div>
-        </div>
-      </template>
-    </Modal>
   </div>
 </template>
 
@@ -1778,41 +1638,11 @@ const showVersionModal = ref(false);
 const newVersionName = ref("");
 
 const openVersionModal = () => {
-    const now = new Date();
-    const ts = `${now.getHours()}${now.getMinutes()}`;
-    const baseName = (fileName.value || "dataset").split('.')[0];
-    newVersionName.value = `${baseName}_v${ts}`;
+    newVersionName.value = mlStore.getNextVersionName();
     showVersionModal.value = true;
 };
 
-// Navigation Guard State
-const isDirty = ref(false);
-const showNavigationModal = ref(false);
-const pendingRoute = ref(null);
-
-onBeforeRouteLeave((to, from, next) => {
-  if (isDirty.value) {
-    pendingRoute.value = to;
-    showNavigationModal.value = true;
-    next(false);
-  } else {
-    next();
-  }
-});
-
-const handleDiscardAndLeave = () => {
-  isDirty.value = false;
-  showNavigationModal.value = false;
-  if (pendingRoute.value) {
-    router.push(pendingRoute.value);
-  }
-};
-
-const handleSaveAndLeave = async () => {
-  showNavigationModal.value = false;
-  openVersionModal();
-  // We'll need to update handleSaveVersion to check for pendingRoute
-};
+// Navigation Guard State handled by Global Store and Layout (default.vue)
 
 const handleSaveVersion = async () => {
     if (!newVersionName.value) return;
@@ -1822,7 +1652,6 @@ const handleSaveVersion = async () => {
         const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
         showSuccess("Version Saved", `Successfully created version: ${result.name}`);
         showVersionModal.value = false;
-        isDirty.value = false;
         
         // If we were trying to navigate, continue now
         if (pendingRoute.value) {
@@ -1957,16 +1786,21 @@ const displayedRowCount = computed(() => {
 });
 
 const getColumnSemanticType = (columnName) => {
-  // 1. Check local column object first (for just-encoded columns)
+  // 1. Check global semantic types from backend/store FIRST (prioritize user overrides)
+  if (semanticTypes.value) {
+    const found = semanticTypes.value.find((s) => s.column === columnName);
+    if (found && found.semantic_type && found.semantic_type !== 'unknown') {
+      return found.semantic_type;
+    }
+  }
+
+  // 2. Fallback to local column object (for just-encoded/scaled columns not yet synced to store)
   const col = columns.value.find(c => c.name === columnName);
   if (col && col.semanticType && col.semanticType !== 'unknown') {
     return col.semanticType;
   }
   
-  // 2. Fallback to global semantic types from backend
-  if (!semanticTypes.value) return "unknown";
-  const found = semanticTypes.value.find((s) => s.column === columnName);
-  return found ? found.semantic_type : "unknown";
+  return "unknown";
 };
 
 const categoricalColumns = computed(() => {
@@ -1979,10 +1813,18 @@ const categoricalColumns = computed(() => {
     // 1. Exclude target column
     if (col.name === targetName) return false;
     
-    const sType = getColumnSemanticType(col.name);
-    // 2. Explicitly include categorical, boolean, datetime, and other text-based semantic types for encoding
-    const categoricalTypes = ['categorical', 'boolean', 'datetime', 'email', 'phone', 'url', 'ip_address', 'uuid', 'text'];
-    return categoricalTypes.includes(sType) || col.type === 'categorical' || col.type === 'string';
+    // 2. Check semantic type (case-insensitive)
+    const sType = (getColumnSemanticType(col.name) || "").toLowerCase();
+    
+    // 3. Strict exclusion for numeric overrides
+    if (sType === 'numeric' || sType === 'integer' || sType === 'float') return false;
+    
+    // 4. Explicitly include categorical, boolean, datetime, and other text-based semantic types for encoding
+    const categoricalTypes = ['categorical', 'boolean', 'datetime', 'email', 'phone', 'url', 'ip_address', 'uuid', 'text', 'string'];
+    if (categoricalTypes.includes(sType)) return true;
+    
+    // 5. Fallback for untyped columns
+    return col.type === 'categorical' || col.type === 'string';
   });
 });
 
@@ -1991,19 +1833,27 @@ const numericalColumns = computed(() => {
     ? selectedTarget.value.name 
     : selectedTarget.value;
 
-  return columns.value.filter(col => {
+  const results = columns.value.filter(col => {
     // 1. Exclude target column
     if (col.name === targetName) return false;
     // 2. Exclude already scaled columns
+    // if (scaledColumns.value.has(col.name)) return false; // REMOVED: Let user see they are scaled and maybe change scaling? Or just show them.
+    // Actually, traditionally we hide them to prevent double scaling. Let's keep it but ensure it's not the cause of the issue.
     if (scaledColumns.value.has(col.name)) return false;
+
     // 3. Exclude One-Hot encoded columns (dummies)
     if (col.isOneHot) return false;
     
-    const sType = getColumnSemanticType(col.name);
-    // 4. Numeric should be strictly numeric, exclude others even if raw type is numerical
-    // Allow other encoded types (label, ordinal, target_encoded) if they are numeric
-    return sType === 'numeric' || (sType === 'unknown' && col.type === 'numerical');
+    const sType = (getColumnSemanticType(col.name) || "").toLowerCase();
+    
+    // 4. Numeric should be strictly numeric, exclude others even if raw type is numerical (e.g. if overridden to categorical)
+    const isNumericType = sType === 'numeric' || sType === 'integer' || sType === 'float';
+    const isFallbackNumeric = (sType === 'unknown' || sType === '') && (col.type === 'numerical' || col.type === 'numeric');
+    
+    return isNumericType || isFallbackNumeric;
   });
+
+  return results;
 });
 
 const smoteValidation = computed(() => {
@@ -2025,23 +1875,20 @@ const smoteValidation = computed(() => {
     
     const sType = getColumnSemanticType(col.name);
     
-    // Explicitly allow One-Hot columns (dummies generated by encoding)
+    // 3. One-Hot columns are always numeric
     if (col.isOneHot) return false;
 
-    // Allow numeric and boolean (binary 0/1)
+    // 4. Strict Enforcement:
+    // If semantic type is numeric or boolean, it's allowed
     if (['numeric', 'boolean'].includes(sType)) return false;
     
-    // Allow if the raw type is numerical (redundancy check)
-    if (col.type === 'numerical' || col.type === 'numeric') return false;
+    // 5. Explicit blockers:
+    // If semantic type is known and is a non-numeric type, block it
+    if (['categorical', 'datetime', 'text', 'identifier'].includes(sType)) return true;
     
-    // Only block if it's explicitly categorical, text, or datetime AND not marked as numeric locally
-    // Note: identifiers are also blockers as they don't hold statistical meaning
-    if (['categorical', 'datetime', 'text', 'identifier'].includes(sType)) {
-       return true;
-    }
-    
-    // Default to allowing (permissive)
-    return false;
+    // 6. Fallback logic:
+    // If unknown semantic type, check raw type
+    return !(col.type === 'numerical' || col.type === 'numeric');
   });
   
   if (blockers.length > 0) {
@@ -2054,22 +1901,7 @@ const smoteValidation = computed(() => {
   return { valid: true };
 });
 
-// For per-column encoding selection state (update as needed for your structure)
-categoricalColumns.value.forEach(col => {
-  col.encode = col.encode ?? false;       // Whether to encode
-  col.encoding = col.encoding ?? 'onehot';// Encoding method: onehot, label, ordinal
-});
-
-// For per-column scaling selection state
-numericalColumns.value.forEach(col => {
-  col.scale = col.scale ?? false;         // Whether to scale
-  // Ensure scalingMethod is initialized to standard if null/undefined
-  if (col.scalingMethod === undefined || col.scalingMethod === null || col.scalingMethod === '') {
-    col.scalingMethod = 'standard';
-  }
-  // Mark as already scaled
-  col.isAlreadyScaled = scaledColumns.value.has(col.name);
-});
+// Initializations are now handled within analyzeColumns to ensure reactivity
 
 
 
@@ -2667,6 +2499,8 @@ const analyzeColumns = () => {
     
     // Prefer backend semantic type detection
     const backendType = getColumnSemanticType(colName);
+    
+    // Ensure the local .type is consistent with semanticType
     const type = backendType !== 'unknown' 
       ? (['numeric', 'boolean'].includes(backendType) ? 'numerical' : 'categorical')
       : detectColumnType(values);
@@ -2679,14 +2513,14 @@ const analyzeColumns = () => {
 
     return {
       name: colName,
-      type: type,
+      type: type, // This will now be 'numerical' if semanticType is 'numeric'
       semanticType: backendType, 
       unique: new Set(values).size,
       missing: originalDataset.value.length - values.length,
       remove: false, 
       encode: !!encodingInfo,
       encoding: encodingInfo ? encodingInfo.encoding || encodingInfo.method : "onehot",
-      targetEncode: false, // Ensure this is always initialized to false on load/reset
+      targetEncode: false, 
       scale: preprocessing.value.scaledColumns.includes(colName),
       isAlreadyScaled: preprocessing.value.scaledColumns.includes(colName),
       scalingMethod: preprocessing.value.scalingMethod || 'standard',
@@ -2695,6 +2529,10 @@ const analyzeColumns = () => {
   });
 
   console.log(`✅ Analyzed ${columns.value.length} columns & synced with store`);
+  
+  // Debug: Log numerical columns detected
+  console.log("📊 Numerical Columns (for Scaling):", numericalColumns.value.map(c => c.name));
+  console.log("📊 Categorical Columns (for Encoding):", categoricalColumns.value.map(c => c.name));
 };
 
 const detectColumnType = (values) => {
@@ -2761,7 +2599,7 @@ const applySplit = async () => {
 
       showSuccess('Split Applied', `Train: ${data.train_size} | Test: ${data.test_size}`);
       addPreprocessingStep('Train/Test Split');
-      isDirty.value = true;
+      mlStore.isDirty = true;
 
       // Update Imbalance Check for SMOTE Availability
       if (problemType.value === 'classification') {
@@ -2810,7 +2648,7 @@ const confirmResetSplit = () => {
   showResetSplitModal.value = false;
   console.log("🔄 Split reset");
   showSuccess('Split Reset', 'All transformations have been cleared');
-  isDirty.value = false;
+  mlStore.isDirty = false;
 };
 
 // Reset all transformations
@@ -2844,7 +2682,7 @@ const confirmResetAll = async () => {
     
     console.log("🔄 All transformations reset");
     showSuccess('Reset Complete', 'Dataset returned to original state');
-    isDirty.value = false;
+    mlStore.isDirty = false;
   } catch (error) {
     console.error('❌ Reset error:', error);
     showError('Reset Failed', error.message);
@@ -2982,7 +2820,7 @@ const applySmote = async () => {
       );
 
       addPreprocessingStep('SMOTE Analysis');
-      isDirty.value = true;
+      mlStore.isDirty = true;
       await checkClassImbalance();
       showSmoteModal.value = false;
 
@@ -3107,7 +2945,7 @@ const applyScaling = async () => {
       showSuccess( 'Scaling Applied', `Scaled ${columnsToScale.length} columns.`);
       addPreprocessingStep('Feature Scaling');
       showScalingModal.value = false;
-      isDirty.value = true;
+      mlStore.isDirty = true;
 
     } else {
       throw new Error(data.error || "Scaling failed");
@@ -3302,8 +3140,11 @@ async function applyCategoricalEncoding() {
       
       addPreprocessingStep('Categorical Encoding');
       showEncodingModal.value = false;
-      isDirty.value = true;
-
+      mlStore.isDirty = true;
+      
+      // Refresh semantic types and stats from backend to reflect numeric status
+      await fetchSemanticTypes();
+      await fetchCompleteStatistics();
     } else {
       throw new Error(data.detail || data.message || 'Encoding failed');
     }
@@ -3431,7 +3272,30 @@ async function applyTfidf() {
     // Update preview data
     trainData.value = data.train_preview || [];
     testData.value = data.test_preview || [];
-    columns.value = data.columns.map(col => ({ name: col }));
+    
+    // Preserve column metadata when updating columns list
+    if (data.columns && data.columns.length > 0) {
+      columns.value = data.columns.map(colName => {
+        const existingCol = columns.value.find(c => c.name === colName);
+        if (existingCol) {
+          return existingCol;
+        } else {
+          // New TF-IDF feature - always numeric
+          return {
+            name: colName,
+            type: 'numerical',
+            semanticType: 'numeric',
+            unique: 0,
+            missing: 0,
+            remove: false,
+            encode: false,
+            scale: false,
+            isAlreadyScaled: false,
+            scalingMethod: 'standard'
+          };
+        }
+      });
+    }
 
     // Update state
     tfidfApplied.value = true;
@@ -3453,7 +3317,7 @@ async function applyTfidf() {
         final_feature_count: data.final_feature_count
       }
     });
-    isDirty.value = true;
+    mlStore.isDirty = true;
 
   } catch (error) {
     console.error('❌ TF-IDF application error:', error);
@@ -3557,7 +3421,11 @@ async function applyTargetEncoding() {
       
       addPreprocessingStep('Target Encoding');
       showTargetEncodingModal.value = false;
-      isDirty.value = true;
+      mlStore.isDirty = true;
+
+      // Refresh semantic types and stats from backend to reflect numeric status
+      await fetchSemanticTypes();
+      await fetchCompleteStatistics();
     } else {
       throw new Error(data.detail || 'Target encoding failed');
     }

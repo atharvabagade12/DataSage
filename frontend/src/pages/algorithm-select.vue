@@ -1,52 +1,9 @@
 <template>
   <div class="algorithm-selection">
-    <!-- Navigation Header -->
-    <nav class="selection-header">
-      <div class="nav-left">
-        <button @click="goBack" class="back-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-            />
-          </svg>
-           Back to Advanced Preprocessing
-        </button>
-        <div class="breadcrumb">
-          <span>DataSage</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span>Advanced Preprocessing</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span class="current">Algorithm Selection</span>
-        </div>
-      </div>
+    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
+    
+    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
 
-      
-      <div class="target-summary" v-if="selectedTarget">
-        <span class="target-info">
-          Target: <strong>{{ selectedTarget.name }}</strong>
-          <span class="problem-type">{{
-            formatProblemType(problemType.type)
-          }}</span>
-        </span>
-      </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <div class="hero-section">
-      <div class="hero-content">
-        <div class="hero-icon"></div>
-        <h1>Choose Your ML Algorithm</h1>
-        <p>
-          We'll recommend the best machine learning algorithms based on your
-          data and target variable
-        </p>
-        
-      </div>
-    </div>
 
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-container">

@@ -1,116 +1,9 @@
 <template>
   <div class="data-preview">
-    <!-- Navigation Header -->
-    <nav class="preview-header">
-      <div class="nav-left">
-        <button @click="goBack" class="back-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-            />
-          </svg>
-          Back to Dashboard
-        </button>
-        <div class="breadcrumb">
-          <span>DataSage</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span class="current">Data Preprocessing</span>
-        </div>
-      </div>
+    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
+    
+    <!-- Hero Section - REMOVED (Context is handled by Global Context Bar) -->
 
-      
-      <div class="backend-status" v-if="backendConnected !== null">
-        <div
-          class="status-indicator"
-          :class="{
-            connected: backendConnected,
-            disconnected: !backendConnected,
-          }"
-        >
-          <div class="status-dot"></div>
-          <span class="status-text">
-            {{ backendConnected ? "ML Backend Ready" : "Frontend Mode" }}
-          </span>
-        </div>
-      </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="hero-section">
-      <div class="hero-content">
-        <!-- Centered Header -->
-        <div class="hero-header-centered">
-          <h1 class="gradient-text">Data Preprocessing</h1>
-          <p class="hero-subtitle">Clean and prepare your dataset for machine learning</p>
-        </div>
-        
-        <!-- Stats Grid -->
-        <div class="dataset-summary">
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Dataset</span>
-              <span v-if="isLoading" class="skeleton-text medium"></span>
-              <span v-else class="stat-value" :title="fileName">{{ fileName }}</span>
-            </div>
-          </div>
-          
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3,3H21V21H3V3M5,5V19H19V5H5M7,7H9V9H7V7M11,7H13V9H11V7M15,7H17V9H15V7Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Rows</span>
-              <span v-if="isLoading" class="skeleton-text mini"></span>
-              <span v-else class="stat-value">{{ displayedRowCount.toLocaleString() }}</span>
-            </div>
-          </div>
-          
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2,2H8V4H16V2H22V8H20V16H22V22H16V20H8V22H2V16H4V8H2V2M16,8V6H8V8H6V16H8V18H16V16H18V8H16M4,4V6H6V4H4M18,4V6H20V4H18M4,18V20H6V18H4M18,18V20H20V18H18Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Columns</span>
-              <span v-if="isLoading" class="skeleton-text mini"></span>
-              <span v-else class="stat-value">{{ dataInfo.columns }}</span>
-            </div>
-          </div>
-          
-          <div class="summary-stat">
-            <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19,3H5L1,9L12,21L23,9L19,3Z"/>
-            </svg>
-            <div class="stat-content">
-              <span class="stat-label">Health Score</span>
-              <div v-if="isLoading" class="skeleton-text small"></div>
-              <div v-else class="quality-indicator-wrapper">
-                <div class="quality-indicator" :class="getHealthLevel(dataQuality.score)">
-                  <div class="quality-score-main">
-                    <span>{{ dataQuality.score }}% Quality</span>
-                    <!-- Info Icon Button -->
-                    <button 
-                      v-if="dataQuality.breakdown && Object.keys(dataQuality.breakdown).length > 0"
-                      @click.stop="toggleQualityPopover"
-                      class="health-info-btn"
-                      title="View breakdown"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- Health Score Breakdown Clickable option -->
     <div v-if="showQualityPopover" class="health-popover-overlay" @click="showQualityPopover = false">
@@ -439,8 +332,11 @@
                   </h3>
                   <p>Verify and override semantic data types for all downstream tools</p>
                 </div>
-                <div class="tool-badge" :class="dataStore.isTypesVerified ? 'success-badge' : 'warning-badge'">
-                  {{ dataStore.isTypesVerified ? '✓ Verified' : '⚠ Verification Required' }}
+                <div class="tool-badge" :class="[
+                  dataStore.isAutoVerified ? 'auto-verified-badge' : 
+                  (dataStore.isTypesVerified ? 'success-badge' : 'warning-badge')
+                ]" :title="dataStore.isAutoVerified ? 'AI is highly confident in these detected types.' : ''">
+                  {{ dataStore.isAutoVerified ? '✓ Auto-Verified' : (dataStore.isTypesVerified ? '✓ Verified' : '⚠ Verification Required') }}
                 </div>
               </div>
               
@@ -1975,6 +1871,7 @@ const applyColumnChanges = async () => {
             experimentStore.setDroppedColumns(toDrop);
             
             showSuccess("Columns Dropped", `Removed ${toDrop.length} columns successfully.`);
+            mlStore.isDirty = true;
         }
         showColumnModal.value = false;
     } catch (e) {
@@ -2008,6 +1905,7 @@ const confirmResetAllChanges = async () => {
         
         showResetModal.value = false;
         showSuccess("Reset Complete", "Dataset and all configurations reverted to original state.");
+        mlStore.isDirty = true;
         insightsRefreshKey.value++;
     } catch(e) {
         console.error("Reset failed", e);
@@ -2063,6 +1961,7 @@ const applyMissingStrategies = async () => {
 
         showMissingModal.value = false;
         showSuccess("Missing Values Handled", "Strategies applied successfully.");
+        mlStore.isDirty = true;
         insightsRefreshKey.value++;
     } catch (e) {
         console.error("Missing handling failed", e);
@@ -2096,6 +1995,7 @@ const applyOutlierHandling = async () => {
 
         showOutlierModal.value = false;
         showSuccess("Outliers Processed", `Outliers handled using ${outlierStrategy.value} method.`);
+        mlStore.isDirty = true;
         insightsRefreshKey.value++;
     } catch (e) {
          console.error("Outlier handling failed", e);
@@ -2125,6 +2025,7 @@ const applyDuplicateRemoval = async () => {
 
         showDuplicateModal.value = false;
         showSuccess("Duplicates Removed", "Duplicate removal complete.");
+        mlStore.isDirty = true;
         insightsRefreshKey.value++;
     } catch (e) {
          console.error("Duplicate removal failed", e);
@@ -2179,6 +2080,7 @@ const applyDateTimeHandling = async () => {
 
             showDateTimeModal.value = false;
             showSuccess("Success", `Extracted features from ${selectedDateTimeColumns.value.length} columns.`);
+            mlStore.isDirty = true;
             insightsRefreshKey.value++;
             
             // Clear selection
@@ -6309,6 +6211,12 @@ onMounted(() => {
   background: rgba(16, 185, 129, 0.1) !important;
   color: #10b981 !important;
   border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.auto-verified-badge {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .continue-btn {

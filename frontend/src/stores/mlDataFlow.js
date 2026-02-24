@@ -15,6 +15,10 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     targetColumn: null,
     problemType: null,
 
+    // Persistence & State Tracking
+    isDirty: false, // Tracks unsaved in-memory changes
+    activeVersion: 'Initial', // Tracks the current version label (e.g., 'Initial', 'v2 REFINED')
+
     // Dataset Registry (Object of all uploaded datasets)
     registeredDatasets: {},
 
@@ -147,6 +151,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
       this.fileName = fileName;
       this.datasetId = datasetId;
       this.currentDataset = datasetId;
+      this.isDirty = false;
+      this.activeVersion = 'Initial';
 
       // Extract columns from data
       if (data && data.length > 0) {
@@ -170,6 +176,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
 
       this.dataset = newData;
       this.preprocessed = true;
+      this.isDirty = true;
 
       // Update columns
       if (newData && newData.length > 0) {
@@ -205,6 +212,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     this.fileName = fileName;
     this.columns = columns || [];
     this.preprocessed = true;
+    this.isDirty = true;
+    this.activeVersion = 'Modified (Unsaved)';
     
     // Register cleaned dataset
     this.registeredDatasets[cleanedDatasetId] = {
@@ -243,6 +252,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     this.dataset = dataset;
     this.fileName = fileName;
     this.columns = columns || [];
+    this.isDirty = false;
+    this.activeVersion = 'Initial';
 
     // Register in datasets map
     this.registeredDatasets[datasetId] = {
@@ -414,6 +425,38 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
       console.log("🗑️ All datasets cleared");
     },
 
+    // Generate unique sequential version name
+    getNextVersionName(sourceFileName = null) {
+      const targetFileName = sourceFileName || this.fileName;
+      if (!targetFileName) return "";
+
+      // Strip extension
+      let baseName = targetFileName.replace(/\.[^/.]+$/, "");
+      
+      // If the current filename already matches the pattern, extract the root base
+      const currentMatch = baseName.match(/^(.*)_version_\d+$/);
+      if (currentMatch) {
+        baseName = currentMatch[1];
+      }
+
+      const pattern = new RegExp(`^${baseName}_version_(\\d+)$`);
+      let maxV = 0;
+
+      // Check all user datasets for the highest version number
+      const datasets = this.allUserDatasets || [];
+      datasets.forEach(ds => {
+        const nameToTest = ds.name || ds.filename || "";
+        const cleanName = nameToTest.replace(/\.[^/.]+$/, "");
+        const match = cleanName.match(pattern);
+        if (match) {
+          const v = parseInt(match[1]);
+          if (v > maxV) maxV = v;
+        }
+      });
+      
+      return `${baseName}_version_${maxV + 1}`;
+    },
+
     // ===== DASHBOARD ACTIONS =====
     async fetchDashboardStats() {
       try {
@@ -475,6 +518,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
         if (response.ok) {
           const result = await response.json();
           console.log("✅ Version saved:", result);
+          this.isDirty = false;
+          this.activeVersion = versionName || result.version_name || result.filename;
           // Refresh datasets list
           await this.fetchAllDatasets();
           return result;
@@ -504,6 +549,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
           "targetColumn",
           "selectedAlgorithm",
           "currentStep",
+          "isDirty",
           // ✅ NEW: Persist split/scaling state
           "isSplit",
           "isScaled",

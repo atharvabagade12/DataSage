@@ -1,49 +1,5 @@
 <template>
   <div class="dashboard">
-    <!-- Top Navigation -->
-    <nav class="dashboard-header">
-      <div class="nav-left">
-        <div class="logo">
-          <div class="logo-icon">
-            <svg viewBox="0 0 32 32" fill="none">
-              <circle cx="16" cy="16" r="12" fill="url(#gradient)" opacity="0.8"/>
-              <circle cx="16" cy="16" r="6" fill="white" opacity="0.9"/>
-              <defs>
-                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#667eea"/>
-                  <stop offset="100%" stop-color="#764ba2"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <div class="brand-text">DataSage</div>
-        </div>
-      </div>
-      
-      <div class="nav-center">
-        <div class="nav-links">
-          <button @click="activeDashboardTab = 'dashboard'" :class="['nav-link', { active: activeDashboardTab === 'dashboard' }]">Dashboard</button>
-          <button @click="activeDashboardTab = 'projects'" :class="['nav-link', { active: activeDashboardTab === 'projects' }]">Projects</button>
-          <button @click="activeDashboardTab = 'analytics'" :class="['nav-link', { active: activeDashboardTab === 'analytics' }]">Analytics</button>
-          <button @click="activeDashboardTab = 'models'" :class="['nav-link', { active: activeDashboardTab === 'models' }]">Models</button>
-        </div>
-      </div>
-      
-      <div class="nav-right">
-        <div class="user-section">
-          <div class="user-avatar">{{ userInitials }}</div>
-          <div class="user-info">
-            <span class="user-name">{{ userName }}</span>
-          </div>
-          <button @click="logout" class="logout-btn" title="Logout">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </nav>
-
     <!-- Main Content -->
     <div v-if="isLoading" class="loader-container">
         <div class="premium-loader"></div>
@@ -54,17 +10,7 @@
       <!-- ===== DASHBOARD TAB ===== -->
       <transition name="fade-slide">
         <div v-if="activeDashboardTab === 'dashboard'" class="tab-view dashboard-view">
-          <div class="welcome-section">
-            <div class="welcome-text">
-              <h1>Welcome back, <span class="gradient-text">{{ userName }}</span>!</h1>
-              <p>Ready to build some amazing ML models? Let's get started.</p>
-            </div>
-            <button @click="fetchData(true)" class="refresh-btn-mini" title="Sync Data">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-              </svg>
-            </button>
-          </div>
+          
 
           <div class="kpi-grid">
             <div class="kpi-card premium project" @click="activeDashboardTab = 'projects'">
@@ -234,9 +180,9 @@
               <h2>Project Inventory</h2>
               <div class="inventory-header-stats">
                 <p>Manage all your uploaded datasets and historical progress</p>
-                <div class="dataset-limit-pill" :class="{ 'warning': allDatasets.length >= 12, 'danger': allDatasets.length >= 15 }">
+                <div class="dataset-limit-pill" :class="{ 'warning': allDatasets.length >= 25, 'danger': allDatasets.length >= 30 }">
                   <span class="count">{{ allDatasets.length }}</span>
-                  <span class="limit">/ 15 Datasets</span>
+                  <span class="limit">/ 30 Datasets</span>
                 </div>
               </div>
             </div>
@@ -470,23 +416,56 @@
         </div>
       </div>
     </transition>
+
+    <!-- ===== LIMIT EXCEEDED MODAL ===== -->
+    <transition name="modal-fade">
+      <div v-if="showLimitModal" class="modal-overlay" @click.self="showLimitModal = false">
+        <div class="modal-container glass">
+          <div class="modal-header">
+            <div class="warning-icon-animate">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              </svg>
+            </div>
+            <h2>Limit Reached</h2>
+          </div>
+          
+          <div class="modal-body">
+            <p>You have reached the dataset upload limit of 30.</p>
+            <div class="warning-box" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.1);">
+              <p style="color: #f59e0b;">Please delete some of the previous datasets to continue uploading.</p>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button @click="showLimitModal = false" class="btn-modal secondary">Understood</button>
+            <button @click="activeDashboardTab = 'projects'; showLimitModal = false" class="btn-modal" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white;">Manage Datasets</button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useMLDataFlowStore } from '../stores/mlDataFlow'
 import { useExperimentStore } from '../stores/experiment'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
 
 const router = useRouter()
+const route = useRoute()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
 
 // Navigation & View State
-const activeDashboardTab = ref('dashboard')
+// Use URL query 'tab' as the source of truth for the active tab
+const activeDashboardTab = computed({
+  get: () => route.query.tab || 'dashboard',
+  set: (val) => router.push({ query: { ...route.query, tab: val } })
+})
 const isLoading = ref(true)
 
 // Upload State
@@ -505,6 +484,7 @@ let performanceChart = null
 
 // Modal States
 const showDeleteModal = ref(false)
+const showLimitModal = ref(false)
 const datasetToDelete = ref(null)
 const isDeleting = ref(false)
 
@@ -644,6 +624,10 @@ const initCharts = () => {
 
 // Upload Handling
 const triggerFileInput = () => {
+    if (allDatasets.value.length >= 30) {
+      showLimitModal.value = true
+      return
+    }
     if (!isUploading.value && !uploadSuccess.value) fileInput.value?.click()
 }
 
@@ -659,6 +643,10 @@ const handleDrop = (e) => {
 }
 
 const processFile = async (file) => {
+  if (allDatasets.value.length >= 30) {
+    showLimitModal.value = true
+    return
+  }
   const { resolveUrl } = useAuthenticatedFetch()
   isUploading.value = true
   uploadSuccess.value = false
@@ -978,35 +966,6 @@ onUnmounted(() => performanceChart?.destroy())
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 24px;
 }
-
-/* Navigation */
-.dashboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 4rem;
-  background: rgba(11, 11, 26, 0.8);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-}
-
-.logo { display: flex; align-items: center; gap: 12px; }
-.logo-icon { width: 32px; height: 32px; }
-.brand-text { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(to right, #667eea, #764ba2); -webkit-background-clip: text; background-clip:text;-webkit-text-fill-color: transparent; }
-
-.nav-links { display: flex; background: rgba(255, 255, 255, 0.03); padding: 4px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
-.nav-link { background: none; border: none; color: #6a6a8a; padding: 10px 24px; border-radius: 10px; cursor: pointer; font-weight: 600; font-family: inherit; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-.nav-link.active { background: rgba(102, 126, 234, 0.1); color: #667eea; box-shadow: inset 0 0 10px rgba(102, 126, 234, 0.1); }
-.nav-link:hover:not(.active) { color: #ffffff; }
-
-.user-section { display: flex; align-items: center; gap: 1rem; }
-.user-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
-.user-name { font-weight: 600; font-size: 0.9rem; color: #b3b3d1; }
-.logout-btn { background: none; border: none; color: #4a4a6a; cursor: pointer; transition: color 0.2s; }
-.logout-btn:hover { color: #ff5757; }
 
 /* Dashboard Content */
 .dashboard-content { padding: 4rem; max-width: 1400px; margin: 0 auto; }

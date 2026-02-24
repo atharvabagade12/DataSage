@@ -1,64 +1,9 @@
 <template>
   <div class="target-selection">
-    <!-- Navigation Header -->
-    <header class="selection-header">
-      <div class="nav-left">
-        <button @click="goBack" class="back-btn">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Back to Data-Preprocessing
-        </button>
-        <div class="breadcrumb">
-          <span>Data Preview</span>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-          <span class="current">Target Selection</span>
-        </div>
-      </div>
+    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
+    
+    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
 
-      <div class="backend-status">
-        <div
-          class="status-indicator"
-          :class="{ connected: mlStore.backendConnected }"
-        >
-          <div class="status-dot"></div>
-          <span class="status-text">{{
-            mlStore.backendConnected ? "Backend Connected" : "Backend Offline"
-          }}</span>
-        </div>
-        <span v-if="datasetId" class="dataset-id">ID: {{ datasetId }}</span>
-      </div>
-    </header>
-
-    <!-- Hero Section -->
-    <section class="hero-section">
-      <div class="hero-content">
-        <!-- Centered Header -->
-        <div class="hero-header-centered">
-          <h1 class="gradient-text">Target Variable Selection</h1>
-          <p class="hero-subtitle">
-            Choose the column you want to predict. Our algorithm analyzes each column's
-            suitability for machine learning tasks.
-          </p>
-        </div>
-      </div>
-    </section>
 
     <!-- Main Content Grid -->
     <div class="main-content">

@@ -1,36 +1,9 @@
 <template>
   <div class="model-visualization">
-    <!-- Navigation Header -->
-    <nav class="vis-header">
-      <div class="nav-left">
-        <button @click="goBack" class="back-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" />
-          </svg>
-          Back to Training
-        </button>
-        <div class="breadcrumb">
-          <span>DataSage</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span>Model Training</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-          </svg>
-          <span class="current">Visualization</span>
-        </div>
-      </div>
-    </nav>
+    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
+    
+    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
 
-    <!-- Hero Section -->
-    <div class="hero-section">
-      <div class="hero-content">
-        
-        <h1>Model Visual Insights</h1>
-        <p>Deep dive into performance patterns and predictive reliability</p>
-      </div>
-    </div>
 
     <div class="main-container" v-if="loading">
       <div class="loading-state">

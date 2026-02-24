@@ -457,11 +457,55 @@ class DataPreprocessor:
             print(f"Processing datetime column: {col}")
             
             try:
-                # errors='coerce' will turn out-of-bounds or invalid dates into NaT
-                # format='mixed' handles multiple date formats automatically
-                self.df[col] = pd.to_datetime(self.df[col], errors='coerce', format='mixed', utc=True)
+                # --- Diagnostic Logging ---
+                sample_values = self.df[col].head(5).tolist()
+                print(f"   Diagnostic for '{col}':")
+                print(f"      dtype: {self.df[col].dtype}")
+                print(f"      samples: {sample_values}")
+                if len(sample_values) > 0:
+                    print(f"      type of first value: {type(sample_values[0])}")
+                
+                # Check if it looks like datetime.time objects (often shows as object dtype)
+                import datetime
+                is_time_objects = False
+                if self.df[col].dtype == 'object' and len(sample_values) > 0:
+                    if any(isinstance(v, datetime.time) for v in sample_values if v is not None):
+                         is_time_objects = True
+                         print(f"   Detected datetime.time objects in '{col}'.")
+
+                # ✅ Support Timedelta columns
+                if pd.api.types.is_timedelta64_dtype(self.df[col]):
+                    print(f"   Detected Timedelta column. Converting to Datetime using 1970-01-01 base.")
+                    self.df[col] = pd.to_datetime(0) + self.df[col]
+                
+                # ✅ Support datetime.time objects by converting to string first
+                elif is_time_objects:
+                    print(f"   Converting time objects to strings to ensure pd.to_datetime works.")
+                    self.df[col] = self.df[col].apply(lambda x: x.strftime('%H:%M:%S') if isinstance(x, datetime.time) else x)
+
+                # ✅ Sanitize input strings: strip whitespace
+                elif self.df[col].dtype == 'object':
+                    print(f"   Stripping whitespace from object column '{col}' before conversion.")
+                    self.df[col] = self.df[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
+
+                # Primary conversion attempt
+                converted = pd.to_datetime(self.df[col], errors='coerce', format='mixed', utc=True)
+                
+                # ✅ Robust Fallback: If conversion yields all NaT but original wasn't empty
+                non_null_orig = self.df[col].count()
+                non_null_conv = converted.count()
+                
+                if non_null_orig > 0 and non_null_conv == 0:
+                    print(f"   ⚠️ Primary conversion failed (all NaT). Trying forced string conversion fallback.")
+                    # Sometimes mixed types or weird objects work better if forced to string first
+                    converted = pd.to_datetime(self.df[col].astype(str), errors='coerce', format='mixed', utc=True)
+                
+                self.df[col] = converted
+                
             except Exception as e:
                 print(f"❌ Critical error converting {col} to datetime: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
                 
             # Extract requested features

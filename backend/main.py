@@ -66,7 +66,7 @@ import joblib
 
 # ===== PREPROCESSING MODULE =====
 from preprocessing import DataPreprocessor, TargetEncoder
-from semantic_type_utils import detect_semantic_type
+from semantic_type_utils import detect_semantic_type, get_effective_semantic_types
 
 # ===== DIRECTORIES =====
 # UPLOAD_DIR = "enterprise_datasets"  <-- Deprecated
@@ -1233,7 +1233,7 @@ async def get_recent_activity(
                 "details": a.action_details,
                 "resource_id": a.resource_id,
                 "resource_type": a.resource_type,
-                "created_at": a.created_at.isoformat() + "Z"
+                "created_at": a.created_at.isoformat() + "Z" if a.created_at.isoformat().endswith('Z') == False else a.created_at.isoformat()
             }
             for a in actions
         ]
@@ -1260,7 +1260,7 @@ async def list_models(
             "algorithm": m.algorithm,
             "metrics": m.metrics,
             "hyperparameters": m.hyperparameters,
-            "createdAt": m.created_at.isoformat(),
+            "createdAt": m.created_at.isoformat() + "Z",
             "dataset_id": m.dataset_id
         }
         for m in models_db
@@ -1276,13 +1276,13 @@ async def upload_dataset(
     try:
         user_id = current_user['id']
         
-        # 0. Check dataset limit (15 max)
+        # 0. Check dataset limit (30 max)
         dataset_count = db.query(DatasetModel).filter(DatasetModel.user_id == user_id).count()
-        if dataset_count >= 15:
-            print(f"⚠️ User {user_id} reached dataset limit (15). Blocked upload.")
+        if dataset_count >= 30:
+            print(f"⚠️ User {user_id} reached dataset limit (30). Blocked upload.")
             raise HTTPException(
                 status_code=400, 
-                detail="Dataset limit reached (15 max). Please delete old datasets to upload new ones."
+                detail="Dataset limit reached (30 max). Please delete old datasets to upload new ones."
             )
 
         print(f"Receiving file upload: {file.filename}")
@@ -1420,13 +1420,15 @@ async def upload_dataset(
             'missing_values': {str(col): int(df[col].isnull().sum()) for col in df.columns},
             'sample_data': sample_data,
             'statistics': statistics,
-            'upload_time': dataset.upload_date.isoformat(),
+            'upload_time': dataset.upload_date.isoformat() + "Z",
             'success': True,
             'total_rows': dataset.row_count,
             'total_columns': dataset.column_count,
             'warning': None
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Upload error: {str(e)}")
         traceback.print_exc()
@@ -1753,7 +1755,7 @@ async def get_dataset_info(
             'dtypes': {str(col): str(dtype) for col, dtype in df.dtypes.items()},
             'missing_values': {str(col): int(df[col].isnull().sum()) for col in df.columns},
             'preprocessed': dataset.is_processed,
-            'uploaded_at': dataset.upload_date.isoformat(),
+            'uploaded_at': dataset.upload_date.isoformat() + "Z",
             'sample_data': sample_data,
             'status': 'success',
             'is_split': is_split, 
@@ -2022,6 +2024,8 @@ async def get_semantic_types(
         existing_metadata = dataset.column_metadata or {}
         
         results = []
+        is_auto_verified = True
+        
         for col in df.columns:
             # Check if we have an override
             if col in existing_metadata and existing_metadata[col].get("is_override"):
@@ -2030,11 +2034,15 @@ async def get_semantic_types(
                 # Auto-detect
                 detection = detect_semantic_type(df[col])
                 results.append(detection)
+                # Auto-verification criteria: all detections must be high confidence
+                if detection.get("confidence") != "high":
+                    is_auto_verified = False
                 
         return {
             "dataset_id": dataset_id,
             "column_types": results,
             "is_verified": dataset.column_metadata.get("_is_verified", False) if dataset.column_metadata else False,
+            "is_auto_verified": is_auto_verified,
             "status": "success"
         }
     except Exception as e:
@@ -2359,8 +2367,8 @@ async def override_semantic_types(
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
             
-        # overrides is a list of {column, semantic_type, reason, ...}
-        current_metadata = dataset.column_metadata or {}
+        # Create a new dict object to ensure SQLAlchemy detects the change (mutation tracking)
+        current_metadata = dict(dataset.column_metadata or {})
         
         for item in overrides:
             col = item.get("column")
@@ -2374,6 +2382,7 @@ async def override_semantic_types(
         # Set verification flag
         current_metadata["_is_verified"] = True
         
+        # Explicitly assign to trigger SQLAlchemy's setter
         dataset.column_metadata = current_metadata
         db.commit()
         
@@ -2661,15 +2670,16 @@ async def get_engineering_preview(dataset_id: str):
 # ===== SMOTE (CLASS IMBALANCE HANDLING) =====
 
 @app.get("/api/datasets/{dataset_id}/check-imbalance")
-async def check_class_imbalance(
+async def check_imbalance(
     dataset_id: str,
     target_column: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(auth.get_current_user)
 ):
     """
-    Check if class imbalance exists in the target column
-    Returns imbalance ratio and recommendation for SMOTE
+    Check if the training set has class imbalance.
+    Returns imbalance ratio and recommendation for SMOTE.
+    Respects manual semantic type overrides.
     """
     global y_train_storage
     
@@ -2678,15 +2688,36 @@ async def check_class_imbalance(
         print(f"🔍 CHECKING CLASS IMBALANCE: Dataset {dataset_id}, Target: {target_column}")
         print(f"{'='*80}")
         
-        # Check if dataset is split
+        # 1. Fetch Dataset and Overrides from DB
+        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset_record:
+            raise HTTPException(status_code=404, detail="Dataset not found in database")
+            
+        column_metadata = dataset_record.column_metadata or {}
+        
         if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+            raise HTTPException(status_code=404, detail="Dataset not found in memory")
         
         if not datasets[dataset_id].get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split first")
         
-        # Check problem type (SMOTE checks are for classification only)
-        if datasets[dataset_id].get('problem_type') != 'classification':
+        # Determine problem type from effective semantic types
+        df_full = datasets[dataset_id]['dataframe']
+        # Use simple check for target column
+        target_meta = column_metadata.get(target_column, {})
+        if target_meta.get("is_override"):
+            target_type = target_meta.get("semantic_type")
+        else:
+            target_type = detect_semantic_type(df_full[target_column]).get("semantic_type", "unknown")
+
+        is_classification = target_type in ['categorical', 'boolean', 'identifier', 'text']
+        # Also check raw type if unknown
+        if target_type == 'unknown' or target_type == 'numeric':
+             # If numeric but unique values are low, it might be classified as categorical by some logic,
+             # but here we follow the dataset record if available.
+             is_classification = datasets[dataset_id].get('problem_type') == 'classification'
+
+        if not is_classification:
              return {
                 "success": True,
                 "has_imbalance": False,
@@ -2773,7 +2804,8 @@ async def apply_smote(
     current_user: dict = Depends(auth.get_current_user)
 ):
     """
-    Apply SMOTE to balance class distribution in training data
+    Apply SMOTE to balance class distribution in training data.
+    Respects manual semantic type overrides.
     """
     global X_train_storage, y_train_storage, datasets
     
@@ -2781,6 +2813,13 @@ async def apply_smote(
         print(f"\n{'='*80}")
         print(f"⚖️ APPLYING SMOTE: Dataset {dataset_id}")
         print(f"{'='*80}")
+        
+        # 1. Fetch Dataset and Overrides from DB
+        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset_record:
+            raise HTTPException(status_code=404, detail="Dataset not found in database")
+            
+        column_metadata = dataset_record.column_metadata or {}
         
         # Check if SMOTE is available
         if not SMOTE_AVAILABLE:
@@ -2821,11 +2860,25 @@ async def apply_smote(
         y_train = y_train_storage[dataset_id]
         
         # Check for non-numeric columns (SMOTE requirement)
-        non_numeric_cols = X_train.select_dtypes(exclude=['number']).columns.tolist()
+        # 1. Get effective types to respect overrides
+        effective_types = get_effective_semantic_types(X_train, column_metadata)
+        
+        # 2. Identify non-numeric columns based on effective type or raw dtype
+        # We consider 'numeric' and 'boolean' as valid for SMOTE
+        non_numeric_cols = []
+        for col in X_train.columns:
+            eff_type = effective_types.get(col)
+            # If overridden to something other than numeric/boolean, it's non-numeric
+            if eff_type and eff_type not in ['numeric', 'boolean']:
+                non_numeric_cols.append(col)
+            # If not overridden, fall back to pandas dtype
+            elif not eff_type and not pd.api.types.is_numeric_dtype(X_train[col]):
+                non_numeric_cols.append(col)
+        
         if non_numeric_cols:
             raise HTTPException(
                 status_code=400,
-                detail=f"SMOTE requires all features to be numerical. Found non-numeric columns: {', '.join(non_numeric_cols)}. Please encode them first."
+                detail=f"SMOTE requires all features to be numerical. Found non-numeric columns based on semantic types: {', '.join(non_numeric_cols)}. Please encode them first."
             )
         
         # Store original distribution
@@ -3210,7 +3263,11 @@ categorical_encoders = {}
 target_encoders = {}
 
 @app.post("/api/apply-target-encoding")
-async def apply_target_encoding(request: TargetEncodingRequest):
+async def apply_target_encoding(
+    request: TargetEncodingRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """
     Apply smoothed target encoding to specified categorical columns.
     Must be called AFTER dataset is split.
@@ -3280,6 +3337,21 @@ async def apply_target_encoding(request: TargetEncodingRequest):
         datasets[dataset_id]['target_encoded'] = True
         datasets[dataset_id]['target_encoded_columns'] = list(encoders_used.keys())
         
+        # Update Database Metadata to reflect new numeric status
+        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if dataset_record:
+            meta = dataset_record.column_metadata or {}
+            for ec in new_encoded_cols:
+                meta[ec] = {
+                    "column": ec,
+                    "semantic_type": "numeric",
+                    "is_override": True,
+                    "reason": "Target encoded (smoothed mean)"
+                }
+            dataset_record.column_metadata = meta
+            db.commit()
+            print(f"✅ Updated DB metadata for {len(new_encoded_cols)} columns")
+        
         # Preview data
         y_test = y_test_storage[dataset_id]
         train_preview = pd.concat([X_train.head(200), y_train.head(200)], axis=1).to_dict('records')
@@ -3309,7 +3381,11 @@ async def apply_target_encoding(request: TargetEncodingRequest):
 
 
 @app.post("/api/apply-categorical-encoding")
-async def apply_categorical_encoding(request: CategoricalEncodingRequest):
+async def apply_categorical_encoding(
+    request: CategoricalEncodingRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """
     Apply categorical encoding to specified columns in train and test splits.
     Must be called AFTER dataset is split.
@@ -3432,6 +3508,21 @@ async def apply_categorical_encoding(request: CategoricalEncodingRequest):
         datasets[dataset_id]['is_encoded'] = True
         datasets[dataset_id]['encoded_columns'] = encoded_columns
         datasets[dataset_id]['encoders'] = list(encoders_used.keys())
+        
+        # Update Database Metadata
+        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if dataset_record:
+            meta = dataset_record.column_metadata or {}
+            for ec in encoded_columns:
+                meta[ec] = {
+                    "column": ec,
+                    "semantic_type": "numeric",
+                    "is_override": True,
+                    "reason": "Categorically encoded"
+                }
+            dataset_record.column_metadata = meta
+            db.commit()
+            print(f"✅ Updated DB metadata for {len(encoded_columns)} columns")
         
         # Create preview data with encoded columns
         train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
@@ -3621,18 +3712,14 @@ async def apply_scaling(request: ScalingRequest):
 # ===== TF-IDF ENDPOINTS =====
 
 @app.post("/api/detect-text-columns")
-async def detect_text_columns(request: Dict[str, Any]):
+async def detect_text_columns(
+    request: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """
     Detect text columns suitable for TF-IDF vectorization using multi-signal scoring.
-    
-    Scoring criteria:
-    1. Average character length (0-2 points)
-    2. Median word count (0-2 points)
-    3. Unique value ratio (0-1 point)
-    4. Vocabulary size (0-2 points)
-    5. Character entropy (0-3 points)
-    
-    Total score ≥ 5 = TEXT column
+    Respects manual semantic type overrides.
     """
     try:
         dataset_id = request.get('dataset_id')
@@ -3642,8 +3729,15 @@ async def detect_text_columns(request: Dict[str, Any]):
         print(f"   Dataset ID: {dataset_id}")
         print("=" * 80)
         
+        # 1. Fetch Dataset and Overrides from DB
+        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+        if not dataset_record:
+            raise HTTPException(status_code=404, detail="Dataset not found in database")
+            
+        column_metadata = dataset_record.column_metadata or {}
+        
         if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+            raise HTTPException(status_code=404, detail="Dataset not found in memory")
         
         if not datasets[dataset_id].get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split before TF-IDF detection")
@@ -3653,10 +3747,22 @@ async def detect_text_columns(request: Dict[str, Any]):
         
         X_train = X_train_storage[dataset_id]
         
-        # Get object/string columns
-        object_columns = X_train.select_dtypes(include=['object', 'string']).columns
+        # 2. Get Effective Semantic Types
+        effective_types = get_effective_semantic_types(X_train, column_metadata)
         
-        print(f"   Found {len(object_columns)} object/string columns")
+        # 3. Identify Candidate Columns
+        # Candidates are columns explicitly marked as 'text' OR those with string-like raw types not overridden otherwise
+        candidate_columns = []
+        for col in X_train.columns:
+            eff_type = effective_types.get(col)
+            raw_dtype = str(X_train[col].dtype)
+            
+            if eff_type == 'text':
+                candidate_columns.append(col)
+            elif (raw_dtype == 'object' or raw_dtype == 'string') and eff_type not in ['numeric', 'boolean', 'categorical', 'datetime']:
+                candidate_columns.append(col)
+        
+        print(f"   Found {len(candidate_columns)} candidate columns for text analysis")
         
         # Exclusion patterns (categorical identifiers)
         exclude_patterns = ['id', 'code', 'country', 'category', 'type', 'status', 'name', 'gender', 'city', 'state', 'zip', 'postal', 'phone', 'email', 'url', 'uuid', 'guid']
@@ -3664,7 +3770,7 @@ async def detect_text_columns(request: Dict[str, Any]):
         text_candidates = []
         all_column_analysis = []
         
-        for col in object_columns:
+        for col in candidate_columns:
             # Get non-null string data
             col_data = X_train[col].dropna().astype(str)
             
@@ -4987,7 +5093,16 @@ async def save_dataset_version(
                 "outliers": outliers, "column_stats": col_stats
             }
             quality_info = calculate_quality_score(df, partial_stats)
-            new_dataset.column_metadata = {"quality_score": quality_info["score"]}
+            
+            # Inherit column metadata from parent
+            parent_ds = db.query(DatasetModel).filter(DatasetModel.id == parent_id).first()
+            if parent_ds and parent_ds.column_metadata:
+                # Merge: Quality score from new, rest from parent
+                new_metadata = parent_ds.column_metadata.copy()
+                new_metadata["quality_score"] = quality_info["score"]
+                new_dataset.column_metadata = new_metadata
+            else:
+                new_dataset.column_metadata = {"quality_score": quality_info["score"]}
         except Exception as q_err:
             print(f"⚠️ Could not calculate version quality score: {q_err}")
 
