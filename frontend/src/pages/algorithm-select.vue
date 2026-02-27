@@ -1,8 +1,18 @@
 <template>
   <div class="algorithm-selection">
-    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
-    
-    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
+    <PageHeader 
+      title="Algorithm Selection" 
+      description="Review your problem analysis and choose the best machine learning algorithm for your dataset."
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </template>
+    </PageHeader>
+
 
 
     <!-- Loading State -->
@@ -669,6 +679,7 @@ import { storeToRefs } from "pinia";
 import { useExperimentStore } from "@/stores/experiment";
 import { useDataStore } from "@/stores/data";
 import { useAuthenticatedFetch } from "@/composables/useAuthenticatedFetch";
+import PageHeader from "@/components/PageHeader.vue";
 
 const router = useRouter();
 const experimentStore = useExperimentStore();

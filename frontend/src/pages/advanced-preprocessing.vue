@@ -1,8 +1,18 @@
 <template>
   <div class="data-preview">
-    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
-    
-    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
+    <PageHeader 
+      title="Advanced Preprocessing" 
+      description="Split your dataset, encode categorical variables, scale numerical features, or apply SMOTE to prepare your data for machine learning."
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+      </template>
+    </PageHeader>
+
 
 
     <div v-if="showBackendWarning" class="backend-warning">
@@ -1570,6 +1580,7 @@ import { useMLDataFlowStore } from "~/stores/mlDataFlow";
 import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch'
 import { useToast } from '~/composables/useToast'
 import { addPreprocessingStep } from '@/utils/preprocessingTracker';
+import PageHeader from '~/components/PageHeader.vue';
 
 const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
 const { showSuccess, showError, showWarning, showInfo } = useToast()
@@ -1786,7 +1797,19 @@ const displayedRowCount = computed(() => {
 });
 
 const getColumnSemanticType = (columnName) => {
-  // 1. Check global semantic types from backend/store FIRST (prioritize user overrides)
+  // 0. Check local column object FIRST for encoding overrides.
+  //    If a column was locally marked as 'numeric' (e.g. via target or categorical encoding),
+  //    prioritize that over the (potentially stale) backend response.
+  const localCol = columns.value.find(c => c.name === columnName);
+  if (localCol?.semanticType && localCol.semanticType !== 'unknown') {
+    // Local explicit numeric/boolean override always wins — prevents stale backend
+    // 'categorical' types from blocking SMOTE after encoding.
+    if (localCol.semanticType === 'numeric' || localCol.semanticType === 'boolean') {
+      return localCol.semanticType;
+    }
+  }
+
+  // 1. Check global semantic types from backend/store (user overrides, backend detection)
   if (semanticTypes.value) {
     const found = semanticTypes.value.find((s) => s.column === columnName);
     if (found && found.semantic_type && found.semantic_type !== 'unknown') {
@@ -1794,10 +1817,9 @@ const getColumnSemanticType = (columnName) => {
     }
   }
 
-  // 2. Fallback to local column object (for just-encoded/scaled columns not yet synced to store)
-  const col = columns.value.find(c => c.name === columnName);
-  if (col && col.semanticType && col.semanticType !== 'unknown') {
-    return col.semanticType;
+  // 2. Fallback to local column object for any other type not yet synced
+  if (localCol && localCol.semanticType && localCol.semanticType !== 'unknown') {
+    return localCol.semanticType;
   }
   
   return "unknown";
@@ -1884,7 +1906,7 @@ const smoteValidation = computed(() => {
     
     // 5. Explicit blockers:
     // If semantic type is known and is a non-numeric type, block it
-    if (['categorical', 'datetime', 'text', 'identifier'].includes(sType)) return true;
+    if (['categorical', 'datetime', 'text', 'identifier'].includes(sType)) return true; 
     
     // 6. Fallback logic:
     // If unknown semantic type, check raw type
@@ -2404,7 +2426,7 @@ const fetchCompleteStatistics = async () => {
 };
 
 
-// ==================== DATA LOADING ====================
+
 
 // ==================== DATA LOADING ====================
 
@@ -2794,9 +2816,7 @@ const applySmote = async () => {
          new_train_rows: data.new_samples
       });
 
-      // Update global row count in experimentStore
-      // Note: While SMOTE only impacts training set, for consistency in later status cards
-      // we reflect the synthetic increase in the global metadata.
+      
       const originalTotalRows = experimentStore.datasetSize?.rows || 0;
       experimentStore.updateDatasetMetadata({
         size: {
@@ -3425,6 +3445,28 @@ async function applyTargetEncoding() {
 
       // Refresh semantic types and stats from backend to reflect numeric status
       await fetchSemanticTypes();
+
+      // 🔧 FIX: After refreshing from backend, force-patch semantic types for all
+      // target-encoded columns. The backend may not have updated yet, causing the
+      // stale 'categorical' type to overwrite our local 'numeric' update, which
+      // breaks SMOTE validation.
+      if (semanticTypes.value && targetEncodedColumns.value.size > 0) {
+        const patchedTypes = semanticTypes.value.map(entry => {
+          if (targetEncodedColumns.value.has(entry.column)) {
+            return { ...entry, semantic_type: 'numeric' };
+          }
+          return entry;
+        });
+        // Also ensure columns that were encoded but missing from semanticTypes get added
+        targetEncodedColumns.value.forEach(encodedColName => {
+          if (!patchedTypes.find(e => e.column === encodedColName)) {
+            patchedTypes.push({ column: encodedColName, semantic_type: 'numeric' });
+          }
+        });
+        semanticTypes.value = patchedTypes;
+        console.log('🔧 Patched semantic types for target-encoded columns to numeric:', [...targetEncodedColumns.value]);
+      }
+
       await fetchCompleteStatistics();
     } else {
       throw new Error(data.detail || 'Target encoding failed');

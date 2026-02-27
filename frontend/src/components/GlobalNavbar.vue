@@ -2,17 +2,8 @@
   <nav class="global-navbar">
     <div class="nav-left">
       <div class="logo" @click="navigateTo('/')">
-        <div class="logo-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="12" fill="url(#nav-gradient)" opacity="0.8"/>
-            <circle cx="16" cy="16" r="6" fill="white" opacity="0.9"/>
-            <defs>
-              <linearGradient id="nav-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#667eea"/>
-                <stop offset="100%" stop-color="#764ba2"/>
-              </linearGradient>
-            </defs>
-          </svg>
+        <div class="brand-logo">
+          <img src="@/assets/logo.jpeg" alt="DataSage Logo" class="logo-img">
         </div>
         <div class="brand-text">DataSage</div>
       </div>
@@ -88,7 +79,27 @@ const logout = () => { sessionStorage.clear(); localStorage.clear(); navigateTo(
 }
 
 .logo { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.logo-icon { width: 28px; height: 28px; }
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+  overflow: hidden;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
 .brand-text { 
     font-size: 1.25rem; 
     font-weight: 800; 

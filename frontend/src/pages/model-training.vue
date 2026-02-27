@@ -1,8 +1,16 @@
 <template>
   <div class="model-training">
-    <!-- Navigation Header - REMOVED (Handled by Global Layout) -->
-    
-    <!-- Hero Section - REMOVED (Context handled by Global Context Bar) -->
+    <PageHeader 
+      title="Model Training" 
+      description="Configure hyperparameters, choose validation strategies, and train your selected machine learning model."
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+      </template>
+    </PageHeader>
+
 
 
     

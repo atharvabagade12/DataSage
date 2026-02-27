@@ -3340,7 +3340,22 @@ async def apply_target_encoding(
         # Update Database Metadata to reflect new numeric status
         dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
         if dataset_record:
-            meta = dataset_record.column_metadata or {}
+            meta = dict(dataset_record.column_metadata or {})
+
+            # 🔧 FIX: Mark BOTH the original column names AND the new encoded column names as numeric.
+            # The original column may still be in the DB with semantic_type='categorical' (possibly with
+            # is_override=True), which causes get_effective_semantic_types() to return 'categorical',
+            # blocking SMOTE validation even after encoding has replaced the data with numeric values.
+            encoded_original_names = [col_info.name for col_info in columns_to_encode]
+            for original_col in encoded_original_names:
+                meta[original_col] = {
+                    "column": original_col,
+                    "semantic_type": "numeric",
+                    "is_override": True,  # Force this to take priority in get_effective_semantic_types
+                    "reason": "Column was target encoded — values are now numeric means"
+                }
+
+            # Also update the new encoded column names (could differ from original for multiclass)
             for ec in new_encoded_cols:
                 meta[ec] = {
                     "column": ec,
@@ -3348,9 +3363,10 @@ async def apply_target_encoding(
                     "is_override": True,
                     "reason": "Target encoded (smoothed mean)"
                 }
+
             dataset_record.column_metadata = meta
             db.commit()
-            print(f"✅ Updated DB metadata for {len(new_encoded_cols)} columns")
+            print(f"✅ Updated DB metadata: {len(encoded_original_names)} original + {len(new_encoded_cols)} new encoded columns → numeric")
         
         # Preview data
         y_test = y_test_storage[dataset_id]
