@@ -32,7 +32,12 @@
         <div class="meta-pill">
           <strong>{{ rowCount.toLocaleString() }}</strong> rows
         </div>
-        <div v-if="targetColumn" class="meta-pill target">
+      </div>
+
+      <div v-if="targetColumn" class="separator"></div>
+
+      <div v-if="targetColumn" class="active-item metadata">
+        <div class="meta-pill target">
           Target: <strong>{{ targetColumn }}</strong>
         </div>
       </div>
@@ -63,9 +68,11 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMLDataFlowStore } from '~/stores/mlDataFlow'
+import { useExperimentStore } from '~/stores/experiment'
 
 const router = useRouter()
 const mlStore = useMLDataFlowStore()
+const experimentStore = useExperimentStore()
 
 const hasDataset = computed(() => !!mlStore.datasetId)
 const fileName = computed(() => mlStore.fileName)
@@ -88,7 +95,21 @@ const rowCount = computed(() => {
   
   return 0
 })
-const targetColumn = computed(() => mlStore.targetColumn)
+const targetColumn = computed(() => {
+  const fromExperiment = experimentStore.targetColumn;
+  if (fromExperiment) {
+    return typeof fromExperiment === 'object' ? (fromExperiment.name || fromExperiment.label) : fromExperiment;
+  }
+  return mlStore.targetColumn;
+})
+
+const selectedAlgorithm = computed(() => {
+  const fromExperiment = experimentStore.selectedAlgorithm;
+  if (fromExperiment) {
+    return typeof fromExperiment === 'object' ? (fromExperiment.name || fromExperiment.label) : fromExperiment;
+  }
+  return mlStore.selectedAlgorithm;
+})
 
 const emit = defineEmits(['save-version'])
 
@@ -161,6 +182,7 @@ const goBack = () => {
     border: 1px solid rgba(255, 255, 255, 0.03); 
 }
 .meta-pill.target { background: rgba(234, 179, 8, 0.05); color: #eab308; border-color: rgba(234, 179, 8, 0.1); }
+.meta-pill.algorithm { background: rgba(139, 92, 246, 0.05); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.1); }
 
 .context-right { display: flex; align-items: center; gap: 20px; }
 

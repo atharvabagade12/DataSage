@@ -186,6 +186,12 @@
                         style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.2);"
                         >Target Encoded</span
                       >
+                      <span
+                        v-if="categoricallyEncodedColumns.has(column)"
+                        class="encoded-badge"
+                        style="background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2);"
+                        >Encoded</span
+                      >
                     </div>
                   </td>
                 </tr>
@@ -1713,6 +1719,7 @@ const trainRows = computed(() => mlStore.isSplit ? mlStore.splitInfo.trainRows :
 const testRows = computed(() => mlStore.isSplit ? mlStore.splitInfo.testRows : 0);
 const scaledColumns = computed(() => new Set(preprocessing.value.scaledColumns));
 const targetEncodedColumns = ref(new Set()); 
+const categoricallyEncodedColumns = ref(new Set()); 
 const backendTotalRows_State = computed(() => experimentStore.datasetSize?.rows || 0);
 
 // Backend Connection
@@ -2509,13 +2516,16 @@ const loadInitialData = async () => {
 
 
 const analyzeColumns = () => {
-  if (!originalDataset.value || originalDataset.value.length === 0) return;
+  // Use the currently active dataset as the source of truth for column names
+  // if a split/encoding has been applied. Otherwise use the original dataset.
+  const activeData = currentDataset.value;
+  if (!activeData || activeData.length === 0) return;
 
-  const firstRow = originalDataset.value[0];
+  const firstRow = activeData[0];
   const encodedConfig = preprocessing.value.encodedColumns || [];
 
   columns.value = Object.keys(firstRow).map((colName) => {
-    const values = originalDataset.value
+    const values = activeData
       .map((row) => row[colName])
       .filter((v) => v !== null && v !== undefined);
     
@@ -2530,19 +2540,23 @@ const analyzeColumns = () => {
     // Restore user selection from store
     const encodingInfo = encodedConfig.find(c => c.name === colName);
 
-    // Preserve existing metrics if available
+    // Preserve existing metrics/state if available
     const existingCol = columns.value?.find(c => c.name === colName);
+
+    // Identify if it's a new One-Hot column (check name pattern if not in existingCol)
+    const isOneHot = existingCol?.isOneHot || colName.includes('_');
 
     return {
       name: colName,
-      type: type, // This will now be 'numerical' if semanticType is 'numeric'
+      type: type, 
       semanticType: backendType, 
       unique: new Set(values).size,
-      missing: originalDataset.value.length - values.length,
-      remove: false, 
+      missing: activeData.length - values.length,
+      remove: existingCol?.remove || false, 
       encode: !!encodingInfo,
       encoding: encodingInfo ? encodingInfo.encoding || encodingInfo.method : "onehot",
-      targetEncode: false, 
+      targetEncode: existingCol?.targetEncode || false, 
+      isOneHot: isOneHot,
       scale: preprocessing.value.scaledColumns.includes(colName),
       isAlreadyScaled: preprocessing.value.scaledColumns.includes(colName),
       scalingMethod: preprocessing.value.scalingMethod || 'standard',
@@ -2550,11 +2564,7 @@ const analyzeColumns = () => {
     };
   });
 
-  console.log(`✅ Analyzed ${columns.value.length} columns & synced with store`);
-  
-  // Debug: Log numerical columns detected
-  console.log("📊 Numerical Columns (for Scaling):", numericalColumns.value.map(c => c.name));
-  console.log("📊 Categorical Columns (for Encoding):", categoricalColumns.value.map(c => c.name));
+  console.log(`✅ Analyzed ${columns.value.length} columns from ${splitApplied.value ? currentSplitView.value : 'original'} dataset`);
 };
 
 const detectColumnType = (values) => {
@@ -2650,6 +2660,7 @@ const confirmResetSplit = () => {
   
   // 2. Clear local UI refs
   targetEncodedColumns.value = new Set();
+  categoricallyEncodedColumns.value = new Set();
   trainData.value = [];
   testData.value = [];
   currentSplitView.value = "full";
@@ -2688,6 +2699,7 @@ const confirmResetAll = async () => {
     
     // 2. Clear local UI refs
     targetEncodedColumns.value = new Set();
+    categoricallyEncodedColumns.value = new Set();
     trainData.value = [];
     testData.value = [];
     currentSplitView.value = "full";
@@ -3156,6 +3168,12 @@ async function applyCategoricalEncoding() {
       currentSplitView.value = 'train';
       
       const encodedCount = data.encoded_columns?.length || 0;
+      
+      // Track newly encoded columns for UI badges
+      if (data.encoded_columns) {
+        data.encoded_columns.forEach(col => categoricallyEncodedColumns.value.add(col));
+      }
+      
       showSuccess( 'Encoding Applied', `Encoded ${encodedCount} columns.`);
       
       addPreprocessingStep('Categorical Encoding');

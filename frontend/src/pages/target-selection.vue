@@ -209,6 +209,9 @@ const continueToAdvancedPreprocessing = async () => {
     // 1. Update Experiment Store
     experimentStore.setTargetColumn(selectedColumn.value);
     
+    // 1.1 Sync to mlStore for context bar visibility
+    mlStore.setTargetColumn(selectedColumn.value.name);
+    
     // Set problem type based on column properties (simplistic detection)
     // Real detection should happen on backend or via robust logic
     let probType = "classification";

@@ -678,12 +678,14 @@ import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useExperimentStore } from "@/stores/experiment";
 import { useDataStore } from "@/stores/data";
+import { useMLDataFlowStore } from "@/stores/mlDataFlow";
 import { useAuthenticatedFetch } from "@/composables/useAuthenticatedFetch";
 import PageHeader from "@/components/PageHeader.vue";
 
 const router = useRouter();
 const experimentStore = useExperimentStore();
 const dataStore = useDataStore();
+const mlStore = useMLDataFlowStore();
 const { authenticatedGet } = useAuthenticatedFetch();
 
 const { 
@@ -2313,6 +2315,9 @@ const startTraining = async () => {
       type: selectedAlgorithm.value.type || 'classification', 
       params: hyperparameters 
     });
+
+    // Sync to ML Data Flow store for Context Bar visibility
+    mlStore.setAlgorithm(selectedAlgorithm.value.name);
     
     // Save the REFINDED/DETECTED Problem Type
     if (problemType.value) {

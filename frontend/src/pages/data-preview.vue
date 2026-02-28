@@ -1101,29 +1101,7 @@
             
 
         
-        <!-- Skip Preprocessing Section -->
-        <div class="skip-section" v-if="!hasActiveTools">
-          <div class="skip-content">
-            <h3>Skip Preprocessing</h3>
-            <p>
-              Your data looks good as-is? You can skip preprocessing and use the
-              original dataset for machine learning.
-            </p>
-            <button @click="proceedToTargetSelection" class="skip-btn">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M4,11V13H16L10.5,18.5L11.92,19.92L19.84,12L11.92,4.08L10.5,5.5L16,11H4Z"
-                />
-              </svg>
-              Skip to Target Selection
-            </button>
-          </div>
-        </div>
+        
 
         <!-- Apply Changes Section - ENHANCED -->
         <div class="apply-section" v-if="hasActiveTools">
