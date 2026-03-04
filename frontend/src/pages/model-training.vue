@@ -826,7 +826,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
-import { useRouter, useRoute } from "vue-router";
+import { useRouter, useRoute, onBeforeRouteLeave } from "vue-router";
 import { Chart, registerables } from "chart.js";
 import { storeToRefs } from "pinia";
 import { useExperimentStore } from "@/stores/experiment";
@@ -2489,6 +2489,19 @@ const initializeTrainingEnvironment = async () => {
 };
 
 
+
+// ── NAVIGATION GUARD: clear session on pipeline exit ───────────────────────
+const PIPELINE_ROUTES = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+onBeforeRouteLeave((to, _from, next) => {
+  if (!PIPELINE_ROUTES.includes(to.name)) {
+    experimentStore.clearAll();
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Lifecycle
 onMounted(async () => {

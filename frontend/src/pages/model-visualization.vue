@@ -339,12 +339,14 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { useAuthenticatedFetch } from '@/composables/useAuthenticatedFetch';
+import { useExperimentStore } from '@/stores/experiment';
 import Chart from 'chart.js/auto';
 
 const route = useRoute();
 const router = useRouter();
+const experimentStore = useExperimentStore();
 
 const loading = ref(true);
 const error = ref(null);
@@ -1085,6 +1087,20 @@ const goBack = () => {
   }
   router.push({ path: '/model-training', query });
 };
+
+// ── NAVIGATION GUARD: clear session on pipeline exit ───────────────────────
+const PIPELINE_ROUTES = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+onBeforeRouteLeave((to, _from, next) => {
+  if (!PIPELINE_ROUTES.includes(to.name)) {
+    // All pipeline work is done at visualization — clear session to allow fresh start
+    experimentStore.clearAll();
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 onMounted(() => {
   fetchVisualizationData();

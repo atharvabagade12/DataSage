@@ -31,6 +31,16 @@
         </div>
       </div>
     </div>
+
+    <!-- Save Success Toast -->
+    <transition name="toast-slide">
+      <div v-if="saveToast.visible" class="save-toast">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="toast-icon">
+          <path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
+        </svg>
+        <span>{{ saveToast.message }}</span>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -50,6 +60,21 @@ const showGuardModal = ref(false)
 const showSaveModal = ref(false)
 const versionName = ref('')
 const pendingNavigation = ref(null)
+
+// Toast state
+const saveToast = ref({ visible: false, message: '' })
+let toastTimer = null
+
+const showSaveSuccessToast = (datasetName) => {
+  if (toastTimer) clearTimeout(toastTimer)
+  saveToast.value = {
+    visible: true,
+    message: `"${datasetName}" was saved successfully in inventory`
+  }
+  toastTimer = setTimeout(() => {
+    saveToast.value.visible = false
+  }, 3500)
+}
 
 // Pipeline routes that require an unsaved changes guard
 const PIPELINE_ROUTES = [
@@ -112,10 +137,14 @@ const handleDiscardAndContinue = () => {
 const saveVersion = async () => {
   if (!versionName.value) return
   
+  const savedName = versionName.value
   try {
-    await mlStore.saveDatasetVersion(mlStore.datasetId, versionName.value)
+    await mlStore.saveDatasetVersion(mlStore.datasetId, savedName)
     showSaveModal.value = false
     versionName.value = ''
+    
+    // Show success toast
+    showSaveSuccessToast(savedName)
     
     // If we were waiting to navigate
     if (pendingNavigation.value) {
@@ -191,4 +220,41 @@ const saveVersion = async () => {
     font-weight: 600;
 }
 .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Save Success Toast */
+.save-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #1a2a1a 0%, #1a2e1a 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  z-index: 20000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(16, 185, 129, 0.1);
+  backdrop-filter: blur(8px);
+  max-width: 400px;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  color: #10b981;
+}
+
+/* Toast transition */
+.toast-slide-enter-active,
+.toast-slide-leave-active {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toast-slide-enter-from,
+.toast-slide-leave-to {
+  opacity: 0;
+  transform: translateY(16px) scale(0.96);
+}
 </style>

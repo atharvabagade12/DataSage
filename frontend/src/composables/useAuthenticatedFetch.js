@@ -51,30 +51,31 @@ export const useAuthenticatedFetch = () => {
   const authenticatedFetch = async (url, options = {}) => {
     const finalUrl = resolveUrl(url)
     
-    // Get JWT token from storage
     const token = sessionStorage.getItem('token') || 
                   sessionStorage.getItem('authToken') || 
                   localStorage.getItem('token') || 
                   localStorage.getItem('authToken')
     
-    // Merge headers with authentication
-    const headers = {
-      ...options.headers,
-    }
-    
-    // Add Authorization header if token exists
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    
-    // Add ngrok skip header (safe to include even for non-ngrok URLs)
+    const headers = { ...options.headers }
+    if (token) headers['Authorization'] = `Bearer ${token}`
     headers['ngrok-skip-browser-warning'] = 'true'
-    
-    // Make the request
-    return fetch(finalUrl, {
-      ...options,
-      headers
-    })
+
+    // Use caller's signal if provided (e.g. verifyToken), else apply 15s default timeout
+    const controller = options.signal ? null : new AbortController();
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
+
+    try {
+      const response = await fetch(finalUrl, {
+        ...options,
+        headers,
+        signal: options.signal || controller.signal
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      return response;
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      throw err;
+    }
   }
 
   /**

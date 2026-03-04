@@ -74,6 +74,22 @@
 
         <!-- Table Container -->
         <div class="table-container">
+          <!-- ── PERSISTENCE FALLBACK NOTICE ─────────────────────────────── -->
+          <!-- Shown when the split flag is true but sample rows could not     -->
+          <!-- be restored (very rare: happens only if DB metadata is missing) -->
+          <div
+            v-if="splitApplied && trainData.length === 0 && !isProcessing"
+            class="preview-restore-notice"
+          >
+            <span class="notice-icon">⚠️</span>
+            <div class="notice-body">
+              <strong>Split preview unavailable</strong>
+              <p>The train/test preview data couldn't be restored. Reset and re-apply the split to continue.</p>
+            </div>
+            <button class="notice-action-btn" @click="resetSplit">Reset Split</button>
+          </div>
+          <!-- ─────────────────────────────────────────────────────────────── -->
+
           <div class="table-toolbar">
             <div class="toolbar-left">
               <span class="table-info">
@@ -1217,185 +1233,7 @@
           </Modal>
 
           <!-- ========== CARD 5: TF-IDF VECTORIZATION ========== -->
-          <Card 
-            class="preprocessing-tool-card" 
-            hover 
-            :class="{ disabled: !splitApplied }"
-          >
-            <div class="tool-header">
-              <div class="tool-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/>
-                </svg>
-              </div>
-              <div class="tool-info">
-                <h3>
-                  TF-IDF Vectorization
-                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
-                </h3>
-                <p>Convert text columns (reviews, descriptions) to numerical features</p>
-              </div>
-              <div class="tool-badge" :class="{ 'success-badge': tfidfApplied }">
-                {{ tfidfApplied ? "✓ Applied" : "Not Applied" }}
-              </div>
-            </div>
-            
-            <div class="tool-footer">
-              <Button variant="primary" @click="detectAndConfigureTfidf" :disabled="!splitApplied">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
-                </svg>
-                Configure TF-IDF
-              </Button>
-            </div>
-          </Card>
-
-          <!-- TF-IDF Configuration Modal -->
-          <Modal v-model="showTfidfModal" title="TF-IDF Vectorization Configuration" size="xl">
-            <div class="modal-section">
-              <!-- Info Alert -->
-              <div class="info-alert">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
-                </svg>
-                <div>
-                  <strong>What is TF-IDF?</strong>
-                  <p>TF-IDF (Term Frequency-Inverse Document Frequency) converts text into numerical features by measuring word importance. Ideal for reviews, descriptions, and other text data.</p>
-                </div>
-              </div>
-
-              <!-- No Text Columns Detected -->
-              <div v-if="textColumns.length === 0" class="empty-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.3;">
-                  <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/>
-                </svg>
-                <p>No text columns detected in your dataset.</p>
-                <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem;">Text columns must have average length ≥ 30 characters.</p>
-              </div>
-
-              <!-- Detected Text Columns -->
-              <div v-else class="config-group">
-                <label class="config-label">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/>
-                  </svg>
-                  Detected Text Columns ({{ textColumns.length }})
-                </label>
-                
-                <div class="encoding-list">
-                  <div
-                    v-for="column in textColumns"
-                    :key="column.name"
-                    class="encoding-row"
-                    :class="{ active: column.selected }"
-                  >
-                    <label class="checkbox-label">
-                      <input
-                        type="checkbox"
-                        v-model="column.selected"
-                      />
-                      <span class="checkbox-custom"></span>
-                      <span class="col-name">
-                        {{ column.name }}
-                        <span class="category-count" style="color: #3b82f6; font-weight: 600;">
-                          Score: {{ column.score }}/10
-                        </span>
-                      </span>
-                    </label>
-
-                    <!-- Column Metrics -->
-                    <div class="recommendation-info" style="margin-top: 0.5rem; flex-wrap: wrap;">
-                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-                        {{ column.avg_length }} chars avg
-                      </span>
-                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-                        {{ column.median_words }} words median
-                      </span>
-                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-                        {{ column.vocabulary_size }} vocab
-                      </span>
-                      <span class="rec-badge" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-                        entropy: {{ column.entropy }}
-                      </span>
-                    </div>
-
-                    <!-- Reasoning (expandable) -->
-                    <div v-if="column.reasoning && column.reasoning.length > 0" style="margin-top: 0.5rem;">
-                      <details style="cursor: pointer;">
-                        <summary style="color: #94a3b8; font-size: 0.85rem; user-select: none;">
-                          📊 View detection reasoning ({{ column.reasoning.length }} signals)
-                        </summary>
-                        <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0; color: #b3b3d1; font-size: 0.85rem; line-height: 1.6;">
-                          <li v-for="(reason, idx) in column.reasoning" :key="idx">
-                            {{ reason }}
-                          </li>
-                        </ul>
-                      </details>
-                    </div>
-
-                    <!-- Configuration Display -->
-                    <div v-if="column.selected && column.config" class="recommendation-info" style="margin-top: 0.75rem; border-top: 1px solid rgba(102, 126, 234, 0.2); padding-top: 0.75rem;">
-                      <span class="rec-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-                        max_features: {{ column.config.max_features }}
-                      </span>
-                      <span class="rec-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-                        ngram: {{ column.config.ngram_range[0] }}-{{ column.config.ngram_range[1] }}
-                      </span>
-                      <span class="rec-reason">Dataset tier: {{ tfidfConfig.base_params?.tier || 'auto' }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Warnings -->
-              <div v-if="tfidfWarnings.length > 0" class="leakage-warning" style="margin-top: 1.5rem;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
-                </svg>
-                <div>
-                  <strong>Safety Adjustments:</strong>
-                  <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
-                    <li v-for="warning in tfidfWarnings" :key="warning.type">
-                      {{ warning.message }}
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              <!-- Model Compatibility -->
-              <div v-if="tfidfConfig.recommended_models" class="info-alert" style="background: rgba(59, 130, 246, 0.05); margin-top: 1.5rem;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
-                </svg>
-                <div>
-                  <strong>Recommended Models:</strong>
-                  <p style="margin: 0.5rem 0 0 0;">Linear models (Ridge, ElasticNet) or boosting models (LightGBM, XGBoost, CatBoost) work best with TF-IDF features.</p>
-                </div>
-              </div>
-
-              <!-- Anti-Leakage Protection -->
-              <div class="leakage-warning" style="margin-top: 1.5rem;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
-                </svg>
-                <span><strong>Anti-Leakage Protection:</strong> TF-IDF will be fit on Training Set only and then applied to Test Set.</span>
-              </div>
-            </div>
-            
-            <template #footer>
-              <Button variant="ghost" @click="showTfidfModal = false">
-                Cancel
-              </Button>
-              <Button 
-                variant="primary" 
-                :loading="isProcessing"
-                @click="applyTfidf"
-                :disabled="!textColumns.some(c => c.selected)"
-              >
-                Apply TF-IDF
-              </Button>
-            </template>
-          </Modal>
+          
 
           <!-- Reset Confirmation Modal -->
           <Modal v-model="showResetConfirmModal" title="Reset All Transformations?" size="md">
@@ -1556,16 +1394,26 @@
         </div>
       </div>
       <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 1rem; width: 100%;">
-          <Button variant="ghost" @click="showVersionModal = false">Cancel</Button>
-          <Button 
-            variant="primary" 
-            :loading="isProcessing" 
-            @click="handleSaveVersion"
-            :disabled="!newVersionName"
-          >
-            Save This Version
-          </Button>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <!-- "Leave anyway" only shown when guard triggered the modal -->
+          <Button
+            v-if="pendingRoute"
+            variant="ghost"
+            @click="leaveWithoutSaving"
+            style="color: #f87171;"
+          >Leave Without Saving</Button>
+          <div v-else></div>
+          <div style="display: flex; gap: 1rem;">
+            <Button variant="ghost" @click="showVersionModal = false; pendingRoute = null">Cancel</Button>
+            <Button
+              variant="primary"
+              :loading="isProcessing"
+              @click="handleSaveVersion"
+              :disabled="!newVersionName"
+            >
+              Save This Version
+            </Button>
+          </div>
         </div>
       </template>
     </Modal>
@@ -1588,7 +1436,7 @@ import { useToast } from '~/composables/useToast'
 import { addPreprocessingStep } from '@/utils/preprocessingTracker';
 import PageHeader from '~/components/PageHeader.vue';
 
-const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch()
+const { authenticatedPost, authenticatedGet, authenticatedDelete } = useAuthenticatedFetch()
 const { showSuccess, showError, showWarning, showInfo } = useToast()
 
 const router = useRouter();
@@ -1659,7 +1507,35 @@ const openVersionModal = () => {
     showVersionModal.value = true;
 };
 
-// Navigation Guard State handled by Global Store and Layout (default.vue)
+// ── NAVIGATION GUARD ──────────────────────────────────────────────────────────
+// Pipeline routes — free navigation between these never triggers the save prompt.
+const PIPELINE_ROUTES = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+
+// Stores the destination route when the guard blocks navigation to show the modal.
+const pendingRoute = ref(null);
+
+onBeforeRouteLeave((to, _from, next) => {
+  const leavingPipeline = !PIPELINE_ROUTES.includes(to.name);
+
+  if (leavingPipeline && mlStore.isDirty) {
+    // Dirty state — prompt to save before leaving
+    pendingRoute.value = to.fullPath;
+    newVersionName.value = mlStore.getNextVersionName?.() || '';
+    showVersionModal.value = true;
+    next(false); // block navigation until user decides
+  } else if (leavingPipeline) {
+    // Clean exit — clear session so next pipeline start is always fresh
+    experimentStore.clearAll();
+    dataStore.clearData();
+    next();
+  } else {
+    next(); // normal within-pipeline navigation
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 const handleSaveVersion = async () => {
     if (!newVersionName.value) return;
@@ -1668,12 +1544,16 @@ const handleSaveVersion = async () => {
         processingMessage.value = "Saving new version...";
         const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
         showSuccess("Version Saved", `Successfully created version: ${result.name}`);
+        mlStore.isDirty = false; // mark clean after save
         showVersionModal.value = false;
         
-        // If we were trying to navigate, continue now
+        // Resume blocked navigation if triggered by the route guard
         if (pendingRoute.value) {
           const target = pendingRoute.value;
           pendingRoute.value = null;
+          // Clear session state before leaving the pipeline
+          experimentStore.clearAll();
+          dataStore.clearData();
           router.push(target);
         }
     } catch (err) {
@@ -1683,6 +1563,16 @@ const handleSaveVersion = async () => {
         isProcessing.value = false;
         processingMessage.value = "Processing...";
     }
+};
+
+// Called when user clicks "Leave Without Saving" in the version modal
+const leaveWithoutSaving = () => {
+  showVersionModal.value = false;
+  const target = pendingRoute.value;
+  pendingRoute.value = null;
+  experimentStore.clearAll();
+  dataStore.clearData();
+  if (target) router.push(target);
 };
 const targetEncodingApplied = ref(false);
 
@@ -1848,12 +1738,15 @@ const categoricalColumns = computed(() => {
     // 3. Strict exclusion for numeric overrides
     if (sType === 'numeric' || sType === 'integer' || sType === 'float') return false;
     
-    // 4. Explicitly include categorical, boolean, datetime, and other text-based semantic types for encoding
+    // 4. Check if already encoded (prevent appearing twice)
+    if (categoricallyEncodedColumns.value.has(col.name)) return false;
+
+    // 5. Explicitly include categorical, boolean, datetime, and other text-based semantic types for encoding
     const categoricalTypes = ['categorical', 'boolean', 'datetime', 'email', 'phone', 'url', 'ip_address', 'uuid', 'text', 'string'];
     if (categoricalTypes.includes(sType)) return true;
     
-    // 5. Fallback for untyped columns
-    return col.type === 'categorical' || col.type === 'string';
+    // 6. Fallback for untyped columns
+    return col.type === 'categorical' || col.type === 'string' || col.type === 'unknown';
   });
 });
 
@@ -1908,8 +1801,8 @@ const smoteValidation = computed(() => {
     if (col.isOneHot) return false;
 
     // 4. Strict Enforcement:
-    // If semantic type is numeric or boolean, it's allowed
-    if (['numeric', 'boolean'].includes(sType)) return false;
+    // If semantic type is numeric, numerical or boolean, it's allowed
+    if (['numeric', 'numerical', 'boolean', 'integer', 'float'].includes(sType.toLowerCase())) return false;
     
     // 5. Explicit blockers:
     // If semantic type is known and is a non-numeric type, block it
@@ -2490,6 +2383,18 @@ const loadInitialData = async () => {
       dataStore.loadData(datasetId.value),
       fetchSemanticTypes()
     ]);
+
+    // ── PERSISTENCE FIX: FRONTEND GUARD ─────────────────────────────────────
+    // If the experiment store says split is applied but our transient preview
+    // store is still empty, force a second fetch (bypasses dedup cache).
+    // This handles the case where the first loadData call already resolved
+    // but the backend restored previews from the DB (they come in the same
+    // response, so this shouldn't happen — but this guard is a safety net).
+    if (preprocessing.value.isSplitApplied && dataStore.trainPreview.length === 0) {
+      console.warn('⚠️ Split applied in store but trainPreview is empty after load — forcing re-fetch...');
+      await dataStore.loadData(datasetId.value, true); // force=true
+    }
+    // ────────────────────────────────────────────────────────────────────────
     
     // Step 4: Sync UI Columns with Metadata (Initially)
     analyzeColumns();
@@ -2503,6 +2408,9 @@ const loadInitialData = async () => {
     // Step 5: Restore View State if Split Applied
     if (preprocessing.value.isSplitApplied) {
       currentSplitView.value = 'train';
+      // Re-analyze columns from trainPreview keys (which may differ from rawPreview after
+      // encoding — e.g. Geography → Geography_Germany + Geography_Spain)
+      analyzeColumns();
     }
 
     console.log("✅ Experiment Hydrated Successfully");
@@ -2532,9 +2440,10 @@ const analyzeColumns = () => {
     // Prefer backend semantic type detection
     const backendType = getColumnSemanticType(colName);
     
-    // Ensure the local .type is consistent with semanticType
-    const type = backendType !== 'unknown' 
-      ? (['numeric', 'boolean'].includes(backendType) ? 'numerical' : 'categorical')
+    // FIX: Only map strictly 'numeric' to 'numerical'. 
+    // Boolean columns (Yes/No) should be 'categorical' unless they are 0/1.
+    const type = backendType === 'numeric' 
+      ? 'numerical' 
       : detectColumnType(values);
 
     // Restore user selection from store
@@ -2553,12 +2462,12 @@ const analyzeColumns = () => {
       unique: new Set(values).size,
       missing: activeData.length - values.length,
       remove: existingCol?.remove || false, 
-      encode: !!encodingInfo,
+      encode: !!encodingInfo && !categoricallyEncodedColumns.value.has(colName),
       encoding: encodingInfo ? encodingInfo.encoding || encodingInfo.method : "onehot",
       targetEncode: existingCol?.targetEncode || false, 
       isOneHot: isOneHot,
       scale: preprocessing.value.scaledColumns.includes(colName),
-      isAlreadyScaled: preprocessing.value.scaledColumns.includes(colName),
+      isAlreadyScaled: (existingCol?.isAlreadyScaled || preprocessing.value.scaledColumns.includes(colName)),
       scalingMethod: preprocessing.value.scalingMethod || 'standard',
       backendMetrics: existingCol?.backendMetrics || null
     };
@@ -2654,11 +2563,20 @@ const resetSplit = () => {
   showResetSplitModal.value = true;
 };
 
-const confirmResetSplit = () => {
-  // 1. Reset store first so analyzeColumns sees clean state
+const confirmResetSplit = async () => {
+  // 1. Notify backend to clear cached split previews from DB
+  try {
+    await authenticatedDelete(`/api/datasets/${datasetId.value}/split`);
+    console.log('✅ Backend split state cleared');
+  } catch (err) {
+    console.warn('⚠️ Could not clear backend split state:', err);
+    // Non-fatal — continue with local reset
+  }
+
+  // 2. Reset store first so analyzeColumns sees clean state
   experimentStore.resetPreprocessing();
   
-  // 2. Clear local UI refs
+  // 3. Clear local UI refs
   targetEncodedColumns.value = new Set();
   categoricallyEncodedColumns.value = new Set();
   trainData.value = [];
@@ -2672,10 +2590,10 @@ const confirmResetSplit = () => {
   // Clear Target Encoding State
   targetEncodingApplied.value = false;
 
-  // 3. Re-sync columns with store (which is now clean)
+  // 4. Re-sync columns with store (which is now clean)
   analyzeColumns();
   
-  // 4. Re-fetch fresh statistics for recommendations
+  // 5. Re-fetch fresh statistics for recommendations
   fetchCompleteStatistics();
 
   showResetSplitModal.value = false;
@@ -2693,6 +2611,14 @@ const confirmResetAll = async () => {
   try {
     isProcessing.value = true;
     showResetConfirmModal.value = false;
+
+    // 0. Notify backend to clear cached split previews from DB
+    try {
+      await authenticatedDelete(`/api/datasets/${datasetId.value}/split`);
+      console.log('✅ Backend split state cleared (reset all)');
+    } catch (err) {
+      console.warn('⚠️ Could not clear backend split state:', err);
+    }
     
     // 1. Reset all state in the store first
     experimentStore.resetPreprocessing();
@@ -3559,6 +3485,10 @@ watch(searchQuery, () => {
 
 watch(currentSplitView, () => {
   currentPage.value = 1;
+  // Rebuild column definitions from the newly active dataset's actual keys.
+  // Needed because encoded columns (Geography_Germany, Gender_Male...) differ
+  // from original column names in rawPreview (Geography, Gender...).
+  analyzeColumns();
 });
 
 // Sync local view when global semantic types from backend change
@@ -3825,6 +3755,60 @@ watch(semanticTypes, () => {
   border-bottom: 1px solid rgba(102, 126, 234, 0.2);
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+/* Fallback notice when split preview data can't be restored */
+.preview-restore-notice {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 10px;
+  color: #fbbf24;
+  flex-wrap: wrap;
+}
+
+.preview-restore-notice .notice-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.preview-restore-notice .notice-body {
+  flex: 1;
+}
+
+.preview-restore-notice .notice-body strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #fcd34d;
+  margin-bottom: 0.2rem;
+}
+
+.preview-restore-notice .notice-body p {
+  font-size: 0.85rem;
+  margin: 0;
+  color: #fbbf24;
+  opacity: 0.85;
+}
+
+.notice-action-btn {
+  padding: 0.5rem 1.1rem;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fcd34d;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.notice-action-btn:hover {
+  background: rgba(245, 158, 11, 0.35);
 }
 
 .table-info {

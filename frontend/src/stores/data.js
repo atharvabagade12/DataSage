@@ -3,7 +3,7 @@ import { useExperimentStore } from './experiment';
 
 export const useDataStore = defineStore('data', {
   state: () => ({
-    // Transient Data (Not Persisted)
+    // Preview Data (Persisted to sessionStorage per-tab; cleared on tab close)
     rawPreview: [], // Top 200 rows of original data
     trainPreview: [],
     testPreview: [],
@@ -22,7 +22,9 @@ export const useDataStore = defineStore('data', {
     // Sync with backend using ID from Experiment Store
     async loadData(datasetId, force = false) {
       if (!datasetId) return;
-      if (!force && this.isLoaded && this.lastFetchedId === datasetId) return;
+      // Re-fetch if both train and test previews are empty (defensive fallback)
+      const previewsMissing = this.trainPreview.length === 0 && this.testPreview.length === 0;
+      if (!force && !previewsMissing && this.isLoaded && this.lastFetchedId === datasetId) return;
       
       const { authenticatedGet } = useAuthenticatedFetch();
       
@@ -130,5 +132,13 @@ export const useDataStore = defineStore('data', {
     clearData() {
       this.$reset();
     }
+  },
+
+  // Persist preview data to sessionStorage so it survives page reloads.
+  // sessionStorage is tab-scoped and cleared automatically on tab close.
+  // pinia-plugin-persistedstate v4.7.1 supports this config format.
+  persist: {
+    storage: sessionStorage,
+    pick: ['rawPreview', 'trainPreview', 'testPreview', 'lastFetchedId', 'isLoaded'],
   }
 });

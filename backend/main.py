@@ -81,6 +81,7 @@ from database import get_db, engine
 from models import Dataset as DatasetModel, Model as ModelModel
 from services.file_service import FileService
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from fastapi import Depends
 
 file_service = FileService()
@@ -1735,7 +1736,7 @@ async def get_dataset_info(
             is_scaled = meta.get('is_scaled', False)
             split_info = meta.get('split_info')
             
-            # If split, get previews
+            # If split, get previews from in-memory globals first
             if is_split and dataset_id in X_train_storage and dataset_id in y_train_storage:
                 X_tr = X_train_storage[dataset_id]
                 y_tr = y_train_storage[dataset_id]
@@ -1745,6 +1746,27 @@ async def get_dataset_info(
                     X_te = X_test_storage[dataset_id]
                     y_te = y_test_storage[dataset_id]
                     test_preview = pd.concat([X_te.head(200), y_te.head(200)], axis=1).to_dict('records')
+
+        # ── PERSISTENCE FIX ──────────────────────────────────────────────────
+        # If in-memory previews are empty (e.g. after backend restart), fall
+        # back to the previews we persisted in column_metadata at split time.
+        db_meta = dataset.column_metadata or {}
+        cached_previews = db_meta.get("_split_previews", {})
+        if cached_previews:
+            # We have DB-persisted split state — trust it.
+            if not is_split:
+                is_split = True
+                split_info = split_info or {
+                    "train_size": cached_previews.get("train_size"),
+                    "test_size": cached_previews.get("test_size"),
+                }
+            if not train_preview:
+                train_preview = cached_previews.get("train", [])
+                print(f"✅ Restored train preview from DB ({len(train_preview)} rows)")
+            if not test_preview:
+                test_preview = cached_previews.get("test", [])
+                print(f"✅ Restored test preview from DB ({len(test_preview)} rows)")
+        # ─────────────────────────────────────────────────────────────────────
 
         return {
             'dataset_id': str(dataset.id),
@@ -2864,12 +2886,12 @@ async def apply_smote(
         effective_types = get_effective_semantic_types(X_train, column_metadata)
         
         # 2. Identify non-numeric columns based on effective type or raw dtype
-        # We consider 'numeric' and 'boolean' as valid for SMOTE
+        # We consider 'numeric', 'numerical' and 'boolean' as valid for SMOTE
         non_numeric_cols = []
         for col in X_train.columns:
-            eff_type = effective_types.get(col)
+            eff_type = (effective_types.get(col) or "").lower()
             # If overridden to something other than numeric/boolean, it's non-numeric
-            if eff_type and eff_type not in ['numeric', 'boolean']:
+            if eff_type and eff_type not in ['numeric', 'numerical', 'boolean', 'integer', 'float']:
                 non_numeric_cols.append(col)
             # If not overridden, fall back to pandas dtype
             elif not eff_type and not pd.api.types.is_numeric_dtype(X_train[col]):
@@ -3127,7 +3149,11 @@ async def set_target(
 # ===== NEW: SPLIT & SCALING ENDPOINTS =====
 
 @app.post("/api/split-dataset")
-async def split_dataset(request: Dict[str, Any]):
+async def split_dataset(
+    request: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Split dataset into train/test sets"""
     global X_train_storage, X_test_storage, y_train_storage, y_test_storage
     
@@ -3206,9 +3232,37 @@ async def split_dataset(request: Dict[str, Any]):
         train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
         test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
         
-        train_preview = train_preview_df.to_dict('records')
-        test_preview = test_preview_df.to_dict('records')
+        # Sanitize NaN/Inf before serializing to JSON
+        def sanitize_preview(df):
+            return df.replace({float('inf'): None, float('-inf'): None}).where(df.notna(), None).to_dict('records')
+
+        train_preview = sanitize_preview(train_preview_df)
+        test_preview  = sanitize_preview(test_preview_df)
         
+        # ── PERSISTENCE FIX ──────────────────────────────────────────────────
+        # Save previews to the DB so they survive backend restarts.
+        # We embed them inside column_metadata (already a JSON column) using a
+        # private key "_split_previews" that the GET endpoint can read back.
+        try:
+            db_dataset = db.query(DatasetModel).filter(
+                DatasetModel.id == int(dataset_id)
+            ).first()
+            if db_dataset:
+                existing_meta = db_dataset.column_metadata or {}
+                existing_meta["_split_previews"] = {
+                    "train": train_preview,
+                    "test": test_preview,
+                    "train_size": len(X_train),
+                    "test_size": len(X_test),
+                }
+                db_dataset.column_metadata = existing_meta
+                flag_modified(db_dataset, "column_metadata")  # Required for PostgreSQL JSON tracking
+                db.commit()
+                print(f"✅ Split previews persisted to DB for dataset {dataset_id}")
+        except Exception as persist_err:
+            print(f"⚠️ Could not persist split previews to DB: {persist_err}")
+        # ─────────────────────────────────────────────────────────────────────
+
         print(f"Split complete: {len(X_train)} train, {len(X_test)} test")
         print(f"Numerical columns: {numerical_cols}")
         
@@ -3231,6 +3285,56 @@ async def split_dataset(request: Dict[str, Any]):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+
+
+@app.delete("/api/datasets/{dataset_id}/split")
+async def reset_split(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Clear split state and cached previews so the dataset returns to its full/unsplit form."""
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, datasets
+
+    try:
+        # 1. Verify dataset ownership
+        db_dataset = db.query(DatasetModel).filter(
+            DatasetModel.id == int(dataset_id)
+        ).first()
+        if not db_dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        if db_dataset.user_id != current_user['id']:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        # 2. Remove in-memory split globals
+        for store in [X_train_storage, X_test_storage, y_train_storage, y_test_storage]:
+            store.pop(dataset_id, None)
+
+        # 3. Clear in-memory split flags
+        if dataset_id in datasets:
+            datasets[dataset_id]['is_split'] = False
+            datasets[dataset_id].pop('split_info', None)
+            datasets[dataset_id].pop('smote_applied', None)
+            datasets[dataset_id].pop('smote_config', None)
+
+        # 4. Clear cached previews from DB
+        existing_meta = db_dataset.column_metadata or {}
+        existing_meta.pop("_split_previews", None)
+        db_dataset.column_metadata = existing_meta
+        flag_modified(db_dataset, "column_metadata")  # Required for PostgreSQL JSON tracking
+        db.commit()
+
+        print(f"✅ Split reset for dataset {dataset_id}")
+        return {"success": True, "message": "Split reset successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error resetting split: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
@@ -3525,20 +3629,31 @@ async def apply_categorical_encoding(
         datasets[dataset_id]['encoded_columns'] = encoded_columns
         datasets[dataset_id]['encoders'] = list(encoders_used.keys())
         
+        # Ensure in-memory metadata is updated for immediate visibility (e.g., in /statistics)
+        if 'column_metadata' not in datasets[dataset_id]:
+            datasets[dataset_id]['column_metadata'] = {}
+            
+        for ec in encoded_columns:
+            datasets[dataset_id]['column_metadata'][ec] = {
+                "column": ec,
+                "semantic_type": "numeric",
+                "is_override": True,
+                "reason": "Categorically encoded",
+                "updated_at": datetime.now().isoformat()
+            }
+        
         # Update Database Metadata
         dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
         if dataset_record:
             meta = dataset_record.column_metadata or {}
             for ec in encoded_columns:
-                meta[ec] = {
-                    "column": ec,
-                    "semantic_type": "numeric",
-                    "is_override": True,
-                    "reason": "Categorically encoded"
-                }
+                meta[ec] = datasets[dataset_id]['column_metadata'][ec]
+            
+            # Use flag_modified to ensure SQLAlchemy tracks the JSON change
             dataset_record.column_metadata = meta
+            flag_modified(dataset_record, "column_metadata")
             db.commit()
-            print(f"✅ Updated DB metadata for {len(encoded_columns)} columns")
+            print(f"✅ Updated DB metadata for {len(encoded_columns)} columns and flagged as modified")
         
         # Create preview data with encoded columns
         train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)

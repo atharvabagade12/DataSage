@@ -80,18 +80,6 @@
           <div class="quick-actions-section">
             <h2 class="section-title">Quick Actions</h2>
             <div class="quick-actions-grid">
-              <div class="action-card" @click="triggerFileInput">
-                <div class="action-icon upload">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                  </svg>
-                </div>
-                <div class="action-text">
-                  <h3>Upload Dataset</h3>
-                  <p>Start a new ML experiment</p>
-                </div>
-              </div>
-              
               <div class="action-card" @click="useSampleData">
                 <div class="action-icon sample">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -104,15 +92,16 @@
                 </div>
               </div>
 
-              <div class="action-card">
-                <div class="action-icon learn">
+              <div class="action-card" @click="resumeLastSession" :class="{ 'disabled-action': !sortedDatasets.length }">
+                <div class="action-icon resume">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5V5A2.5 2.5 0 0 1 6.5 2.5H20"/>
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
                   </svg>
                 </div>
                 <div class="action-text">
-                  <h3>Learn DataSage</h3>
-                  <p>Explore guided tutorials</p>
+                  <h3>Resume Last Session</h3>
+                  <p v-if="sortedDatasets.length">Continue with <strong>{{ sortedDatasets[0].name }}</strong></p>
+                  <p v-else>No previous sessions found</p>
                 </div>
               </div>
             </div>
@@ -445,6 +434,10 @@
       </div>
     </transition>
   </div>
+
+  <!-- Sample Data Modal -->
+  <SampleDataModal :show="showSampleModal" @close="showSampleModal = false" />
+
 </template>
 
 <script setup>
@@ -454,6 +447,7 @@ import { useMLDataFlowStore } from '../stores/mlDataFlow'
 import { useExperimentStore } from '../stores/experiment'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
+import SampleDataModal from '@/components/SampleDataModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -485,6 +479,7 @@ let performanceChart = null
 // Modal States
 const showDeleteModal = ref(false)
 const showLimitModal = ref(false)
+const showSampleModal = ref(false)
 const datasetToDelete = ref(null)
 const isDeleting = ref(false)
 
@@ -752,7 +747,12 @@ const formatFileSize = (bytes) => {
 // Navigation
 const navigateTo = (path) => router.push(path)
 const logout = () => { sessionStorage.clear(); localStorage.clear(); navigateTo('/login') }
-const useSampleData = () => navigateTo('/ml-pipeline?sample=true')
+const useSampleData = () => { showSampleModal.value = true }
+const resumeLastSession = () => {
+  const latest = sortedDatasets.value[0]
+  if (!latest) return
+  analyzeDataset(latest)
+}
 const analyzeDataset = (ds) => {
   mlStore.setCurrentDataset(ds.id, [], ds.name, [])
   experimentStore.setDataset(ds.id, ds.name)
@@ -1013,10 +1013,13 @@ onUnmounted(() => performanceChart?.destroy())
 .action-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .action-icon.upload { background: rgba(102, 126, 234, 0.1); color: #667eea; }
 .action-icon.sample { background: rgba(168, 139, 235, 0.1); color: #a88beb; }
-.action-icon.learn { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.action-icon.resume { background: rgba(16, 185, 129, 0.1); color: #10b981; }
 
 .action-text h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
 .action-text p { margin: 4px 0 0; font-size: 0.85rem; color: #6a6a8a; }
+.action-text p strong { color: #a88beb; font-weight: 600; }
+
+.disabled-action { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
 
 /* Immersive Upload Section */
 .upload-immersive-section { display: flex; justify-content: center; margin-top: 2rem; }

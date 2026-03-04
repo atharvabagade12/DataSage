@@ -674,7 +674,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useExperimentStore } from "@/stores/experiment";
 import { useDataStore } from "@/stores/data";
@@ -2567,6 +2567,20 @@ const formatDistributionsPreview = () => {
     return `Auto-generated distributions\nbased on your hyperparameters\nand algorithm characteristics`;
   }
 };
+
+// ── NAVIGATION GUARD: clear session on pipeline exit ───────────────────────
+const PIPELINE_ROUTES = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+onBeforeRouteLeave((to, _from, next) => {
+  if (!PIPELINE_ROUTES.includes(to.name)) {
+    experimentStore.clearAll();
+    dataStore.clearData();
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Lifecycle
 onMounted(async () => {

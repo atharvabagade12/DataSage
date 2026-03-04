@@ -1364,11 +1364,11 @@
     />
 
     <!-- Save Version Modal -->
-    <Modal v-model="showVersionModal" title="Save Dataset Version" size="sm">
+    <Modal v-model="showVersionModal" title="Save Dataset Version" size="md">
       <div class="modal-section" style="padding: 1.5rem;">
         <p class="modal-intro" style="margin-bottom: 1.5rem; color: #b3b3d1; font-size: 0.95rem;">Save the current state of your dataset as a new version in your inventory.</p>
         <div class="input-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
-          <label for="versionName" style="font-weight: 500; color: white;">Version Name</label>
+          <label for="versionName" style="font-weight: 600; color: #e2e8f0; font-size: 0.9rem;">Version Name</label>
           <input 
             id="versionName"
             v-model="newVersionName" 
@@ -1376,21 +1376,39 @@
             placeholder="e.g., Cleaned_v1" 
             class="native-input"
             @keyup.enter="handleSaveVersion"
-            style="background: rgba(13, 17, 23, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.75rem; color: white; width: 100%;"
+            style="background: rgba(13, 17, 23, 0.6); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; padding: 0.75rem 1rem; color: white; width: 100%; font-size: 0.95rem; outline: none; transition: border-color 0.2s;"
           />
         </div>
       </div>
       <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 1rem; width: 100%;">
-          <Button variant="ghost" @click="showVersionModal = false">Cancel</Button>
-          <Button 
-            variant="primary" 
-            :loading="isProcessing" 
-            @click="handleSaveVersion"
-            :disabled="!newVersionName"
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.75rem;">
+          <Button
+            v-if="pendingRoute"
+            variant="ghost"
+            @click="leaveWithoutSaving"
+            style="color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; background: rgba(248, 113, 113, 0.08); white-space: nowrap;"
           >
-            Save This Version
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px; flex-shrink: 0;">
+              <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
+            </svg>
+            Leave Without Saving
           </Button>
+          <div v-else></div>
+          <div style="display: flex; gap: 0.75rem; flex-shrink: 0;">
+            <Button variant="ghost" @click="showVersionModal = false; pendingRoute = null" style="padding: 0.5rem 1.25rem;">Cancel</Button>
+            <Button
+              variant="primary"
+              :loading="isProcessing"
+              @click="handleSaveVersion"
+              :disabled="!newVersionName"
+              style="padding: 0.5rem 1.25rem; font-weight: 600;"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
+                <path d="M17,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3M19,19H5V5H16.17L19,7.83V19M12,12A3,3 0 0,0 9,15A3,3 0 0,0 12,18A3,3 0 0,0 15,15A3,3 0 0,0 12,12M6,6H15V10H6V6Z"/>
+              </svg>
+              Save Version
+            </Button>
+          </div>
         </div>
       </template>
     </Modal>
@@ -1399,7 +1417,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMLDataFlowStore } from "../stores/mlDataFlow";
 import { useDataStore } from "../stores/data";
@@ -1468,6 +1486,32 @@ const openVersionModal = () => {
     showVersionModal.value = true;
 };
 
+// ── NAVIGATION GUARD ──────────────────────────────────────────────────────────
+const PIPELINE_ROUTES = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+
+const pendingRoute = ref(null);
+
+onBeforeRouteLeave((to, _from, next) => {
+  const leavingPipeline = !PIPELINE_ROUTES.includes(to.name);
+  if (leavingPipeline && mlStore.isDirty) {
+    pendingRoute.value = to.fullPath;
+    const now = new Date();
+    newVersionName.value = `${(fileName.value || 'dataset').split('.')[0]}_v${now.getHours()}${now.getMinutes()}`;
+    showVersionModal.value = true;
+    next(false);
+  } else if (leavingPipeline) {
+    experimentStore.clearAll();
+    dataStore.clearData();
+    next();
+  } else {
+    next();
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const handleSaveVersion = async () => {
     if (!newVersionName.value) return;
     
@@ -1478,11 +1522,16 @@ const handleSaveVersion = async () => {
         const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
         
         showSuccess("Version Saved", `Successfully created version: ${result.name}`);
+        mlStore.isDirty = false;
         showVersionModal.value = false;
         
-        // Refresh local data if needed, or just let user stay here
-        // Usually, saving a version means creating a NEW record, 
-        // but we keep the user on the current "draft" state.
+        if (pendingRoute.value) {
+          const target = pendingRoute.value;
+          pendingRoute.value = null;
+          experimentStore.clearAll();
+          dataStore.clearData();
+          router.push(target);
+        }
     } catch (err) {
         console.error("Save version error:", err);
         showError("Save Failed", err.message || "Could not save dataset version");
@@ -1490,6 +1539,15 @@ const handleSaveVersion = async () => {
         isProcessing.value = false;
         processingMessage.value = "Processing...";
     }
+};
+
+const leaveWithoutSaving = () => {
+  showVersionModal.value = false;
+  const target = pendingRoute.value;
+  pendingRoute.value = null;
+  experimentStore.clearAll();
+  dataStore.clearData();
+  if (target) router.push(target);
 };
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});

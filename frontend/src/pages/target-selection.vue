@@ -93,7 +93,7 @@
 
 
 import { ref, onMounted, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, onBeforeRouteLeave } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useMLDataFlowStore } from '../stores/mlDataFlow';
 import { useDataStore } from '../stores/data';
@@ -245,6 +245,20 @@ watch(semanticTypes, (newVal) => {
     console.log("🔄 Semantic types updated in store, re-analyzing targets...");
     processAvailableColumns();
 }, { immediate: false }); // Remove deep watch to prevent reactivity issues
+
+// ── NAVIGATION GUARD: clear session on pipeline exit ───────────────────────
+const PIPELINE_ROUTES = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+onBeforeRouteLeave((to, _from, next) => {
+  if (!PIPELINE_ROUTES.includes(to.name)) {
+    experimentStore.clearAll();
+    dataStore.clearData();
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
   await mlStore.checkBackendConnection();

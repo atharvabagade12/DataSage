@@ -8,22 +8,13 @@
       </button>
       
       <div class="separator"></div>
-
-      <div class="active-item project-name">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M10,4V7H11V14.5C11,15.83 10.11,17 9,17C7.89,17 7,15.83 7,14.5V10H8V7H9V4H10M15,4V7H16V10H17V14.5C17,15.83 16.11,17 15,17C13.89,17 13,15.83 13,14.5V7H14V4H15M10,19V22H14V19H10Z"/>
-        </svg>
-        <span>Project: <strong>Default Workspace</strong></span>
-      </div>
-      
-      <div class="separator"></div>
       
       <div class="active-item dataset-info">
+        <!-- Table / dataset icon -->
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/>
+          <path d="M5,4H19A2,2 0 0,1 21,6V18A2,2 0 0,1 19,20H5A2,2 0 0,1 3,18V6A2,2 0 0,1 5,4M5,8V12H11V8H5M13,8V12H19V8H13M5,14V18H11V14H5M13,14V18H19V14H13Z"/>
         </svg>
-        <span class="file-name">{{ fileName }}</span>
-        <span class="version-badge">{{ activeVersion }}</span>
+        <span class="file-name">{{ originalFileName }}</span>
       </div>
       
       <div class="separator"></div>
@@ -43,10 +34,10 @@
       </div>
     </div>
     
-    <div class="context-right">
+    <div v-if="showSaveControls" class="context-right">
       <div class="status-indicator" :class="{ 'is-dirty': isDirty }">
         <span class="status-dot"></span>
-        <span class="status-text">{{ isDirty ? 'Status: Unsaved Changes' : 'Status: Saved Version ✓' }}</span>
+        <span class="status-text">{{ isDirty ? 'Status: Unsaved Changes' : 'Status: Saved ✓' }}</span>
       </div>
       
       <button 
@@ -66,28 +57,50 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useMLDataFlowStore } from '~/stores/mlDataFlow'
 import { useExperimentStore } from '~/stores/experiment'
 
 const router = useRouter()
+const route = useRoute()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
 
+// Pages where the save controls (status + save button) should be hidden
+const SAVE_HIDDEN_ROUTES = ['algorithm-select', 'model-training', 'model-visualization']
+
 const hasDataset = computed(() => !!mlStore.datasetId)
-const fileName = computed(() => mlStore.fileName)
-const activeVersion = computed(() => mlStore.activeVersion)
+
+// Always show the ORIGINAL uploaded file name, never the saved version name
+const originalFileName = computed(() => {
+  // mlStore.fileName holds the original upload filename and is NOT updated on save
+  return mlStore.fileName
+})
+
 const isDirty = computed(() => mlStore.isDirty)
+
+// Whether to show the status indicator and save button
+const showSaveControls = computed(() => {
+  return !SAVE_HIDDEN_ROUTES.includes(route.name)
+})
+
 const rowCount = computed(() => {
-  // 1. Check if full dataset is loaded in memory
+  // 1. If dataset is split, use trainRows + testRows (reflects SMOTE changes)
+  if (mlStore.isSplit && mlStore.splitInfo) {
+    const train = mlStore.splitInfo.trainRows || 0
+    const test = mlStore.splitInfo.testRows || 0
+    if (train + test > 0) return train + test
+  }
+
+  // 2. Fallback: in-memory dataset array length
   if (mlStore.dataset && mlStore.dataset.length > 0) return mlStore.dataset.length
   
-  // 2. Fallback to registeredDatasets (if available)
+  // 3. Fallback to registeredDatasets (if available)
   const registered = mlStore.registeredDatasets[mlStore.datasetId]
   if (registered?.shape?.[0]) return registered.shape[0]
   if (registered?.row_count) return registered.row_count
   
-  // 3. Fallback to allUserDatasets (from dashboard view)
+  // 4. Fallback to allUserDatasets (from dashboard view)
   const meta = mlStore.allUserDatasets?.find(d => d.id === mlStore.datasetId || d.dataset_id === mlStore.datasetId)
   if (meta) {
     return meta.row_count || meta.rows || meta.total_rows || (meta.shape?.[0]) || 0
@@ -95,20 +108,13 @@ const rowCount = computed(() => {
   
   return 0
 })
+
 const targetColumn = computed(() => {
   const fromExperiment = experimentStore.targetColumn;
   if (fromExperiment) {
     return typeof fromExperiment === 'object' ? (fromExperiment.name || fromExperiment.label) : fromExperiment;
   }
   return mlStore.targetColumn;
-})
-
-const selectedAlgorithm = computed(() => {
-  const fromExperiment = experimentStore.selectedAlgorithm;
-  if (fromExperiment) {
-    return typeof fromExperiment === 'object' ? (fromExperiment.name || fromExperiment.label) : fromExperiment;
-  }
-  return mlStore.selectedAlgorithm;
 })
 
 const emit = defineEmits(['save-version'])

@@ -76,13 +76,20 @@ export const useAuth = () => {
     router.push('/login')
   }
   
-  // Verify token
+  // Verify token — with a 5-second timeout so a dead backend never freezes the app
   const verifyToken = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     try {
-      const response = await authenticatedPost(`${API_BASE}/verify-token`, {})
-      return response.ok
+      const response = await authenticatedFetch(`${API_BASE}/verify-token`, {
+        method: 'POST',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return response.ok;
     } catch {
-      return false
+      clearTimeout(timeoutId);
+      return false; // treat timeout / network error as invalid token (will redirect to login)
     }
   }
   

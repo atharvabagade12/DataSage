@@ -83,13 +83,7 @@
               </div>
             </div>
 
-            <div class="live-stats reveal">
-              <div class="stat-ticker">
-                <span class="ticker-label">Datasets Processed:</span>
-                <span class="ticker-value">{{ datasetsCount.toLocaleString() }}+</span>
-              </div>
-              <div class="stat-pulse"></div>
-            </div>
+           
           </div>
   
           <div class="hero-visual">
@@ -134,7 +128,7 @@
           <div class="section-header">
             <h2 class="section-title">Everything You Need for Machine Learning</h2>
             <p class="section-subtitle">
-              From data upload to model deployment - DataSage provides a complete ML pipeline 
+              From data upload to model training - DataSage provides a complete ML pipeline 
               that's perfect for learning and real-world applications.
             </p>
           </div>
@@ -208,10 +202,7 @@
                 </div>
               </div>
   
-              <button @click="goToSignup" class="demo-cta">
-                <span>🚀</span>
-                <span>Try It Yourself</span>
-              </button>
+              
             </div>
   
             <div class="demo-visual">
@@ -345,7 +336,7 @@
         </div>
   
         <div class="footer-bottom">
-          <p>&copy; 2025 DataSage. Final Year Information Technology Project.</p>
+          <p>&copy; 2025 DataSage.</p>
         </div>
       </footer>
   
