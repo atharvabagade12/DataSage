@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 // Import components from pages directory
+import Login from "@/pages/login.vue";
 import Dashboard from "@/pages/dashboard.vue";
 import DataPreview from "@/pages/data-preview.vue";
 import TargetSelection from "@/pages/target-selection.vue";
@@ -11,7 +12,13 @@ import ModelVisualization from "@/pages/model-visualization.vue";
 const routes = [
   {
     path: "/",
-    redirect: "/dashboard",
+    redirect: "/login",
+  },
+  {
+    path: "/login",
+    name: "Login",
+    component: Login,
+    meta: { title: "Sign In — DataSage", public: true },
   },
   {
     path: "/dashboard",
@@ -94,8 +101,29 @@ const router = createRouter({
   routes,
 });
 
-// Navigation guards for data flow validation
+// Navigation guard — auth check first, then pipeline data-flow checks
 router.beforeEach((to, from, next) => {
+  const token =
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("authToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken");
+
+  const isPublic = to.meta.public === true;
+
+  // Redirect unauthenticated users to /login for protected routes
+  if (!isPublic && !token) {
+    console.log("Redirecting to /login — no auth token");
+    next("/login");
+    return;
+  }
+
+  // Redirect already-authenticated users away from /login
+  if (to.name === "Login" && token) {
+    next("/dashboard");
+    return;
+  }
+
   // Get pipeline state from localStorage (kept by useMLPipeline)
   const appState = JSON.parse(
     localStorage.getItem("datasage_pipeline_state") || "{}"
@@ -130,10 +158,11 @@ router.beforeEach((to, from, next) => {
 
   // Update page title
   if (to.meta.title) {
-    document.title = `${to.meta.title} - ML Platform`;
+    document.title = `${to.meta.title} - DataSage`;
   }
 
   next();
 });
+
 
 export default router;

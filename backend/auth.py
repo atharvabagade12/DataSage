@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 import traceback
+import os
 
 # Import database and models
 from database import get_db
@@ -15,9 +16,22 @@ from models import User as UserModel
 # ============================================
 # CONFIGURATION
 # ============================================
-SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    # In production this is a hard failure; for local dev, fall back to a
+    # non-empty placeholder so the server still starts when running without
+    # a .envs file.  The placeholder key is intentionally NOT a real secret.
+    import warnings
+    warnings.warn(
+        "SECRET_KEY environment variable is not set. "
+        "Using an insecure placeholder — DO NOT use this in production!",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    SECRET_KEY = "INSECURE_PLACEHOLDER_SET_SECRET_KEY_ENV_VAR"
+
+ALGORITHM = os.environ.get("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24)))  # 24 hours
 
 # Password hashing
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
