@@ -1,5 +1,6 @@
 // stores/mlDataFlow.js
 import { defineStore } from "pinia";
+import { useAuthenticatedFetch } from "@/composables/useAuthenticatedFetch";
 
 export const useMLDataFlowStore = defineStore("mlDataFlow", {
   state: () => ({
@@ -38,7 +39,6 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     scalingMethod: null,
 
     // ML Pipeline State
-    targetColumn: null,
     selectedAlgorithm: null,
     trainedModel: null,
 

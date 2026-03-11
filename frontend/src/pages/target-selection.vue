@@ -99,6 +99,7 @@ import { useMLDataFlowStore } from '../stores/mlDataFlow';
 import { useDataStore } from '../stores/data';
 import { useExperimentStore } from '../stores/experiment';
 import { useAuthenticatedFetch } from '../composables/useAuthenticatedFetch';
+import { useToast } from '../composables/useToast';
 import { useTargetAnalysis } from '../composables/useTargetAnalysis';
 import PageHeader from '../components/PageHeader.vue';
 
@@ -112,6 +113,7 @@ const mlStore = useMLDataFlowStore();
 const dataStore = useDataStore();
 const experimentStore = useExperimentStore();
 const { authenticatedPost } = useAuthenticatedFetch();
+const { showError } = useToast();
 const { processColumns } = useTargetAnalysis();
 
 // Store Refs
@@ -234,7 +236,7 @@ const continueToAdvancedPreprocessing = async () => {
     router.push('/advanced-preprocessing');
   } catch (error) {
     console.error('Navigation error:', error);
-    alert('Failed to proceed: ' + error.message);
+    showError('Navigation Failed', error.message);
   }
 };
 

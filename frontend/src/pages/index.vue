@@ -13,8 +13,8 @@
           <div class="nav-links">
             <a class="nav-link" @click="scrollTo('features')">Features</a>
             <a class="nav-link" @click="scrollTo('how-it-works')">How It Works</a>
-            <a class="nav-link" @click="scrollTo('demo')">Demo</a>
             <a class="nav-link" @click="scrollTo('about')">About</a>
+            <a class="nav-link" @click="scrollTo('faq')">FAQ</a>
           </div>
   
           <div class="nav-actions">
@@ -87,7 +87,7 @@
           </div>
   
           <div class="hero-visual">
-            <div class="dashboard-preview">
+            <div class="pipeline-preview">
               <div class="preview-window">
                 <div class="window-header">
                   <div class="window-dots">
@@ -95,24 +95,32 @@
                     <span></span>
                     <span></span>
                   </div>
-                  <div class="window-title">DataSage Dashboard</div>
+                  <div class="window-title">DataSage — ML Pipeline</div>
                 </div>
-                <div class="window-content dashboard-grid">
-                  <div class="algorithm-list">
-                    <div class="algo-item" v-for="algo in ['Random Forest', 'XGBoost', 'SVM']" :key="algo">
-                      <span class="algo-dot"></span>
-                      <span class="algo-name">{{ algo }}</span>
-                      <span class="algo-score">{{ (85 + Math.random() * 10).toFixed(1) }}%</span>
+                <div class="window-content pipeline-flow">
+                  <div class="pipeline-track">
+                    <div 
+                      class="pipeline-node" 
+                      v-for="(node, idx) in pipelineNodes" 
+                      :key="node.label"
+                      :class="{ active: activePipelineStep >= idx }"
+                    >
+                      <div class="node-icon-wrapper">
+                        <span class="node-icon">{{ node.icon }}</span>
+                      </div>
+                      <span class="node-label">{{ node.label }}</span>
+                      <span class="node-desc">{{ node.desc }}</span>
                     </div>
                   </div>
-                  <div class="metrics-preview">
-                    <div class="metric-card">
-                      <div class="metric-val">94.2%</div>
-                      <div class="metric-label">Avg. Accuracy</div>
-                    </div>
-                    <div class="pipeline-status">
-                      <div class="status-dot"></div>
-                      <span>Model Transformation Pipeline Active</span>
+                  <div class="pipeline-connector">
+                    <div class="connector-line"></div>
+                    <div class="connector-progress" :style="{ width: pipelineProgress + '%' }"></div>
+                    <div class="connector-dot" :style="{ left: pipelineProgress + '%' }"></div>
+                  </div>
+                  <div class="pipeline-output">
+                    <div class="output-badge">
+                      <span class="output-pulse"></span>
+                      <span>Ready to build your first model</span>
                     </div>
                   </div>
                 </div>
@@ -172,88 +180,76 @@
         </div>
       </section>
   
-      <!-- Platform Demo Section -->
-      <section class="demo-section reveal" id="demo">
+      <!-- About Section -->
+      <section class="about-section reveal" id="about">
         <div class="section-container">
-          <div class="demo-content">
-            <div class="demo-info">
-              <h2 class="demo-title">See DataSage in Action</h2>
-              <p class="demo-subtitle">
-                Watch how easy it is to build machine learning models with DataSage's 
-                intuitive interface and powerful automation.
+          <div class="section-header">
+            <h2 class="section-title">About DataSage</h2>
+            <p class="section-subtitle">
+              A student-built open-source platform making machine learning accessible to everyone.
+            </p>
+          </div>
+
+          <div class="about-content">
+            <div class="about-card">
+              <div class="about-icon">🎯</div>
+              <h3>Our Mission</h3>
+              <p>
+                DataSage was created to bridge the gap between understanding ML theory and 
+                applying it in practice. We believe everyone should be able to train, evaluate, 
+                and compare machine learning models — without writing a single line of code.
               </p>
-              
-              <div class="demo-features">
-                <div class="demo-feature">
-                  <span class="demo-feature-icon">⚡</span>
-                  <span class="demo-feature-text">Instant data processing</span>
-                </div>
-                <div class="demo-feature">
-                  <span class="demo-feature-icon">🤖</span>
-                  <span class="demo-feature-text">Automated model training</span>
-                </div>
-                <div class="demo-feature">
-                  <span class="demo-feature-icon">📊</span>
-                  <span class="demo-feature-text">Interactive visualizations</span>
-                </div>
-                <div class="demo-feature">
-                  <span class="demo-feature-icon">📈</span>
-                  <span class="demo-feature-text">Real-time insights</span>
-                </div>
-              </div>
-  
-              
             </div>
-  
-            <div class="demo-visual">
-              <div class="demo-window">
-                <div class="demo-header">
-                  <div class="demo-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <div class="demo-title-bar">DataSage Platform</div>
-                </div>
-                
-                <div class="demo-screen">
-                  <div class="demo-step" :class="{ active: currentDemoStep === 0 }">
-                    <div class="upload-simulation">
-                      <div style="font-size: 2rem; margin-bottom: 1rem;">📁</div>
-                      <div>Upload Complete</div>
-                    </div>
-                  </div>
-                  
-                  <div class="demo-step" :class="{ active: currentDemoStep === 1 }">
-                    <div class="processing-simulation">
-                      <div class="processing-bar">
-                        <div class="progress" :style="{ width: processingProgress + '%' }"></div>
-                      </div>
-                      <div class="processing-text">Processing Data...</div>
-                    </div>
-                  </div>
-                  
-                  <div class="demo-step" :class="{ active: currentDemoStep === 2 }">
-                    <div class="results-simulation">
-                      <div class="chart-bars">
-                        <div class="bar" style="height: 70px;"></div>
-                        <div class="bar" style="height: 90px;"></div>
-                        <div class="bar" style="height: 60px;"></div>
-                      </div>
-                      <div class="accuracy-display">
-                        <div class="accuracy-label">Model Accuracy</div>
-                        <div class="accuracy-value">{{ modelAccuracy.toFixed(1) }}%</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div class="about-card">
+              <div class="about-icon">🎓</div>
+              <h3>Built by Students</h3>
+              <p>
+                Developed as a final-year academic project, DataSage is built with modern 
+                technologies and real-world engineering practices. It's designed to grow with 
+                the community's feedback and contributions.
+              </p>
+            </div>
+            <div class="about-card">
+              <div class="about-icon">🌍</div>
+              <h3>Open &amp; Free</h3>
+              <p>
+                DataSage is 100% free and open source. No hidden fees, no premium tiers. 
+                We're committed to keeping ML tools accessible for students, researchers, 
+                and data enthusiasts everywhere.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ Section -->
+      <section class="faq-section reveal" id="faq">
+        <div class="section-container">
+          <div class="section-header">
+            <h2 class="section-title">Frequently Asked Questions</h2>
+            <p class="section-subtitle">
+              Got questions? We've got answers.
+            </p>
+          </div>
+
+          <div class="faq-list">
+            <div 
+              class="faq-item" 
+              v-for="(item, index) in faqItems" 
+              :key="index"
+              :class="{ open: openFaqIndex === index }"
+            >
+              <button class="faq-question" @click="toggleFaq(index)">
+                <span>{{ item.question }}</span>
+                <span class="faq-chevron">▾</span>
+              </button>
+              <div class="faq-answer" v-show="openFaqIndex === index">
+                <p>{{ item.answer }}</p>
               </div>
             </div>
           </div>
         </div>
       </section>
-  
-      
   
       <!-- Final CTA Section -->
       <section class="cta-section reveal">
@@ -309,7 +305,6 @@
             <div class="footer-links">
               <a @click="scrollTo('features')">Features</a>
               <a @click="scrollTo('how-it-works')">How It Works</a>
-              <a @click="scrollTo('demo')">Demo</a>
               <a href="/login">Get Started</a>
             </div>
           </div>
@@ -336,7 +331,7 @@
         </div>
   
         <div class="footer-bottom">
-          <p>&copy; 2025 DataSage.</p>
+          <p>&copy; 2025–2026 DataSage. Built with ❤️ as a student project.</p>
         </div>
       </footer>
   
@@ -379,6 +374,9 @@ const currentDemoStep = ref(0)
 const processingProgress = ref(0)
 const modelAccuracy = ref(94.2)
 const datasetsCount = ref(12450)
+const activePipelineStep = ref(-1)
+const pipelineProgress = ref(0)
+const openFaqIndex = ref(null)
 
 // Data
 const features = ref([
@@ -386,43 +384,43 @@ const features = ref([
     id: 1,
     icon: '📊',
     title: 'Smart Data Processing',
-    description: 'Upload CSV, Excel, or JSON files and let automated logic handle the cleaning, preprocessing, and feature engineering automatically.',
-    highlights: ['Automatic data cleaning', 'Missing value handling', 'Feature scaling & encoding', 'Data quality reports']
+    description: 'Upload CSV or Excel files and let DataSage automatically detect data types, identify missing values, and generate data quality reports.',
+    highlights: ['Automatic type detection', 'Missing value handling', 'Feature scaling & encoding', 'Data quality overview']
   },
   {
     id: 2,
     icon: '🤖',
     title: 'Automated ML Pipeline',
-    description: 'Train multiple algorithms simultaneously with hyperparameter tuning and cross-validation for optimal results.',
-    highlights: ['Multiple algorithms', 'Auto hyperparameter tuning', 'Cross-validation', 'Model comparison']
+    description: 'Train multiple classification and regression algorithms simultaneously with built-in hyperparameter tuning and cross-validation.',
+    highlights: ['Random Forest, XGBoost, SVM & more', 'Hyperparameter tuning', 'Cross-validation support', 'Train-test splitting']
   },
   {
     id: 3,
     icon: '📈',
     title: 'Interactive Visualizations',
-    description: 'Create beautiful, interactive charts and dashboards to understand your data and model performance.',
-    highlights: ['Dynamic charts', 'Custom dashboards', 'Real-time updates', 'Export capabilities']
+    description: 'Explore your data with dynamic distribution charts, correlation heatmaps, and feature analysis plots powered by Chart.js.',
+    highlights: ['Distribution plots', 'Correlation heatmaps', 'Feature analysis charts', 'Model performance graphs']
   },
   {
     id: 4,
-    icon: '☁️',
-    title: 'Easy Model Deployment',
-    description: 'Deploy your trained models with one click and integrate them into your applications via REST API.',
-    highlights: ['One-click deployment', 'REST API endpoints', 'Model versioning', 'Performance monitoring']
+    icon: '⚙️',
+    title: 'Advanced Preprocessing',
+    description: 'Handle class imbalance with SMOTE, apply label & ordinal encoding, detect outliers, and scale features — all from an intuitive interface.',
+    highlights: ['SMOTE oversampling', 'Label & ordinal encoding', 'Outlier detection', 'Standard & MinMax scaling']
   },
   {
     id: 5,
-    icon: '🔍',
-    title: 'Deep Analytics',
-    description: 'Get detailed insights into your models with feature importance, prediction explanations, and performance metrics.',
-    highlights: ['Feature importance', 'SHAP explanations', 'Performance metrics', 'Error analysis']
+    icon: '🏆',
+    title: 'Model Comparison',
+    description: 'Compare trained models side-by-side with key performance metrics, confusion matrices, and classification reports.',
+    highlights: ['Side-by-side metrics', 'Confusion matrices', 'Classification reports', 'Accuracy, Precision & Recall']
   },
   {
     id: 6,
-    icon: '🎓',
-    title: 'Learning Resources',
-    description: 'Built-in tutorials, explanations, and best practices to help you understand ML concepts while building models.',
-    highlights: ['Step-by-step tutorials', 'ML concept explanations', 'Best practices guide', 'Academic references']
+    icon: '💾',
+    title: 'Version Control',
+    description: 'Save snapshots of your preprocessed dataset at any stage. Track changes, compare versions, and roll back when needed.',
+    highlights: ['Save dataset versions', 'Preprocessing history', 'Version comparison', 'Rollback support']
   }
 ])
 
@@ -453,26 +451,37 @@ const steps = ref([
   }
 ])
 
-const techStack = ref([
+const pipelineNodes = ref([
+  { icon: '📁', label: 'Upload', desc: 'CSV / Excel' },
+  { icon: '⚙️', label: 'Process', desc: 'Clean & encode' },
+  { icon: '🚀', label: 'Train', desc: 'ML algorithms' },
+  { icon: '📊', label: 'Analyze', desc: 'Metrics & charts' }
+])
+
+const faqItems = ref([
   {
-    icon: '⚡',
-    name: 'Vue.js',
-    desc: 'Frontend Framework'
+    question: 'Is DataSage completely free to use?',
+    answer: 'Yes! DataSage is 100% free and open source. There are no hidden fees, premium tiers, or usage limits. It was built as a student project to make ML accessible to everyone.'
   },
   {
-    icon: '🚀',
-    name: 'FastAPI',
-    desc: 'Backend API'
+    question: 'Do I need coding or programming experience?',
+    answer: 'Not at all. DataSage is designed as a no-code platform. You upload your data, configure options through an intuitive UI, and the platform handles all the code behind the scenes.'
   },
   {
-    icon: '🤖',
-    name: 'Scikit-Learn',
-    desc: 'ML Library'
+    question: 'What file formats are supported for upload?',
+    answer: 'Currently DataSage supports CSV and Excel (.xlsx) file formats. Simply drag and drop your file or use the upload button to get started.'
   },
   {
-    icon: '📊',
-    name: 'Chart.js',
-    desc: 'Visualizations'
+    question: 'Which machine learning algorithms are available?',
+    answer: 'DataSage supports popular algorithms including Random Forest, XGBoost, Support Vector Machines (SVM), Logistic Regression, Decision Trees, K-Nearest Neighbors, and more — for both classification and regression tasks.'
+  },
+  {
+    question: 'Can I use my own datasets?',
+    answer: 'Absolutely. You can upload any structured dataset in CSV or Excel format. DataSage also provides sample datasets if you want to explore the platform first.'
+  },
+  {
+    question: 'Is my data stored securely?',
+    answer: 'Your data is stored locally on the server during your session. DataSage does not share your data with any third parties. As an open-source project, you can review the code to verify our data handling practices.'
   }
 ])
 
@@ -560,6 +569,10 @@ const closeDemoModal = () => {
   modelAccuracy.value = 94.2
 }
 
+const toggleFaq = (index) => {
+  openFaqIndex.value = openFaqIndex.value === index ? null : index
+}
+
 const handleScroll = () => {
   if (process.client) {
     isScrolled.value = window.scrollY > 50
@@ -609,6 +622,33 @@ const startStatsAnimation = () => {
   return interval
 }
 
+// Pipeline hero animation
+const startPipelineAnimation = () => {
+  if (!process.client) return null
+
+  const totalDuration = 4000 // full cycle in ms
+  const steps = 4
+  let elapsed = 0
+  const tick = 50
+
+  const interval = setInterval(() => {
+    elapsed += tick
+    const progress = (elapsed % totalDuration) / totalDuration
+    pipelineProgress.value = Math.min(progress * 100, 100)
+    activePipelineStep.value = Math.floor(progress * steps)
+
+    if (elapsed % totalDuration === 0) {
+      // brief pause at end then restart
+      setTimeout(() => {
+        activePipelineStep.value = -1
+        pipelineProgress.value = 0
+      }, 800)
+    }
+  }, tick)
+
+  return interval
+}
+
 // ✨ NEW: Handle mobile menu clicks
 const handleMobileMenuClick = async (action) => {
   showMobileMenu.value = false // Close mobile menu first
@@ -648,6 +688,7 @@ const closeMobileMenuOnOutsideClick = (event) => {
 // Lifecycle
 let demoInterval = null
 let statsInterval = null
+let pipelineInterval = null
 
 onMounted(() => {
   if (process.client) {
@@ -662,6 +703,9 @@ onMounted(() => {
     
     // Start stats animation
     statsInterval = startStatsAnimation()
+    
+    // Start pipeline hero animation
+    pipelineInterval = startPipelineAnimation()
     
     // Initialize reveal on scroll
     initScrollReveal()
@@ -684,6 +728,11 @@ onUnmounted(() => {
     // Clear stats interval
     if (statsInterval) {
       clearInterval(statsInterval)
+    }
+    
+    // Clear pipeline interval
+    if (pipelineInterval) {
+      clearInterval(pipelineInterval)
     }
   }
 })
@@ -723,6 +772,7 @@ defineExpose({
   closeDemoModal,
   toggleMobileMenu,
   handleMobileMenuClick,
+  toggleFaq,
   scrollTo,
   scrollToTop,
   initScrollReveal
@@ -1161,13 +1211,13 @@ defineExpose({
     100% { transform: scale(1); opacity: 1; }
   }
   
-  /* Hero Visual */
+  /* Hero Visual — Pipeline Flow */
   .hero-visual {
     position: relative;
     z-index: 1;
   }
-  
-  .dashboard-preview {
+
+  .pipeline-preview {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -1175,11 +1225,11 @@ defineExpose({
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .preview-window {
     background: linear-gradient(145deg, #1a1a2e, #16213e);
   }
-  
+
   .window-header {
     display: flex;
     justify-content: space-between;
@@ -1188,152 +1238,170 @@ defineExpose({
     background: rgba(255, 255, 255, 0.05);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .window-dots {
     display: flex;
     gap: 6px;
   }
-  
+
   .window-dots span {
     width: 12px;
     height: 12px;
     border-radius: 50%;
     background: #ff5f56;
   }
-  
+
   .window-dots span:nth-child(2) {
     background: #ffbd2e;
   }
-  
+
   .window-dots span:nth-child(3) {
     background: #27ca3f;
   }
-  
+
   .window-title {
     color: rgba(255, 255, 255, 0.8);
     font-size: 0.9rem;
     font-weight: 500;
   }
-  
+
   .window-content {
     padding: 2rem;
   }
-  
-  .dashboard-grid {
+
+  .pipeline-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .pipeline-track {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    align-items: center;
-  }
-  
-  .algorithm-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  
-  .algo-item {
-    display: flex;
-    align-items: center;
+    grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    transition: all 0.3s ease;
   }
-  
-  .algo-item:hover {
-    background: rgba(102, 126, 234, 0.1);
-    transform: translateX(5px);
-  }
-  
-  .algo-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #667eea;
-  }
-  
-  .algo-name {
-    flex: 1;
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  
-  .algo-score {
-    font-family: var(--font-mono);
-    color: #4ade80;
-    font-weight: 600;
-  }
-  
-  .metrics-preview {
+
+  .pipeline-node {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-  }
-  
-  .metric-card {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-    padding: 1.5rem;
-    border-radius: 16px;
-    border: 1px solid rgba(102, 126, 234, 0.3);
+    align-items: center;
+    gap: 0.5rem;
     text-align: center;
+    opacity: 0.4;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(0.95);
   }
-  
-  .metric-val {
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: white;
-    margin-bottom: 0.5rem;
+
+  .pipeline-node.active {
+    opacity: 1;
+    transform: scale(1);
   }
-  
-  .metric-label {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  
-  .pipeline-status {
+
+  .node-icon-wrapper {
+    width: 56px;
+    height: 56px;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.8);
-    background: rgba(255, 255, 255, 0.05);
-    padding: 0.75rem 1rem;
-    border-radius: 20px;
+    justify-content: center;
+    border-radius: 16px;
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.25);
+    transition: all 0.5s ease;
   }
-  
-  .status-dot {
+
+  .pipeline-node.active .node-icon-wrapper {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25));
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+  }
+
+  .node-icon {
+    font-size: 1.5rem;
+  }
+
+  .node-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: white;
+  }
+
+  .node-desc {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .pipeline-connector {
+    position: relative;
+    height: 6px;
+    margin: 0 2rem;
+  }
+
+  .connector-line {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  .connector-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 3px;
+    transition: width 0.1s linear;
+  }
+
+  .connector-dot {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(102, 126, 234, 0.8), 0 0 24px rgba(102, 126, 234, 0.4);
+    transition: left 0.1s linear;
+  }
+
+  .pipeline-output {
+    display: flex;
+    justify-content: center;
+  }
+
+  .output-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1.25rem;
+    background: rgba(74, 222, 128, 0.08);
+    border: 1px solid rgba(74, 222, 128, 0.2);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .output-pulse {
     width: 8px;
     height: 8px;
     background: #4ade80;
     border-radius: 50%;
-    animation: flash 2s infinite;
-  }
-  
-  @keyframes flash {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    box-shadow: 0 0 8px #4ade80;
+    animation: pulse 2s infinite;
   }
   
   /* Sections */
   .features-section,
   .how-it-works-section,
-  .demo-section,
-  .academic-section,
+  .about-section,
+  .faq-section,
   .cta-section {
     padding: 6rem 2rem;
     position: relative;
   }
   
   .features-section {
-    background: rgba(255, 255, 255, 0.02);
-  }
-  
-  .demo-section {
     background: rgba(255, 255, 255, 0.02);
   }
   
@@ -1384,6 +1452,24 @@ defineExpose({
     transition: all 0.4s ease;
     border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .feature-card:hover::before {
+    opacity: 1;
   }
   
   .feature-card:hover {
@@ -1493,169 +1579,7 @@ defineExpose({
     color: rgba(255, 255, 255, 0.8);
     line-height: 1.6;
   }
-  
-  .demo-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4rem;
-    align-items: center;
-  }
-  
-  .demo-title {
-    font-size: 2.5rem;
-    font-weight: 800;
-    margin-bottom: 1.5rem;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  
-  .demo-subtitle {
-    color: rgba(255, 255, 255, 0.8);
-    margin-bottom: 2rem;
-    line-height: 1.6;
-    font-size: 1.1rem;
-  }
-  
-  .demo-features {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-  
-  .demo-feature {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .demo-cta {
-    padding: 1rem 2rem;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  
-  .demo-cta:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-  }
-  
-  .demo-window {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .demo-header {
-    display: flex;
-    align-items: center;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .demo-dots {
-    display: flex;
-    gap: 6px;
-  }
-  
-  .demo-dots span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: white;
-    opacity: 0.6;
-  }
-  
-  .demo-title-bar {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 0.9rem;
-    margin-left: 1rem;
-  }
-  
-  .demo-screen {
-    padding: 2rem;
-    min-height: 300px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .demo-step {
-    width: 100%;
-    opacity: 0;
-    transition: all 0.5s ease;
-  }
-  
-  .demo-step.active {
-    opacity: 1;
-  }
-  
-  .processing-bar {
-    width: 100%;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 1rem;
-  }
-  
-  .progress {
-    height: 100%;
-    background: linear-gradient(90deg, #667eea, #764ba2);
-    transition: width 0.3s ease;
-  }
-  
-  .processing-text {
-    text-align: center;
-    color: rgba(255, 255, 255, 0.8);
-  }
-  
-  .chart-bars {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-  
-  .bar {
-    background: linear-gradient(to top, #667eea, #764ba2);
-    border-radius: 4px;
-    transition: all 0.8s ease;
-  }
-  
-  .accuracy-display {
-    text-align: center;
-  }
-  
-  .accuracy-label {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .accuracy-value {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #4ade80;
-  }
+
   
   .academic-content {
     text-align: center;
@@ -1875,6 +1799,125 @@ defineExpose({
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
   }
+
+  /* About Section */
+  .about-section {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .about-content {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .about-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .about-card:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  .about-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .about-card h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .about-card p {
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.7;
+    font-size: 0.95rem;
+  }
+
+  /* FAQ Section */
+  .faq-section {
+    background: linear-gradient(180deg, transparent, rgba(102, 126, 234, 0.03));
+  }
+
+  .faq-list {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .faq-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .faq-item:hover {
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  .faq-item.open {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(102, 126, 234, 0.4);
+  }
+
+  .faq-question {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: color 0.3s ease;
+  }
+
+  .faq-question:hover {
+    color: #a5b4fc;
+  }
+
+  .faq-chevron {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .faq-item.open .faq-chevron {
+    transform: rotate(180deg);
+    color: #667eea;
+  }
+
+  .faq-answer {
+    padding: 0 1.5rem 1.25rem;
+  }
+
+  .faq-answer p {
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.7;
+    font-size: 0.95rem;
+  }
   
   /* Responsive */
   @media (max-width: 1024px) {
@@ -1895,13 +1938,16 @@ defineExpose({
       display: flex;
     }
     
-    .demo-content {
-      grid-template-columns: 1fr;
-      text-align: center;
-    }
-    
     .features-grid {
       grid-template-columns: 1fr;
+    }
+
+    .about-content {
+      grid-template-columns: 1fr;
+    }
+
+    .pipeline-track {
+      grid-template-columns: repeat(2, 1fr);
     }
   }
   
@@ -1927,11 +1973,6 @@ defineExpose({
       grid-template-columns: 1fr;
     }
     
-    .academic-stats {
-      grid-template-columns: 1fr;
-      gap: 2rem;
-    }
-    
     .footer-content {
       grid-template-columns: 1fr;
       gap: 2rem;
@@ -1940,6 +1981,22 @@ defineExpose({
     .cta-assurance {
       flex-direction: column;
       gap: 1rem;
+    }
+
+    .pipeline-track {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+
+    .connector-line,
+    .connector-progress,
+    .connector-dot {
+      display: none;
+    }
+
+    .faq-question {
+      font-size: 0.95rem;
+      padding: 1rem 1.25rem;
     }
   }
   </style>

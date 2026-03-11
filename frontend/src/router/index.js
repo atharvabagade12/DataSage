@@ -80,16 +80,6 @@ const routes = [
     },
   },
   {
-    path: "/results",
-    name: "Results",
-    component: Results,
-    meta: {
-      title: "Results",
-      step: 7,
-      requiresModel: true,
-    },
-  },
-  {
     path: "/:pathMatch(.*)*",
     name: "NotFound",
     component: () => import("@/pages/NotFound.vue"),
@@ -113,7 +103,6 @@ router.beforeEach((to, from, next) => {
 
   // Redirect unauthenticated users to /login for protected routes
   if (!isPublic && !token) {
-    console.log("Redirecting to /login — no auth token");
     next("/login");
     return;
   }
@@ -129,29 +118,23 @@ router.beforeEach((to, from, next) => {
     localStorage.getItem("datasage_pipeline_state") || "{}"
   );
 
-  console.log(`Navigating from ${from.path} to ${to.path}`, appState);
-
   // Check if user is trying to access a page without required data
   if (to.meta.requiresData && !appState.dataset) {
-    console.log("Redirecting to dashboard - no dataset");
     next("/dashboard");
     return;
   }
 
   if (to.meta.requiresTarget && !appState.targetColumn) {
-    console.log("Redirecting to target selection - no target");
     next("/target-selection");
     return;
   }
 
   if (to.meta.requiresAlgorithm && !appState.selectedAlgorithm) {
-    console.log("Redirecting to algorithm selection - no algorithm");
-    next("/algorithm-selection");
+    next("/algorithm-select");
     return;
   }
 
   if (to.meta.requiresModel && !appState.trainedModel) {
-    console.log("Redirecting to model training - no model");
     next("/model-training");
     return;
   }
@@ -163,6 +146,5 @@ router.beforeEach((to, from, next) => {
 
   next();
 });
-
 
 export default router;

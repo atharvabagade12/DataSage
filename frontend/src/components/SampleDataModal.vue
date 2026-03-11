@@ -146,6 +146,7 @@ import { useRouter } from 'vue-router'
 import { useMLDataFlowStore } from '@/stores/mlDataFlow'
 import { useExperimentStore } from '@/stores/experiment'
 import { useAuthenticatedFetch } from '@/composables/useAuthenticatedFetch'
+import { useToast } from '@/composables/useToast'
 import axios from 'axios'
 
 const props = defineProps({ show: Boolean })
@@ -154,6 +155,7 @@ const emit = defineEmits(['close'])
 const router = useRouter()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
+const { showError } = useToast()
 
 const selectedDataset = ref(null)
 const isLoading = ref(false)
@@ -266,7 +268,7 @@ const useDataset = async () => {
     router.push('/data-preview')
   } catch (err) {
     console.error('Sample upload failed:', err)
-    alert('Failed to load sample dataset: ' + (err.response?.data?.detail || err.message))
+    showError('Failed to Load Dataset', err.response?.data?.detail || err.message)
     isLoading.value = false
     loadingMessage.value = ''
   }

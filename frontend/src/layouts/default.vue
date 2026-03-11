@@ -6,18 +6,13 @@
     <main class="content-area">
       <slot />
     </main>
-    
-    <NavigationGuardModal 
-      v-model="showGuardModal" 
-      @save="handleSaveAndContinue"
-      @discard="handleDiscardAndContinue"
-    />
 
     <!-- Internal Save Modal for Context Bar -->
-    <div v-if="showSaveModal" class="save-modal-overlay" @click="showSaveModal = false">
+    <div v-if="showSaveModal" class="save-modal-overlay" @click.self="showSaveModal = false">
       <div class="save-modal" @click.stop>
         <h3>Save Dataset Version</h3>
-        <p>Give this version a name to identify your progress.</p>
+        <p>Save the current state of your dataset as a new version in your inventory.</p>
+        <label class="version-label">Version Name</label>
         <input 
           v-model="versionName" 
           type="text" 
@@ -45,21 +40,19 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useMLDataFlowStore } from '~/stores/mlDataFlow'
+import { useExperimentStore } from '~/stores/experiment'
 import GlobalNavbar from '~/components/GlobalNavbar.vue'
 import DatasetContextBar from '~/components/DatasetContextBar.vue'
-import NavigationGuardModal from '~/components/NavigationGuardModal.vue'
 
-const router = useRouter()
 const route = useRoute()
 const mlStore = useMLDataFlowStore()
+const experimentStore = useExperimentStore()
 
-const showGuardModal = ref(false)
 const showSaveModal = ref(false)
 const versionName = ref('')
-const pendingNavigation = ref(null)
 
 // Toast state
 const saveToast = ref({ visible: false, message: '' })
@@ -76,83 +69,55 @@ const showSaveSuccessToast = (datasetName) => {
   }, 3500)
 }
 
-// Pipeline routes that require an unsaved changes guard
+// Pipeline routes — used to control context bar visibility only
 const PIPELINE_ROUTES = [
   'data-preview',
   'target-selection',
   'advanced-preprocessing',
   'algorithm-select',
   'model-training',
-  'model-visualization',
-  'results'
+  'model-visualization'
 ]
 
-// Only show context bar on pipeline pages (not on dashboard or home)
-const showContextBar = computed(() => {
-  return PIPELINE_ROUTES.includes(route.name)
-})
+// Only show context bar on pipeline pages
+const showContextBar = computed(() => PIPELINE_ROUTES.includes(route.name))
 
 // Hide global navbar on landing and login pages
 const showGlobalNavbar = computed(() => {
-  const hiddenRoutes = ['index', 'login']
-  return !hiddenRoutes.includes(route.name)
+  return !['index', 'login'].includes(route.name)
 })
 
-// Navigation Guard Implementation
-router.beforeEach((to, from, next) => {
-  // If moving away from a pipeline page that has dirty data
-  if (PIPELINE_ROUTES.includes(from.name) && mlStore.isDirty && !to.meta.skipGuard) {
-    showGuardModal.value = true
-    pendingNavigation.value = to
-    next(false)
-  } else {
-    next()
-  }
-})
-
-const prefillVersionName = () => {
-  versionName.value = mlStore.getNextVersionName()
-}
-
+// Context-bar "Save Dataset Version" button handler
 const openSaveModal = () => {
-  prefillVersionName()
+  // Prefill with a suggested name
+  versionName.value = mlStore.getNextVersionName()
   showSaveModal.value = true
 }
 
-const handleSaveAndContinue = async () => {
-  showGuardModal.value = false
-  openSaveModal()
-  // After saving, we will resume pending navigation in saveVersion
-}
-
-const handleDiscardAndContinue = () => {
-  mlStore.isDirty = false
-  showGuardModal.value = false
-  if (pendingNavigation.value) {
-    router.push(pendingNavigation.value.fullPath)
-    pendingNavigation.value = null
-  }
-}
+// Resolve dataset ID from the active pipeline context
+const resolveDatasetId = () =>
+  mlStore.datasetId || mlStore.currentDataset || experimentStore.datasetId || null
 
 const saveVersion = async () => {
   if (!versionName.value) return
-  
+
   const savedName = versionName.value
+  const datasetId = resolveDatasetId()
+
+  if (!datasetId) {
+    saveToast.value = { visible: true, message: 'No active dataset — please re-open your dataset first.' }
+    setTimeout(() => { saveToast.value.visible = false }, 4000)
+    return
+  }
+
   try {
-    await mlStore.saveDatasetVersion(mlStore.datasetId, savedName)
+    await mlStore.saveDatasetVersion(datasetId, savedName)
     showSaveModal.value = false
     versionName.value = ''
-    
-    // Show success toast
     showSaveSuccessToast(savedName)
-    
-    // If we were waiting to navigate
-    if (pendingNavigation.value) {
-      router.push(pendingNavigation.value.fullPath)
-      pendingNavigation.value = null
-    }
   } catch (err) {
-    alert("Failed to save version: " + err.message)
+    saveToast.value = { visible: true, message: `Save failed: ${err.message}` }
+    setTimeout(() => { saveToast.value.visible = false }, 4000)
   }
 }
 </script>
@@ -194,7 +159,17 @@ const saveVersion = async () => {
 }
 
 .save-modal h3 { margin-bottom: 8px; }
-.save-modal p { color: #b3b3d1; font-size: 0.9rem; margin-bottom: 20px; }
+.save-modal p { color: #b3b3d1; font-size: 0.9rem; margin-bottom: 12px; }
+
+.version-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b3b3d1;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 .version-input {
   width: 100%;
@@ -207,7 +182,7 @@ const saveVersion = async () => {
   font-size: 1rem;
 }
 
-.modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
 
 .btn-cancel { background: transparent; border: none; color: #b3b3d1; cursor: pointer; padding: 8px 16px; }
 .btn-confirm { 

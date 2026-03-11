@@ -680,6 +680,7 @@ import { useExperimentStore } from "@/stores/experiment";
 import { useDataStore } from "@/stores/data";
 import { useMLDataFlowStore } from "@/stores/mlDataFlow";
 import { useAuthenticatedFetch } from "@/composables/useAuthenticatedFetch";
+import { useToast } from "@/composables/useToast";
 import PageHeader from "@/components/PageHeader.vue";
 
 const router = useRouter();
@@ -687,6 +688,7 @@ const experimentStore = useExperimentStore();
 const dataStore = useDataStore();
 const mlStore = useMLDataFlowStore();
 const { authenticatedGet } = useAuthenticatedFetch();
+const { showError, showWarning } = useToast();
 
 const { 
   datasetId, 
@@ -2304,8 +2306,8 @@ const getAdvancedFeaturesCount = () => {
 
 const startTraining = async () => {
   if (!selectedAlgorithm.value) {
-    alert("Please select an algorithm first");
-    return;
+    showWarning('No Algorithm Selected', 'Please select an algorithm before starting training.')
+    return
   }
 
   try {
@@ -2340,7 +2342,7 @@ const startTraining = async () => {
     });
   } catch (error) {
     console.error("❌ Error navigating to training:", error);
-    alert("Error: " + error.message);
+    showError('Error', error.message)
   }
 };
 

@@ -445,6 +445,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useRouter, useRoute } from 'vue-router'
 import { useMLDataFlowStore } from '../stores/mlDataFlow'
 import { useExperimentStore } from '../stores/experiment'
+import { useToast } from '@/composables/useToast'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
 import SampleDataModal from '@/components/SampleDataModal.vue'
@@ -453,6 +454,7 @@ const router = useRouter()
 const route = useRoute()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
+const { showError, showSuccess } = useToast()
 
 // Navigation & View State
 // Use URL query 'tab' as the source of truth for the active tab
@@ -696,7 +698,7 @@ const processFile = async (file) => {
   } catch (error) {
     console.error('Core Upload Error:', error)
     const errorMsg = error.response?.data?.detail || error.message || 'Network intelligence failure'
-    alert('Upload failed: ' + errorMsg)
+    showError('Upload Failed', errorMsg)
     isUploading.value = false
   }
 }
@@ -790,7 +792,7 @@ const confirmDelete = async () => {
     // alert('Intelligence purged successfully') // Optional: already visible in feed
   } catch (error) {
     console.error('Purge Error:', error)
-    alert('Failed to purge data: ' + error.message)
+    showError('Purge Failed', error.message)
   } finally {
     isDeleting.value = false
   }
@@ -814,7 +816,7 @@ const downloadDataset = async (ds) => {
     document.body.removeChild(a)
   } catch (error) {
     console.error('Download Error:', error)
-    alert('Failed to download dataset: ' + error.message)
+    showError('Download Failed', error.message)
   }
 }
 
@@ -839,7 +841,7 @@ const downloadModel = async (model) => {
     document.body.removeChild(a)
   } catch (error) {
     console.error('Model Download Error:', error)
-    alert('Failed to download model: ' + error.message)
+    showError('Model Download Failed', error.message)
   }
 }
 

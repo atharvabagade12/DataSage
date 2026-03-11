@@ -1519,17 +1519,17 @@ const handleSaveVersion = async () => {
         isProcessing.value = true;
         processingMessage.value = "Saving new version...";
         
-        const result = await mlStore.saveDatasetVersion(datasetId.value, newVersionName.value);
+        const activeDatasetId = mlStore.datasetId || mlStore.currentDataset || datasetId.value;
         
-        showSuccess("Version Saved", `Successfully created version: ${result.name}`);
+        const result = await mlStore.saveDatasetVersion(activeDatasetId, newVersionName.value);
+        
+        showSuccess("Version Saved", `Successfully created version: ${result.name || newVersionName.value}`);
         mlStore.isDirty = false;
         showVersionModal.value = false;
         
         if (pendingRoute.value) {
           const target = pendingRoute.value;
           pendingRoute.value = null;
-          experimentStore.clearAll();
-          dataStore.clearData();
           router.push(target);
         }
     } catch (err) {
@@ -1543,15 +1543,17 @@ const handleSaveVersion = async () => {
 
 const leaveWithoutSaving = () => {
   showVersionModal.value = false;
+  mlStore.isDirty = false; // MUST set this before pushing, to break the loop!
+  
   const target = pendingRoute.value;
   pendingRoute.value = null;
-  experimentStore.clearAll();
-  dataStore.clearData();
+  
   if (target) router.push(target);
 };
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});
 const hasConfirmedUnverifiedFlagged = ref(false); // Track if user was warned about low/medium confidence
+
 
 // --- Column Insights State ---
 const showInsightsDrawer = ref(false);
