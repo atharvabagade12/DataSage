@@ -67,14 +67,9 @@ import joblib
 # ===== PREPROCESSING MODULE =====
 from preprocessing import DataPreprocessor, TargetEncoder
 from semantic_type_utils import detect_semantic_type, get_effective_semantic_types
+from missing_value_markers import MISSING_VALUE_MARKERS
 
-# ===== DIRECTORIES =====
-# UPLOAD_DIR = "enterprise_datasets"  <-- Deprecated
-# MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB limit
-# CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 
-# os.makedirs(UPLOAD_DIR, exist_ok=True)
-# os.makedirs("models", exist_ok=True)
 
 # ===== DATABASE & STORAGE =====
 from database import get_db, engine
@@ -111,11 +106,10 @@ ALLOWED_ORIGINS = [
 if env_origins:
     ALLOWED_ORIGINS.extend([o.strip() for o in env_origins if o.strip()])
 
-# Support FRONTEND_URL for legacy/consistency
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url and frontend_url not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(frontend_url)
-
+ 
 @app.middleware("http")
 async def manual_cors_middleware(request, call_next):
     origin = request.headers.get("origin")
@@ -152,9 +146,8 @@ async def manual_cors_middleware(request, call_next):
     
     return response
 
-# Note: We are REMOVING the standard CORSMiddleware to prevent interference
 
-# ✅ IMPORT AUTH ROUTER
+# IMPORT AUTH ROUTER
 try:
     import auth
     app.include_router(auth.router)
@@ -172,9 +165,7 @@ y_train_storage: Dict[str, Any] = {}
 y_test_storage: Dict[str, Any] = {}
 split_scalers: Dict[str, Any] = {}
 
-# TF-IDF storage
-tfidf_vectorizers: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: TfidfVectorizer}
-tfidf_feature_names: Dict[str, Dict[str, list]] = {}  # dataset_id -> {col_name: [feature_names]}
+
 categorical_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: encoder_info}
 target_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: TargetEncoder}
 
@@ -1213,6 +1204,8 @@ async def get_dashboard_stats(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
 @app.get("/api/dashboard/activity")
 async def get_recent_activity(
     limit: int = 10,
@@ -1295,16 +1288,16 @@ async def upload_dataset(
         ext = file.filename.lower()
         try:
             if ext.endswith('.csv'):
-                df = pd.read_csv(file_path)
+                df = pd.read_csv(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
             elif ext.endswith('.parquet'):
                 df = pd.read_parquet(file_path)
             elif ext.endswith('.json'):
                 df = pd.read_json(file_path)
             elif ext.endswith('.xlsx') or ext.endswith('.xls'):
-                df = pd.read_excel(file_path)
+                df = pd.read_excel(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
             else:
                 # Fallback to CSV if extension is unknown but might be a text file
-                df = pd.read_csv(file_path)
+                df = pd.read_csv(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
         except Exception as e:
             # Clean up file if reading fails
             if os.path.exists(file_path):
@@ -1785,7 +1778,7 @@ async def get_dataset_info(
             'split_info': split_info,
             'train_preview': train_preview,
             'test_preview': test_preview
-        }
+        } 
         
     except HTTPException:
         raise
@@ -2947,6 +2940,25 @@ async def apply_smote(
         X_train_storage[dataset_id] = X_train_resampled
         y_train_storage[dataset_id] = y_train_resampled
         
+        # ── SYNC BASE DATAFRAME ──────────────────────────────────────────────
+        # Reconstruct the full dataset so Data Preview sees the SMOTE distribution
+        try:
+            X_test_sync = X_test_storage.get(dataset_id)
+            y_test_sync = y_test_storage.get(dataset_id)
+            
+            if X_test_sync is not None and y_test_sync is not None:
+                full_X = pd.concat([X_train_resampled, X_test_sync], axis=0).reset_index(drop=True)
+                full_y = pd.concat([y_train_resampled, y_test_sync], axis=0).reset_index(drop=True)
+                full_df = pd.concat([full_X, full_y], axis=1)
+            else:
+                full_df = pd.concat([X_train_resampled, y_train_resampled], axis=1)
+                
+            datasets[dataset_id]['dataframe'] = full_df
+            print(f"✅ Base dataframe synced after SMOTE. Shape: {full_df.shape}")
+        except Exception as sync_err:
+            print(f"⚠️  Could not sync base dataframe after SMOTE: {sync_err}")
+        # ─────────────────────────────────────────────────────────────────────
+        
         # Mark SMOTE as applied in dataset metadata
         datasets[dataset_id]['smote_applied'] = True
         datasets[dataset_id]['smote_config'] = config
@@ -3437,6 +3449,24 @@ async def apply_target_encoding(
         X_test_storage[dataset_id] = X_test
         target_encoders[dataset_id] = encoders_used
         
+        # ── SYNC BASE DATAFRAME ──────────────────────────────────────────────
+        try:
+            full_X = pd.concat([X_train, X_test], axis=0).reset_index(drop=True)
+            y_train_sync = y_train_storage.get(dataset_id)
+            y_test_sync = y_test_storage.get(dataset_id)
+            
+            if y_train_sync is not None and y_test_sync is not None:
+                full_y = pd.concat([y_train_sync, y_test_sync], axis=0).reset_index(drop=True)
+                full_df = pd.concat([full_X, full_y], axis=1)
+            else:
+                full_df = full_X
+                
+            datasets[dataset_id]['dataframe'] = full_df
+            print(f"✅ Base dataframe synced after target encoding. Shape: {full_df.shape}")
+        except Exception as sync_err:
+            print(f"⚠️  Could not sync base dataframe after target encoding: {sync_err}")
+        # ─────────────────────────────────────────────────────────────────────
+        
         # Update metadata
         datasets[dataset_id]['target_encoded'] = True
         datasets[dataset_id]['target_encoded_columns'] = list(encoders_used.keys())
@@ -3624,6 +3654,21 @@ async def apply_categorical_encoding(
         X_test_storage[dataset_id] = X_test
         categorical_encoders[dataset_id] = encoders_used
         
+        # ── SYNC BASE DATAFRAME ──────────────────────────────────────────────
+        # Reconstruct the full dataset from train + test so that
+        # GET /api/datasets/{id} (used by data-preview page) always reflects
+        # the latest encoded state. Without this, data-preview shows stale
+        # pre-encoding data because it reads from datasets[id]['dataframe'].
+        try:
+            full_X = pd.concat([X_train, X_test], axis=0).reset_index(drop=True)
+            full_y = pd.concat([y_train_storage[dataset_id], y_test_storage[dataset_id]], axis=0).reset_index(drop=True)
+            full_df = pd.concat([full_X, full_y], axis=1)
+            datasets[dataset_id]['dataframe'] = full_df
+            print(f"✅ Base dataframe synced after encoding. Shape: {full_df.shape}")
+        except Exception as sync_err:
+            print(f"⚠️  Could not sync base dataframe after encoding: {sync_err}")
+        # ─────────────────────────────────────────────────────────────────────
+
         # Update dataset metadata
         datasets[dataset_id]['is_encoded'] = True
         datasets[dataset_id]['encoded_columns'] = encoded_columns
@@ -3696,9 +3741,7 @@ async def apply_categorical_encoding(
 
 
 
-
-
-from pydantic import BaseModel
+from pydantic import BaseModel 
 from typing import List, Optional
 
 class ColumnScaling(BaseModel):
@@ -3709,17 +3752,7 @@ class ScalingRequest(BaseModel):
     dataset_id: str
     columns: List[ColumnScaling]
 
-# TF-IDF Request Models
-class TfidfColumnConfig(BaseModel):
-    name: str
-    max_features: int
-    min_df: int
-    max_df: float
-    ngram_range: tuple
 
-class TfidfRequest(BaseModel):
-    dataset_id: str
-    columns: List[TfidfColumnConfig]
 
 class DateTimeRequest(BaseModel):
     dataset_id: str
@@ -3793,6 +3826,28 @@ async def apply_scaling(request: ScalingRequest):
         X_test_storage[dataset_id] = X_test
         split_scalers[dataset_id] = scalers_used
         
+        # ── SYNC BASE DATAFRAME ──────────────────────────────────────────────
+        # Reconstruct the full dataset from train + test so that
+        # GET /api/datasets/{id} (used by data-preview page) always reflects
+        # the latest scaled state. Without this, data-preview shows stale
+        # pre-scaling data because it reads from datasets[id]['dataframe'].
+        try:
+            full_X = pd.concat([X_train, X_test], axis=0).reset_index(drop=True)
+            y_train_sync = y_train_storage.get(dataset_id)
+            y_test_sync = y_test_storage.get(dataset_id)
+            
+            if y_train_sync is not None and y_test_sync is not None:
+                full_y = pd.concat([y_train_sync, y_test_sync], axis=0).reset_index(drop=True)
+                full_df = pd.concat([full_X, full_y], axis=1)
+            else:
+                full_df = full_X
+                
+            datasets[dataset_id]['dataframe'] = full_df
+            print(f"✅ Base dataframe synced after scaling. Shape: {full_df.shape}")
+        except Exception as sync_err:
+            print(f"⚠️  Could not sync base dataframe after scaling: {sync_err}")
+        # ─────────────────────────────────────────────────────────────────────
+        
         # Update dataset metadata
         datasets[dataset_id]['is_scaled'] = True
         datasets[dataset_id]['scaled_columns'] = scaled_columns
@@ -3838,559 +3893,6 @@ async def apply_scaling(request: ScalingRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ===== TF-IDF ENDPOINTS =====
-
-@app.post("/api/detect-text-columns")
-async def detect_text_columns(
-    request: Dict[str, Any],
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(auth.get_current_user)
-):
-    """
-    Detect text columns suitable for TF-IDF vectorization using multi-signal scoring.
-    Respects manual semantic type overrides.
-    """
-    try:
-        dataset_id = request.get('dataset_id')
-        
-        print("\n" + "=" * 80)
-        print(f"📝 ENHANCED TEXT COLUMN DETECTION REQUEST")
-        print(f"   Dataset ID: {dataset_id}")
-        print("=" * 80)
-        
-        # 1. Fetch Dataset and Overrides from DB
-        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-        if not dataset_record:
-            raise HTTPException(status_code=404, detail="Dataset not found in database")
-            
-        column_metadata = dataset_record.column_metadata or {}
-        
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found in memory")
-        
-        if not datasets[dataset_id].get('is_split', False):
-            raise HTTPException(status_code=400, detail="Dataset must be split before TF-IDF detection")
-        
-        if dataset_id not in X_train_storage:
-            raise HTTPException(status_code=400, detail="Split data not found")
-        
-        X_train = X_train_storage[dataset_id]
-        
-        # 2. Get Effective Semantic Types
-        effective_types = get_effective_semantic_types(X_train, column_metadata)
-        
-        # 3. Identify Candidate Columns
-        # Candidates are columns explicitly marked as 'text' OR those with string-like raw types not overridden otherwise
-        candidate_columns = []
-        for col in X_train.columns:
-            eff_type = effective_types.get(col)
-            raw_dtype = str(X_train[col].dtype)
-            
-            if eff_type == 'text':
-                candidate_columns.append(col)
-            elif (raw_dtype == 'object' or raw_dtype == 'string') and eff_type not in ['numeric', 'boolean', 'categorical', 'datetime']:
-                candidate_columns.append(col)
-        
-        print(f"   Found {len(candidate_columns)} candidate columns for text analysis")
-        
-        # Exclusion patterns (categorical identifiers)
-        exclude_patterns = ['id', 'code', 'country', 'category', 'type', 'status', 'name', 'gender', 'city', 'state', 'zip', 'postal', 'phone', 'email', 'url', 'uuid', 'guid']
-        
-        text_candidates = []
-        all_column_analysis = []
-        
-        for col in candidate_columns:
-            # Get non-null string data
-            col_data = X_train[col].dropna().astype(str)
-            
-            if len(col_data) == 0:
-                continue
-            
-            # Initialize scoring
-            score = 0
-            reasoning = []
-            
-            # ===== SIGNAL 1: Average Character Length (0-2 points) =====
-            avg_length = col_data.str.len().mean()
-            
-            if avg_length >= 100:
-                score += 2
-                reasoning.append(f"Very long text (avg: {avg_length:.0f} chars) +2")
-            elif avg_length >= 50:
-                score += 1.5
-                reasoning.append(f"Long text (avg: {avg_length:.0f} chars) +1.5")
-            elif avg_length >= 30:
-                score += 1
-                reasoning.append(f"Medium text (avg: {avg_length:.0f} chars) +1")
-            else:
-                reasoning.append(f"Short text (avg: {avg_length:.0f} chars) +0")
-            
-            # ===== SIGNAL 2: Median Word Count (0-2 points) =====
-            word_counts = col_data.str.split().str.len()
-            median_words = word_counts.median()
-            
-            if median_words >= 10:
-                score += 2
-                reasoning.append(f"Many words (median: {median_words:.0f}) +2")
-            elif median_words >= 5:
-                score += 1.5
-                reasoning.append(f"Several words (median: {median_words:.0f}) +1.5")
-            elif median_words >= 3:
-                score += 1
-                reasoning.append(f"Few words (median: {median_words:.0f}) +1")
-            else:
-                reasoning.append(f"Very few words (median: {median_words:.0f}) +0")
-            
-            # ===== SIGNAL 3: Unique Value Ratio (0-1 point) =====
-            unique_count = col_data.nunique()
-            total_count = len(col_data)
-            unique_ratio = unique_count / total_count if total_count > 0 else 0
-            
-            if unique_ratio >= 0.95:
-                # Too unique, likely IDs
-                reasoning.append(f"Very high uniqueness ({unique_ratio:.2%}) -1 (likely ID)")
-                score -= 1
-            elif unique_ratio >= 0.7:
-                score += 1
-                reasoning.append(f"High uniqueness ({unique_ratio:.2%}) +1")
-            elif unique_ratio >= 0.3:
-                score += 0.5
-                reasoning.append(f"Medium uniqueness ({unique_ratio:.2%}) +0.5")
-            else:
-                reasoning.append(f"Low uniqueness ({unique_ratio:.2%}) +0")
-            
-            # ===== SIGNAL 4: Vocabulary Size (0-2 points) =====
-            # Count unique words across all values
-            all_words = ' '.join(col_data.values).lower().split()
-            vocabulary_size = len(set(all_words))
-            
-            if vocabulary_size >= 1000:
-                score += 2
-                reasoning.append(f"Large vocabulary ({vocabulary_size} words) +2")
-            elif vocabulary_size >= 500:
-                score += 1.5
-                reasoning.append(f"Medium vocabulary ({vocabulary_size} words) +1.5")
-            elif vocabulary_size >= 100:
-                score += 1
-                reasoning.append(f"Small vocabulary ({vocabulary_size} words) +1")
-            else:
-                reasoning.append(f"Tiny vocabulary ({vocabulary_size} words) +0")
-            
-            # ===== SIGNAL 5: Character Entropy (0-3 points) =====
-            # Measure character diversity (higher = more varied text)
-            all_chars = ''.join(col_data.values)
-            char_counts = {}
-            for char in all_chars:
-                char_counts[char] = char_counts.get(char, 0) + 1
-            
-            total_chars = len(all_chars)
-            entropy = 0
-            for count in char_counts.values():
-                prob = count / total_chars
-                entropy -= prob * np.log2(prob)
-            
-            if entropy >= 4.5:
-                score += 3
-                reasoning.append(f"High character diversity (entropy: {entropy:.2f}) +3")
-            elif entropy >= 4.0:
-                score += 2
-                reasoning.append(f"Good character diversity (entropy: {entropy:.2f}) +2")
-            elif entropy >= 3.5:
-                score += 1
-                reasoning.append(f"Moderate character diversity (entropy: {entropy:.2f}) +1")
-            else:
-                reasoning.append(f"Low character diversity (entropy: {entropy:.2f}) +0")
-            
-            # ===== EXCLUSION PATTERN CHECK =====
-            is_excluded = any(pattern in col.lower() for pattern in exclude_patterns)
-            if is_excluded:
-                reasoning.append(f"⚠️ Matches exclusion pattern (likely categorical ID)")
-                score -= 2  # Penalty for matching exclusion patterns
-            
-            # ===== FINAL CLASSIFICATION =====
-            is_text_column = score >= 6 and not is_excluded
-            
-            print(f"\n   Column: {col}")
-            print(f"      Score: {score:.1f}/10")
-            print(f"      Classification: {'TEXT' if is_text_column else 'NOT TEXT'}")
-            print(f"      Reasoning:")
-            for reason in reasoning:
-                print(f"         - {reason}")
-            
-            # Store analysis for all columns
-            analysis = {
-                'name': col,
-                'score': round(score, 2),
-                'is_text': is_text_column,
-                'avg_length': round(avg_length, 1),
-                'median_words': round(median_words, 1),
-                'unique_count': int(unique_count),
-                'unique_ratio': round(unique_ratio, 3),
-                'vocabulary_size': vocabulary_size,
-                'entropy': round(entropy, 2),
-                'reasoning': reasoning,
-                'sample_text': col_data.iloc[0][:100] if len(col_data) > 0 else ""
-            }
-            
-            all_column_analysis.append(analysis)
-            
-            if is_text_column:
-                text_candidates.append(analysis)
-        
-        print(f"\n✅ Detected {len(text_candidates)} text columns out of {len(object_columns)} total")
-        print("=" * 80 + "\n")
-        
-        return {
-            "success": True,
-            "text_columns": text_candidates,
-            "all_columns_analysis": all_column_analysis,
-            "total_detected": len(text_candidates),
-            "total_analyzed": len(object_columns)
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Text detection error: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/configure-tfidf")
-async def configure_tfidf(request: Dict[str, Any]):
-    """
-    Generate dataset-size-aware TF-IDF parameters.
-    
-    Returns recommended parameters based on:
-    - Dataset row count
-    - Existing feature count
-    - Text column characteristics
-    """
-    try:
-        dataset_id = request.get('dataset_id')
-        text_columns = request.get('text_columns', [])
-        
-        print("\n" + "=" * 80)
-        print(f"⚙️ TF-IDF CONFIGURATION REQUEST")
-        print(f"   Dataset ID: {dataset_id}")
-        print(f"   Text Columns: {len(text_columns)}")
-        print("=" * 80)
-        
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        if dataset_id not in X_train_storage:
-            raise HTTPException(status_code=400, detail="Split data not found")
-        
-        X_train = X_train_storage[dataset_id]
-        num_rows = len(X_train)
-        num_existing_features = X_train.shape[1]
-        
-        print(f"   Dataset rows: {num_rows}")
-        print(f"   Existing features: {num_existing_features}")
-        
-        # Dataset-size-aware parameter selection
-        if num_rows < 2000:
-            base_params = {
-                'max_features': 800,
-                'min_df': 2,
-                'max_df': 0.85,
-                'ngram_range': (1, 1),
-                'tier': 'small'
-            }
-        elif num_rows <= 20000:
-            base_params = {
-                'max_features': 2000,
-                'min_df': 5,
-                'max_df': 0.9,
-                'ngram_range': (1, 2),
-                'tier': 'medium'
-            }
-        else:
-            base_params = {
-                'max_features': 4000,
-                'min_df': 10,
-                'max_df': 0.95,
-                'ngram_range': (1, 2),
-                'tier': 'large'
-            }
-        
-        # Apply feature safety constraint: TF-IDF features <= 5 × existing features
-        max_allowed_tfidf_features = num_existing_features * 5
-        total_tfidf_features = base_params['max_features'] * len(text_columns)
-        
-        warnings = []
-        adjustments_made = False
-        
-        if total_tfidf_features > max_allowed_tfidf_features:
-            # Reduce max_features to satisfy constraint
-            adjusted_max_features = max(100, int(max_allowed_tfidf_features / len(text_columns)))
-            warnings.append({
-                'type': 'feature_explosion',
-                'message': f'Feature count would exceed 5× constraint ({total_tfidf_features} > {max_allowed_tfidf_features}). Reduced max_features from {base_params["max_features"]} to {adjusted_max_features}.',
-                'severity': 'warning'
-            })
-            base_params['max_features'] = adjusted_max_features
-            adjustments_made = True
-        
-        # Generate configuration for each text column
-        column_configs = []
-        for col_info in text_columns:
-            col_name = col_info if isinstance(col_info, str) else col_info.get('name')
-            column_configs.append({
-                'name': col_name,
-                'max_features': base_params['max_features'],
-                'min_df': base_params['min_df'],
-                'max_df': base_params['max_df'],
-                'ngram_range': base_params['ngram_range'],
-                'stop_words': 'english',
-                'sublinear_tf': True
-            })
-        
-        # Model compatibility recommendations
-        recommended_models = [
-            'Logistic Regression',
-            'Ridge',
-            'Lasso',
-            'ElasticNet',
-            'LightGBM',
-            'XGBoost',
-            'CatBoost'
-        ]
-        
-        not_recommended_models = [
-            'Neural Network (MLP)',
-            'Neural Network Regressor (MLP)'
-        ]
-        
-        print(f"✅ Configuration generated (tier: {base_params['tier']})")
-        print(f"   Max features per column: {base_params['max_features']}")
-        print(f"   Total TF-IDF features: {base_params['max_features'] * len(text_columns)}")
-        print(f"   Adjustments made: {adjustments_made}")
-        print("=" * 80 + "\n")
-        
-        return {
-            "success": True,
-            "base_params": base_params,
-            "column_configs": column_configs,
-            "warnings": warnings,
-            "adjustments_made": adjustments_made,
-            "recommended_models": recommended_models,
-            "not_recommended_models": not_recommended_models,
-            "dataset_info": {
-                'num_rows': num_rows,
-                'num_existing_features': num_existing_features,
-                'max_allowed_tfidf_features': max_allowed_tfidf_features
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ TF-IDF configuration error: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/apply-tfidf")
-async def apply_tfidf(request: TfidfRequest):
-    """
-    Apply TF-IDF vectorization to text columns.
-    
-    Safety features:
-    - Fit on train set only (prevent data leakage)
-    - Apply 5× feature safety constraint
-    - Keep sparse matrices (memory efficient)
-    - Concatenate with existing features
-    """
-    global X_train_storage, X_test_storage, tfidf_vectorizers, tfidf_feature_names
-    
-    try:
-        dataset_id = request.dataset_id
-        columns_config = request.columns
-        
-        print("\n" + "=" * 80)
-        print(f"🔤 TF-IDF APPLICATION REQUEST")
-        print(f"   Dataset ID: {dataset_id}")
-        print(f"   Columns to vectorize: {len(columns_config)}")
-        print("=" * 80)
-        
-        # Validate dataset exists and is split
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        if not datasets[dataset_id].get('is_split', False):
-            raise HTTPException(status_code=400, detail="Dataset must be split before TF-IDF")
-        
-        if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
-            raise HTTPException(status_code=400, detail="Split data not found")
-        
-        X_train = X_train_storage[dataset_id].copy()
-        X_test = X_test_storage[dataset_id].copy()
-        y_train = y_train_storage[dataset_id]
-        y_test = y_test_storage[dataset_id]
-        
-        vectorizers_used = {}
-        feature_names_used = {}
-        tfidf_features_train = []
-        tfidf_features_test = []
-        columns_to_drop = []
-        
-        for col_config in columns_config:
-            col_name = col_config.name
-            
-            if col_name not in X_train.columns:
-                print(f"⚠️  Column {col_name} not found, skipping...")
-                continue
-            
-            print(f"Vectorizing {col_name}...")
-            print(f"   max_features: {col_config.max_features}")
-            print(f"   min_df: {col_config.min_df}")
-            print(f"   max_df: {col_config.max_df}")
-            print(f"   ngram_range: {col_config.ngram_range}")
-            
-            # Create TF-IDF vectorizer
-            vectorizer = TfidfVectorizer(
-                max_features=col_config.max_features,
-                min_df=col_config.min_df,
-                max_df=col_config.max_df,
-                ngram_range=tuple(col_config.ngram_range),
-                stop_words='english',
-                sublinear_tf=True,
-                dtype=np.float32  # Use float32 to save memory
-            )
-            
-            # Fit on train set only (prevent data leakage)
-            train_text = X_train[col_name].fillna('').astype(str)
-            test_text = X_test[col_name].fillna('').astype(str)
-            
-            train_tfidf = vectorizer.fit_transform(train_text)
-            test_tfidf = vectorizer.transform(test_text)
-            
-            # Get feature names
-            feature_names = [f"{col_name}_tfidf_{i}" for i in range(train_tfidf.shape[1])]
-            
-            print(f"   Generated {train_tfidf.shape[1]} TF-IDF features")
-            print(f"   Train shape: {train_tfidf.shape}")
-            print(f"   Test shape: {test_tfidf.shape}")
-            
-            # Store vectorizer and feature names
-            vectorizers_used[col_name] = vectorizer
-            feature_names_used[col_name] = feature_names
-            
-            # Collect TF-IDF features
-            tfidf_features_train.append(train_tfidf)
-            tfidf_features_test.append(test_tfidf)
-            
-            # Mark original column for removal
-            columns_to_drop.append(col_name)
-        
-        if not vectorizers_used:
-            raise HTTPException(status_code=400, detail="No valid columns to vectorize")
-        
-        # Drop original text columns
-        X_train_numeric = X_train.drop(columns=columns_to_drop)
-        X_test_numeric = X_test.drop(columns=columns_to_drop)
-        
-        # Convert numeric dataframes to sparse matrices
-        X_train_sparse = csr_matrix(X_train_numeric.values)
-        X_test_sparse = csr_matrix(X_test_numeric.values)
-        
-        # Concatenate all TF-IDF features
-        if len(tfidf_features_train) > 1:
-            tfidf_train_combined = hstack(tfidf_features_train)
-            tfidf_test_combined = hstack(tfidf_features_test)
-        else:
-            tfidf_train_combined = tfidf_features_train[0]
-            tfidf_test_combined = tfidf_features_test[0]
-        
-        # Concatenate numeric features with TF-IDF features
-        X_train_final = hstack([X_train_sparse, tfidf_train_combined])
-        X_test_final = hstack([X_test_sparse, tfidf_test_combined])
-        
-        # Convert back to DataFrame for compatibility
-        # Combine column names
-        all_feature_names = list(X_train_numeric.columns)
-        for col_name in columns_to_drop:
-            all_feature_names.extend(feature_names_used[col_name])
-        
-        X_train_final_df = pd.DataFrame.sparse.from_spmatrix(
-            X_train_final,
-            columns=all_feature_names,
-            index=X_train.index
-        )
-        X_test_final_df = pd.DataFrame.sparse.from_spmatrix(
-            X_test_final,
-            columns=all_feature_names,
-            index=X_test.index
-        )
-        
-        # Update storage
-        X_train_storage[dataset_id] = X_train_final_df
-        X_test_storage[dataset_id] = X_test_final_df
-        tfidf_vectorizers[dataset_id] = vectorizers_used
-        tfidf_feature_names[dataset_id] = feature_names_used
-        
-        # Update Registry
-        if dataset_id not in feature_metadata: feature_metadata[dataset_id] = {}
-        for col, words in feature_names_used.items():
-            for w in words:
-                feature_metadata[dataset_id][w] = {
-                    'original_column': col,
-                    'type': 'text',
-                    'transformation': 'tfidf',
-                    'word': w
-                }
-        
-        # Update metadata
-        datasets[dataset_id]['tfidf_applied'] = True
-        datasets[dataset_id]['tfidf_columns'] = list(vectorizers_used.keys())
-        
-        # Create preview data
-        train_preview_df = pd.concat([X_train_final_df.head(200).sparse.to_dense(), y_train.head(200)], axis=1)
-        test_preview_df = pd.concat([X_test_final_df.head(200).sparse.to_dense(), y_test.head(200)], axis=1)
-        
-        train_preview = train_preview_df.to_dict('records')
-        test_preview = test_preview_df.to_dict('records')
-        
-        total_tfidf_features = sum(len(names) for names in feature_names_used.values())
-        
-        print(f"✅ TF-IDF vectorization complete!")
-        print(f"   Original features: {X_train_numeric.shape[1]}")
-        print(f"   TF-IDF features added: {total_tfidf_features}")
-        print(f"   Final feature count: {X_train_final_df.shape[1]}")
-        print(f"   Train shape: {X_train_final_df.shape}")
-        print(f"   Test shape: {X_test_final_df.shape}")
-        print("=" * 80 + "\n")
-        
-        # Include target column in the columns list
-        target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
-        all_columns = list(X_train_final_df.columns) + [target_col_name]
-        
-        return {
-            "success": True,
-            "message": f"Successfully applied TF-IDF to {len(vectorizers_used)} columns",
-            "train_shape": list(X_train_final_df.shape),
-            "test_shape": list(X_test_final_df.shape),
-            "original_features": X_train_numeric.shape[1],
-            "tfidf_features_added": total_tfidf_features,
-            "final_feature_count": X_train_final_df.shape[1],
-            "vectorized_columns": list(vectorizers_used.keys()),
-            "train_preview": train_preview,
-            "test_preview": test_preview,
-            "columns": all_columns
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ TF-IDF application error: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 
 
 

@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 import tempfile
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from missing_value_markers import MISSING_VALUE_MARKERS
 
 router = APIRouter(prefix="/ml", tags=["Machine Learning Pipeline"])
 
@@ -41,9 +44,9 @@ async def upload_dataset(
         try:
             # Load dataset based on file type
             if file_extension == '.csv':
-                df = pd.read_csv(tmp_file_path)
+                df = pd.read_csv(tmp_file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
             elif file_extension in ['.xlsx', '.xls']:
-                df = pd.read_excel(tmp_file_path)
+                df = pd.read_excel(tmp_file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
             elif file_extension == '.json':
                 df = pd.read_json(tmp_file_path)
             

@@ -4,6 +4,7 @@ from fastapi import UploadFile
 from datetime import datetime
 import pandas as pd
 import io
+from missing_value_markers import MISSING_VALUE_MARKERS
 
 STORAGE_ROOT = "storage"
 
@@ -53,12 +54,12 @@ class FileService:
             
         ext = file_path.lower()
         if ext.endswith('.csv'):
-            return pd.read_csv(file_path)
+            return pd.read_csv(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
         elif ext.endswith('.parquet'):
             return pd.read_parquet(file_path)
         elif ext.endswith('.json'):
             return pd.read_json(file_path)
         elif ext.endswith('.xlsx') or ext.endswith('.xls'):
-            return pd.read_excel(file_path)
+            return pd.read_excel(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
         else:
             raise ValueError(f"Unsupported file format: {os.path.basename(file_path)}")

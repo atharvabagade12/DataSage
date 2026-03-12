@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, LabelEncoder, OrdinalEncoder 
 import json
+from missing_value_markers import MISSING_VALUE_MARKERS
 
 class DataPreprocessor:
     """
@@ -16,9 +17,9 @@ class DataPreprocessor:
         
         # ✅ FIX: Normalize missing values - convert empty strings and other representations to NaN
         print(f"   Normalizing missing values...")
-        # ... (rest of normalization logic)
-        df = df.replace(['', ' ', '  ', 'null', 'NULL', 'None', 'NA', 'N/A', 'n/a', 'NaN'], np.nan)
-        df = df.replace({None: np.nan})
+        # Use shared missing value markers (single source of truth)
+        df = df.replace(MISSING_VALUE_MARKERS, np.nan)
+        df = df.replace({None: np.nan}) 
         
         for col in df.columns:
             if df[col].dtype == 'object':
@@ -102,17 +103,7 @@ class DataPreprocessor:
         return self.df
     
     def handle_missing_values(self, strategies):
-        """
-        Handle missing values using scikit-learn SimpleImputer
         
-        Args:
-            strategies (dict): { 'column_name': 'strategy' }
-                Strategies: 'fillmean', 'fillmedian', 'fillmode', 'fillzero', 
-                           'fillunknown', 'droprows', 'keep'
-        
-        Returns:
-            DataFrame: Preprocessed dataframe
-        """
         print(f"\nDEBUG: handle_missing_values called")
         print(f"   Strategies received: {strategies}")
         
@@ -155,8 +146,7 @@ class DataPreprocessor:
                 print(f"   Kept missing values as-is")
                 
             else:
-                # Use SimpleImputer for fill strategies
-                # ✅ ENFORCE SEMANTIC TYPES
+                
                 applied_numerical = []
                 applied_categorical = []
                 

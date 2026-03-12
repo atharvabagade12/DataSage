@@ -1736,8 +1736,8 @@ const initializeData = async () => {
         return;
     }
 
-    // 2. Load Data via DataStore
-    await dataStore.loadData(datasetId.value);
+    // 2. Load Data via DataStore - FORCE refresh to ensure "Always Latest"
+    await dataStore.loadData(datasetId.value, true);
     
     // 3. Set Local Metadata
     fileName.value = experimentStore.datasetName || "Dataset";
@@ -1992,10 +1992,8 @@ const applyMissingStrategies = async () => {
             strategies[c.strategy].push(c.name);
         });
 
-        // Execute API calls sequantially or parallel
+        // Execute API calls sequentially
         for (const [strategy, cols] of Object.entries(strategies)) {
-            // Need specific endpoints or a bulk one. 
-            // Assuming generic 'handle-missing' endpoint
             await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/missing-values`, {
                 strategy: strategy, 
                 columns: cols,
@@ -2033,11 +2031,10 @@ const applyOutlierHandling = async () => {
     isProcessing.value = true;
     try {
         await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/outliers`, {
-             method: outlierStrategy.value, // 'cap', 'remove'
+             method: outlierStrategy.value,
              target_column: experimentStore.targetColumn
         });
         await dataStore.loadData(datasetId.value, true);
-        // Refresh local columns
         processColumns();
         analyzeDataQuality();
 
@@ -2059,7 +2056,7 @@ const applyOutlierHandling = async () => {
 // DUPLICATES
 const applyDuplicateRemoval = async () => {
     isProcessing.value = true;
-     try {
+    try {
         let keepStrategy = 'first';
         if (duplicateStrategy.value === 'keep_last') keepStrategy = 'last';
         else if (duplicateStrategy.value === 'remove_all') keepStrategy = 'all';

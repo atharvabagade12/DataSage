@@ -1532,7 +1532,10 @@ onBeforeRouteLeave((to, _from, next) => {
     dataStore.clearData();
     next();
   } else {
-    next(); // normal within-pipeline navigation
+    // Within-pipeline navigation: invalidate rawPreview cache so the next page
+    // always sees fresh data re-fetched from the backend.
+    dataStore.clearCache();
+    next();
   }
 });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2380,16 +2383,11 @@ const loadInitialData = async () => {
     }
     
     await Promise.all([
-      dataStore.loadData(datasetId.value),
+      dataStore.loadData(datasetId.value, true),
       fetchSemanticTypes()
     ]);
 
-    // ── PERSISTENCE FIX: FRONTEND GUARD ─────────────────────────────────────
-    // If the experiment store says split is applied but our transient preview
-    // store is still empty, force a second fetch (bypasses dedup cache).
-    // This handles the case where the first loadData call already resolved
-    // but the backend restored previews from the DB (they come in the same
-    // response, so this shouldn't happen — but this guard is a safety net).
+    
     if (preprocessing.value.isSplitApplied && dataStore.trainPreview.length === 0) {
       console.warn('⚠️ Split applied in store but trainPreview is empty after load — forcing re-fetch...');
       await dataStore.loadData(datasetId.value, true); // force=true
@@ -2539,7 +2537,6 @@ const applySplit = async () => {
       showSplitModal.value = false;
 
       showSuccess('Split Applied', `Train: ${data.train_size} | Test: ${data.test_size}`);
-      addPreprocessingStep('Train/Test Split');
       mlStore.isDirty = true;
 
       // Update Imbalance Check for SMOTE Availability

@@ -131,14 +131,22 @@ export const useDataStore = defineStore('data', {
     
     clearData() {
       this.$reset();
+    },
+    
+    // Invalidate cache so next loadData call will always re-fetch from backend
+    clearCache() {
+      this.lastFetchedId = null;
+      this.isLoaded = false;
     }
   },
 
-  // Persist preview data to sessionStorage so it survives page reloads.
-  // sessionStorage is tab-scoped and cleared automatically on tab close.
-  // pinia-plugin-persistedstate v4.7.1 supports this config format.
+  // Preview data (rawPreview, trainPreview, testPreview) is intentionally NOT
+  // persisted to sessionStorage. Pages always re-fetch fresh data from the
+  // backend on mount, guaranteeing a consistent "always latest" view.
+  // Only lastFetchedId is persisted to avoid duplicate inflight requests within
+  // the same page session.
   persist: {
     storage: sessionStorage,
-    pick: ['rawPreview', 'trainPreview', 'testPreview', 'lastFetchedId', 'isLoaded'],
+    pick: ['lastFetchedId'],
   }
 });
