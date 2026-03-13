@@ -2204,35 +2204,53 @@ async def get_column_insights(
                 q1 = float(clean_data.quantile(0.25))
                 q3 = float(clean_data.quantile(0.75))
                 median = float(clean_data.median())
+                mean_val = float(clean_data.mean())
+                std_val = float(clean_data.std()) if n_obs > 1 else 0
+                col_min = float(clean_data.min())
+                col_max = float(clean_data.max())
+                col_range = col_max - col_min
                 iqr = q3 - q1
-                
-                # Bounds
+
+                # ── FIX #1: Zero-variance / near-constant guard ──────────────────
+                is_near_constant = std_val == 0 or col_range == 0 or iqr == 0
+
+                # Bounds & Outlier Counts (only meaningful when not near-constant)
                 lower_bound = q1 - 1.5 * iqr
                 upper_bound = q3 + 1.5 * iqr
                 extreme_lower = q1 - 3 * iqr
                 extreme_upper = q3 + 3 * iqr
-                
-                # Outlier Counts
+
                 outliers_mask = (clean_data < lower_bound) | (clean_data > upper_bound)
                 extreme_outliers_mask = (clean_data < extreme_lower) | (clean_data > extreme_upper)
-                
+
                 outlier_count = int(outliers_mask.sum())
                 extreme_outlier_count = int(extreme_outliers_mask.sum())
-                outlier_ratio = outlier_count / n_obs if n_obs > 0 else 0
+                outlier_ratio = (outlier_count / n_obs) if (n_obs > 0 and not is_near_constant) else 0
                 outlier_pct = round(outlier_ratio * 100, 2)
-                
+
                 # Skewness
                 raw_skewness = float(clean_data.skew()) if n_obs > 1 else 0
-                # Robust skewness = (Q3 + Q1 − 2 × Median) / IQR (if IQR ≠ 0)
+                # Robust/Bowley skewness = (Q3 + Q1 − 2×Median) / IQR  (IQR=0 → 0)
                 robust_skewness = (q3 + q1 - 2 * median) / iqr if iqr != 0 else 0
                 skewness_gap = abs(abs(raw_skewness) - abs(robust_skewness))
-                
-                # Step 2 & 3: Severity and Detection
-                skewness_distorted = skewness_gap > 1 and abs(raw_skewness) > 1 and abs(robust_skewness) < 0.5
 
+                # Zero-inflated indicator
+                zeros_pct = float((clean_data == 0).sum() / n_obs * 100) if n_obs > 0 else 0
+
+                # ── FIX #2: Lowered gap threshold from 1 → 0.7 for better distortion detection ──
+                # Skewness Distorted  = outliers are pulling raw_skewness high;
+                #                       robust_skewness stays low → safe core distribution
+                skewness_distorted = (
+                    skewness_gap > 0.7
+                    and abs(raw_skewness) > 1
+                    and abs(robust_skewness) < 0.5
+                )
+
+                # ── FIX #3: Use true_skewness (guard with skewness_gap) for Cases C & D ──
+                # true_skewness = robust but skewness_gap is tight
+                # (i.e. outliers aren't inflating the raw metric)
                 true_skewness = abs(robust_skewness) > 0.7 and skewness_gap < 0.7
 
-                
                 # Skewness Interpretation (Reporting only)
                 if abs(raw_skewness) < 0.5:
                     skew_desc = "Symmetric"
@@ -2245,17 +2263,28 @@ async def get_column_insights(
                 else:
                     skew_desc = "Left-Skewed"
 
+                # ── Transform recommendation helper (Box-Cox requires min > 0) ──
+                # Used in multiple cases below
+                def _transform_advice(include_log=True):
+                    if col_min > 0:
+                        return "Box-Cox (preferred, all values positive), Yeo-Johnson, or Log" if include_log else "Box-Cox or Yeo-Johnson"
+                    elif col_min == 0 and include_log:
+                        return "Yeo-Johnson (handles zeros), Log1p"
+                    else:
+                        return "Yeo-Johnson (handles zeros and negatives)"
+
                 # Histogram computation (once)
                 hist_counts, hist_edges = np.histogram(clean_data, bins='auto')
 
                 insights.update({
                     "type": "numeric",
-                    "mean": float(clean_data.mean()),
+                    "mean": mean_val,
                     "median": median,
-                    "std": float(clean_data.std()) if n_obs > 1 else 0,
-                    "min": float(clean_data.min()),
-                    "max": float(clean_data.max()),
+                    "std": std_val,
+                    "min": col_min,
+                    "max": col_max,
                     "iqr": iqr,
+                    "zeros_pct": zeros_pct,
                     "raw_skewness": raw_skewness,
                     "robust_skewness": robust_skewness,
                     "skewness_gap": skewness_gap,
@@ -2270,64 +2299,122 @@ async def get_column_insights(
                             "bin_edges": hist_edges.tolist()
                         },
                         "box_plot": {
-                            "min": float(clean_data.min()), "q1": q1, "median": median, "q3": q3, "max": float(clean_data.max())
+                            "min": col_min, "q1": q1, "median": median, "q3": q3, "max": col_max
                         }
                     }
                 })
 
-                # Step 4: Decision Logic (Cases A-F) with Sample Size Guardrails
+                # ── Step 4: Decision Logic  ──────────────────────────────────────
                 if n_obs < 30:
-                    insights["suggested_actions"].append("⚠️ Statistical recommendations are unreliable due to small sample size (N < 30). Manual review is recommended before applying transformations.")
-                else:
-                    # Severity Helper Flags
-                    is_highly_skewed = abs(robust_skewness) > 0.7
-                    has_moderate_outliers = outlier_ratio >= 0.02
-                    has_extreme_outliers = extreme_outlier_count > 0
-                    
-                    # Case A: Skewness Driven Primarily by Outliers (Explosion of raw skewness vs robust)
-                    if skewness_distorted:
-                        insights["suggested_actions"].append("Recommend handling extreme outliers first. High raw skewness is likely an outlier-driven distortion (Core distribution is symmetric).")
+                    insights["suggested_actions"].append(
+                        "⚠️ Statistical recommendations are unreliable due to small sample size "
+                        "(N < 30). Manual review is recommended before applying transformations."
+                    )
 
+                # ── FIX #6: Degenerate / near-constant column  ───────────────────
+                elif is_near_constant:
+                    unique_vals = int(clean_data.nunique())
+                    if unique_vals <= 1:
+                        insights["suggested_actions"].append(
+                            "⚠️ Column is constant (single unique value). "
+                            "It carries no information and should be dropped before modelling."
+                        )
+                    else:
+                        insights["suggested_actions"].append(
+                            "⚠️ Column has zero or near-zero variance (IQR = 0). "
+                            "All values fall within a very tight range. "
+                            "Consider dropping or flagging — this column may offer little predictive value."
+                        )
+
+                else:
+                    has_moderate_outliers = outlier_ratio >= 0.02
+                    has_extreme_outliers  = extreme_outlier_count > 0
+
+                    # ── FIX #4 & #5: Reorder — heavy-tail / zero-inflated BEFORE distorted-skew ──
+                    # Case A-1: Zero-inflated heavy-tail (>15% outliers AND >30% zeros)
+                    if outlier_ratio > 0.15 and zeros_pct > 30:
+                        insights["suggested_actions"].append(
+                            f"⚠️ Zero-inflated distribution detected ({zeros_pct:.1f}% zeros) "
+                            "with a heavy tail. IQR-based outlier flagging is overcounting — "
+                            "this is a structural property of the data. "
+                            "Consider a two-part/hurdle model, sqrt transform, or domain-specific binning."
+                        )
+
+                    # Case A-2: Heavy-tailed (>15% flagged, NOT zero-inflated)
                     elif outlier_ratio > 0.15:
                         insights["suggested_actions"].append(
                             "High proportion of values flagged as outliers (>15%). "
-                            "This likely indicates a naturally heavy-tailed or zero-inflated distribution, "
-                            "not isolated anomalies. Avoid aggressive capping. Consider transformation or domain review."
+                            "This likely indicates a naturally heavy-tailed distribution, "
+                            "not isolated anomalies. Avoid aggressive capping. "
+                            f"Consider {_transform_advice()} transformation or domain review."
                         )
 
-                    # Case B: Extreme Outliers Present, Low Overall Outlier Ratio   
+                    # Case B: Skewness distorted by extreme outliers
+                    elif skewness_distorted:
+                        insights["suggested_actions"].append(
+                            "Recommend handling extreme outliers first — high raw skewness is "
+                            "likely an outlier-driven distortion (core distribution is roughly symmetric)."
+                        )
+
+                    # Case C: True extreme outliers, low overall outlier ratio
                     elif has_extreme_outliers and outlier_ratio < 0.05:
-                        insights["suggested_actions"].append("Recommend outlier capping. Few extreme anomalies are distorting statistics.")
-                        if is_highly_skewed:
-                            insights["suggested_actions"].append("Recommend transformation (Log, Yeo-Johnson, or Box-Cox) due to true distribution skewness.")
+                        insights["suggested_actions"].append(
+                            "Recommend outlier capping. A small number of extreme anomalies "
+                            "are distorting statistics."
+                        )
+                        # ── FIX #3: use true_skewness (not bare robust check) ──
+                        if true_skewness:
+                            insights["suggested_actions"].append(
+                                f"After capping, recommend {_transform_advice()} transformation "
+                                "to address genuine distributional skewness."
+                            )
 
-                    # Case C: High Robust Skewness, Low Outlier Ratio
-                    elif is_highly_skewed and outlier_ratio < 0.02:
-                        insights["suggested_actions"].append("Recommend transformation (Log, Yeo-Johnson, or Box-Cox). Distribution is naturally skewed (True distribution skewness).")
+                    # Case D: High robust skewness, low outlier ratio  (natural skew)
+                    elif true_skewness and outlier_ratio < 0.02:
+                        insights["suggested_actions"].append(
+                            f"Recommend {_transform_advice()} transformation. "
+                            "Distribution is genuinely skewed with few outliers."
+                        )
 
-                    # Case D: High Skewness and Moderate/High Outliers
-                    elif is_highly_skewed and has_moderate_outliers:
-                        insights["suggested_actions"].append("Suggest handling outliers (capping or review) first, then transformation. Both outliers and natural skewness are present.")
+                    # Case E: High robust skewness AND moderate/high outliers
+                    elif true_skewness and has_moderate_outliers:
+                        insights["suggested_actions"].append(
+                            f"Suggest handling outliers first, then apply {_transform_advice()} "
+                            "transformation. Both genuine skewness and outlier contamination are present."
+                        )
 
-                    # Case E: Outliers Present but Low Robust Skewness
+                    # Case F: Outliers present, but core distribution is symmetric
                     elif outlier_ratio > 0.01 and abs(robust_skewness) < 0.3:
-                        insights["suggested_actions"].append("Optional outlier capping. Core distribution is symmetric; outliers are isolated noise.")
+                        insights["suggested_actions"].append(
+                            "Optional outlier capping. Core distribution is symmetric; "
+                            "outliers appear to be isolated noise."
+                        )
 
-                    # Case F: No Significant Issues or Fallback
+                    # Case G: No significant issues
                     else:
                         if outlier_ratio < 0.01 and abs(robust_skewness) < 0.3:
                             if missing_pct == 0:
-                                insights["suggested_actions"].append("No outlier handling or transformation required. Distribution is stable.")
-                        elif is_highly_skewed: # Catch-all for skewness if other cases missed
-                            insights["suggested_actions"].append("Recommend transformation (Log, Yeo-Johnson, or Box-Cox).")
-                        elif has_moderate_outliers: # Catch-all for outliers
-                            insights["suggested_actions"].append("Recommend handling outliers (capping or review).")
+                                insights["suggested_actions"].append(
+                                    "No outlier handling or transformation required. Distribution is stable."
+                                )
+                        elif true_skewness:
+                            insights["suggested_actions"].append(
+                                f"Recommend {_transform_advice()} transformation."
+                            )
+                        elif has_moderate_outliers:
+                            insights["suggested_actions"].append(
+                                "Recommend handling outliers (capping or review)."
+                            )
 
                 # Add missing value recommendations (Common across all numeric)
                 if missing_pct > 20:
-                    insights["suggested_actions"].append("High missing values. Consider dropping column or using advanced imputation.")
+                    insights["suggested_actions"].append(
+                        "High missing values. Consider dropping column or using advanced imputation."
+                    )
                 elif missing_pct > 0:
-                    insights["suggested_actions"].append("Handle missing values using Median/Mean/Mode imputation.")
+                    insights["suggested_actions"].append(
+                        "Handle missing values using Median/Mean/Mode imputation."
+                    )
 
         else:
             # Handle Categorical Columns

@@ -80,7 +80,7 @@
           </template>
         </div>
 
-        <!-- Suggestion Alert -->
+        <!-- Suggestion Alert - Smart Action Chips -->
         <div v-if="insights.suggested_actions?.length" class="suggestion-box">
           <div class="suggestion-header">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -88,12 +88,33 @@
             </svg>
             <strong>Suggested Actions</strong>
           </div>
-          <ul class="suggestion-list">
-            <li v-for="(action, idx) in insights.suggested_actions" :key="idx">
-              {{ action }}
-            </li>
-          </ul>
-          
+          <div class="action-chips">
+            <div
+              v-for="(action, idx) in insights.suggested_actions"
+              :key="idx"
+              class="action-chip"
+              :class="categorizeAction(action).cls"
+            >
+              <span class="chip-icon">{{ categorizeAction(action).icon }}</span>
+              <div class="chip-body">
+                <span class="chip-category">{{ categorizeAction(action).label }}</span>
+                <span class="chip-text">{{ action }}</span>
+                <!-- Deeplink: only for outlier / missing -->
+                <router-link
+                  v-if="categorizeAction(action).link"
+                  :to="categorizeAction(action).link"
+                  class="chip-goto"
+                  @click="$emit('update:modelValue', false)"
+                >
+                  → Go to {{ categorizeAction(action).linkLabel }}
+                </router-link>
+                <!-- Informational note: for transforms (split-gate) -->
+                <span v-else-if="categorizeAction(action).note" class="chip-note">
+                  {{ categorizeAction(action).note }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Visualizations -->
@@ -135,11 +156,23 @@
               <span>Robust Skewness:</span> <strong :class="{ 'warning': Math.abs(insights.robust_skewness) > 0.7 }">{{ formatValue(insights.robust_skewness) }}</strong>
             </div>
             <div class="metrics-row">
-              <span>Skewness Gap:</span> <strong :title="Math.abs(insights.skewness_gap) > 1 ? 'Distortion likely' : 'Low distortion'">{{ formatValue(insights.skewness_gap) }}</strong>
+              <span>Skewness Gap:</span>
+              <strong :title="Math.abs(insights.skewness_gap) > 0.7 ? 'Gap > 0.7 — Distortion likely (outliers inflating raw skewness)' : 'Gap ≤ 0.7 — Low distortion, skewness is genuine'">
+                {{ formatValue(insights.skewness_gap) }}
+                <small v-if="Math.abs(insights.skewness_gap) > 0.7" style="color:#f87171; font-size:0.7rem; margin-left:4px;">⚠ distorted</small>
+              </strong>
             </div>
             <div class="metrics-row divider"></div>
             <div class="metrics-row">
-              <span>Outlier / Extreme Counts:</span> <strong>{{ insights.outlier_count }} / {{ insights.extreme_outlier_count }}</strong>
+              <span>Outlier / Extreme Counts:</span>
+              <strong>{{ insights.outlier_count }} / {{ insights.extreme_outlier_count }}</strong>
+            </div>
+            <div class="metrics-row" v-if="insights.zeros_pct !== undefined">
+              <span>Zeros %:</span>
+              <strong :class="{ 'warning': insights.zeros_pct > 30 }">
+                {{ formatValue(insights.zeros_pct) }}%
+                <small v-if="insights.zeros_pct > 30" style="color:#f87171; font-size:0.7rem; margin-left:4px;">zero-inflated</small>
+              </strong>
             </div>
           </div>
           <div v-else-if="insights.type === 'datetime'" class="detailed-metrics">
@@ -170,9 +203,12 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue';
+import { ref, watch, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import Chart from 'chart.js/auto';
 import { useAuthenticatedFetch } from '../composables/useAuthenticatedFetch';
+
+const router = useRouter();
 
 const props = defineProps({
   modelValue: Boolean,
@@ -264,11 +300,7 @@ const renderChart = () => {
       options: chartOptions
     });
   } else if (activeChart.value === 'boxplot' && type === 'numeric') {
-    // Basic Boxplot using bar chart hacks or better just custom drawing
-    // Chart.js doesn't have native boxplot without plugins, but we can simulate it or use a simple stats view
-    // For now, let's just stick to Histogram as the primary visual since we have the stats below.
-    // If I wanted real boxplot I'd need charjs-boxplot-plugin which might not be here.
-    // Let's implement a "Stat labels" box instead or just a message.
+    
     
     chartInstance = new Chart(ctx, {
       type: 'bar', // Fallback or placeholder
@@ -338,6 +370,38 @@ const formatValue = (val) => {
   if (typeof val !== 'number') return val;
   if (Number.isInteger(val)) return val;
   return val.toFixed(2);
+};
+
+// ── Smart action chip categorisation ─────────────────────────────────────────
+const categorizeAction = (text) => {
+
+  // ✅ Check positive / stable outcome FIRST before any keyword matching
+  // e.g. "No outlier handling or transformation required. Distribution is stable."
+  if (/stable|no outlier|no transform/i.test(text)) {
+    return { cls: 'chip-success', icon: '✅', label: 'Looks Good',      link: null, linkLabel: null, note: null };
+  }
+  // 🔴 Warning / degenerate columns
+  if (/constant|single unique|near-zero variance|iqr\s*=\s*0|carries no information/i.test(text)) {
+    return { cls: 'chip-danger',  icon: '⚠️', label: 'Warning',         link: null, linkLabel: null, note: null };
+  }
+  // 🟣 Zero-inflated
+  if (/zero.inflat|hurdle|two.part/i.test(text)) {
+    return { cls: 'chip-purple',  icon: '〰️', label: 'Distribution',    link: null, linkLabel: null, note: null };
+  }
+  // 🟠 Outlier handling → deeplink to data-preview (cleaning tools are there)
+  if (/outlier|cap(ping)?|anoma/i.test(text)) {
+    return { cls: 'chip-orange',  icon: '🎯', label: 'Outlier Handling', link: '/data-preview', linkLabel: 'Data Preview', note: null };
+  }
+  // 🔵 Transformation → no deeplink (split-gated), show note
+  if (/transform|box.cox|yeo.johnson|log(1p)?|sqrt/i.test(text)) {
+    return { cls: 'chip-indigo',  icon: '📐', label: 'Transformation',   link: null, linkLabel: null, note: 'Apply after splitting in Advanced Preprocessing' };
+  }
+  // 🟡 Missing values → deeplink to data-preview
+  if (/missing|imputation|impute|drop column/i.test(text)) {
+    return { cls: 'chip-amber',   icon: '🕳️', label: 'Missing Values',   link: '/data-preview', linkLabel: 'Data Preview', note: null };
+  }
+  // Grey fallback
+  return     { cls: 'chip-info',  icon: 'ℹ️', label: 'Info',             link: null, linkLabel: null, note: null };
 };
 
 const truncate = (str, len = 20) => {
@@ -693,4 +757,92 @@ h2 {
   margin-left: 2px;
   font-weight: 800;
 }
+
+/* ── Action Chips ─────────────────────────────────── */
+.action-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.chip-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.chip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.chip-category {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.chip-text {
+  color: #e2e8f0;
+}
+
+.chip-goto {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 3px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  width: fit-content;
+}
+
+.chip-note {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-style: italic;
+  opacity: 0.65;
+}
+
+/* Colour variants */
+.chip-orange  { background: rgba(251,146,60,0.08);  border-color: rgba(251,146,60,0.25);  color: #fb923c; }
+.chip-orange  .chip-category { color: #fb923c; }
+.chip-orange  .chip-goto     { background: rgba(251,146,60,0.15); color: #fb923c; }
+.chip-orange  .chip-goto:hover { background: rgba(251,146,60,0.3); }
+
+.chip-indigo  { background: rgba(99,102,241,0.08);  border-color: rgba(99,102,241,0.25);  color: #818cf8; }
+.chip-indigo  .chip-category { color: #818cf8; }
+
+.chip-amber   { background: rgba(251,191,36,0.08);  border-color: rgba(251,191,36,0.25);  color: #fbbf24; }
+.chip-amber   .chip-category { color: #fbbf24; }
+.chip-amber   .chip-goto     { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.chip-amber   .chip-goto:hover { background: rgba(251,191,36,0.3); }
+
+.chip-danger  { background: rgba(239,68,68,0.08);   border-color: rgba(239,68,68,0.3);    color: #f87171; }
+.chip-danger  .chip-category { color: #f87171; }
+
+.chip-purple  { background: rgba(167,139,250,0.08); border-color: rgba(167,139,250,0.25); color: #a78bfa; }
+.chip-purple  .chip-category { color: #a78bfa; }
+
+.chip-success { background: rgba(16,185,129,0.08);  border-color: rgba(16,185,129,0.25);  color: #34d399; }
+.chip-success .chip-category { color: #34d399; }
+
+.chip-info    { background: rgba(148,163,184,0.06); border-color: rgba(148,163,184,0.15); color: #94a3b8; }
+.chip-info    .chip-category { color: #94a3b8; }
 </style>
