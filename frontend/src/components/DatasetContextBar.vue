@@ -39,7 +39,7 @@
         <span class="status-dot"></span>
         <span class="status-text">{{ isDirty ? 'Status: Unsaved Changes' : 'Status: Saved ✓' }}</span>
       </div>
-      
+
       <button 
         @click="onSaveVersion" 
         class="save-btn" 
@@ -53,7 +53,7 @@
       </button>
     </div>
   </div>
-</template>
+</template> 
 
 <script setup>
 import { computed } from 'vue'

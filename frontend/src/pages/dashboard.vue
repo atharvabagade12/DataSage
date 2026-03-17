@@ -254,7 +254,7 @@
             <div class="chart-container-premium glass">
               <div class="container-header">
                 <h3>Evolution of Accuracy</h3>
-                <span class="status-indicator">Live</span>
+                <span class="status-indicator">Live</span> 
               </div>
               <div class="chart-wrapper">
                 <canvas ref="performanceChartCanvas"></canvas>

@@ -3563,20 +3563,17 @@ async def apply_target_encoding(
         if dataset_record:
             meta = dict(dataset_record.column_metadata or {})
 
-            # 🔧 FIX: Mark BOTH the original column names AND the new encoded column names as numeric.
-            # The original column may still be in the DB with semantic_type='categorical' (possibly with
-            # is_override=True), which causes get_effective_semantic_types() to return 'categorical',
-            # blocking SMOTE validation even after encoding has replaced the data with numeric values.
+            
             encoded_original_names = [col_info.name for col_info in columns_to_encode]
             for original_col in encoded_original_names:
                 meta[original_col] = {
                     "column": original_col,
                     "semantic_type": "numeric",
-                    "is_override": True,  # Force this to take priority in get_effective_semantic_types
+                    "is_override": True,  
                     "reason": "Column was target encoded — values are now numeric means"
                 }
 
-            # Also update the new encoded column names (could differ from original for multiclass)
+        
             for ec in new_encoded_cols:
                 meta[ec] = {
                     "column": ec,
@@ -3589,7 +3586,7 @@ async def apply_target_encoding(
             db.commit()
             print(f"✅ Updated DB metadata: {len(encoded_original_names)} original + {len(new_encoded_cols)} new encoded columns → numeric")
         
-        # Preview data
+        
         y_test = y_test_storage[dataset_id]
         train_preview = pd.concat([X_train.head(200), y_train.head(200)], axis=1).to_dict('records')
         test_preview = pd.concat([X_test.head(200), y_test.head(200)], axis=1).to_dict('records')
@@ -3624,9 +3621,8 @@ async def apply_categorical_encoding(
     current_user: dict = Depends(auth.get_current_user)
 ):
     """
-    Apply categorical encoding to specified columns in train and test splits.
-    Must be called AFTER dataset is split.
-    """
+    Applying categrical encoding to specified columns in train and test spliths.
+    """ 
     global X_train_storage, X_test_storage, y_train_storage, y_test_storage, categorical_encoders
     
     try:
@@ -3656,7 +3652,7 @@ async def apply_categorical_encoding(
         
         encoders_used = {}
         encoded_columns = []
-        onehot_columns = []  # Added to track only OH dummies
+        onehot_columns = []  
         
         for col_info in columns_to_encode:
             col_name = col_info.name
@@ -3683,15 +3679,14 @@ async def apply_categorical_encoding(
                 encoded_columns.append(col_name)
                 
             elif method == 'onehot':
-                # One-Hot Encoding: Creates new columns
-                # Using drop='first' to avoid dummy variable trap (multicollinearity)
+                
                 encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore', drop='first')
                 
                 # Fit on train
                 train_encoded = encoder.fit_transform(X_train[[col_name]])
                 test_encoded = encoder.transform(X_test[[col_name]])
                 
-                # Get feature names from encoder (this handles drop='first' correctly)
+                # Get feature names from encoder 
                 feature_names = encoder.get_feature_names_out([col_name]).tolist()
                 
                 # Create DataFrames for encoded columns
@@ -3741,11 +3736,7 @@ async def apply_categorical_encoding(
         X_test_storage[dataset_id] = X_test
         categorical_encoders[dataset_id] = encoders_used
         
-        # ── SYNC BASE DATAFRAME ──────────────────────────────────────────────
-        # Reconstruct the full dataset from train + test so that
-        # GET /api/datasets/{id} (used by data-preview page) always reflects
-        # the latest encoded state. Without this, data-preview shows stale
-        # pre-encoding data because it reads from datasets[id]['dataframe'].
+       
         try:
             full_X = pd.concat([X_train, X_test], axis=0).reset_index(drop=True)
             full_y = pd.concat([y_train_storage[dataset_id], y_test_storage[dataset_id]], axis=0).reset_index(drop=True)
@@ -3761,7 +3752,7 @@ async def apply_categorical_encoding(
         datasets[dataset_id]['encoded_columns'] = encoded_columns
         datasets[dataset_id]['encoders'] = list(encoders_used.keys())
         
-        # Ensure in-memory metadata is updated for immediate visibility (e.g., in /statistics)
+        
         if 'column_metadata' not in datasets[dataset_id]:
             datasets[dataset_id]['column_metadata'] = {}
             
@@ -3781,13 +3772,13 @@ async def apply_categorical_encoding(
             for ec in encoded_columns:
                 meta[ec] = datasets[dataset_id]['column_metadata'][ec]
             
-            # Use flag_modified to ensure SQLAlchemy tracks the JSON change
+           
             dataset_record.column_metadata = meta
             flag_modified(dataset_record, "column_metadata")
             db.commit()
             print(f"✅ Updated DB metadata for {len(encoded_columns)} columns and flagged as modified")
         
-        # Create preview data with encoded columns
+        
         train_preview_df = pd.concat([X_train.head(200), y_train.head(200)], axis=1)
         test_preview_df = pd.concat([X_test.head(200), y_test.head(200)], axis=1)
         
@@ -3800,7 +3791,7 @@ async def apply_categorical_encoding(
         print(f"   Encoded columns: {encoded_columns}")
         print("=" * 80 + "\n")
         
-        # Include target column in the columns list
+        
         target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
         all_columns = list(X_train.columns) + [target_col_name]
         
@@ -3913,11 +3904,7 @@ async def apply_scaling(request: ScalingRequest):
         X_test_storage[dataset_id] = X_test
         split_scalers[dataset_id] = scalers_used
         
-        # ── SYNC BASE DATAFRAME ──────────────────────────────────────────────
-        # Reconstruct the full dataset from train + test so that
-        # GET /api/datasets/{id} (used by data-preview page) always reflects
-        # the latest scaled state. Without this, data-preview shows stale
-        # pre-scaling data because it reads from datasets[id]['dataframe'].
+        
         try:
             full_X = pd.concat([X_train, X_test], axis=0).reset_index(drop=True)
             y_train_sync = y_train_storage.get(dataset_id)
