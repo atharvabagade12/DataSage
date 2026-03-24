@@ -60,11 +60,13 @@ import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMLDataFlowStore } from '~/stores/mlDataFlow'
 import { useExperimentStore } from '~/stores/experiment'
+import { useDataStore } from '~/stores/data'
 
 const router = useRouter()
 const route = useRoute()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
+const dataStore = useDataStore()
 
 // Pages where the save controls (status + save button) should be hidden
 const SAVE_HIDDEN_ROUTES = ['algorithm-select', 'model-training', 'model-visualization']
@@ -85,22 +87,28 @@ const showSaveControls = computed(() => {
 })
 
 const rowCount = computed(() => {
-  // 1. If dataset is split, use trainRows + testRows (reflects SMOTE changes)
+  // New Priority: experimentStore (Latest metadata from backend/preprocessing)
+  if (experimentStore.datasetSize?.rows) return experimentStore.datasetSize.rows
+
+  // 1. Fallback: dataStore statistics (which has the real total_rows)
+  if (dataStore.statistics?.total_rows) return dataStore.statistics.total_rows
+
+  // 2. If dataset is split, use trainRows + testRows (reflects SMOTE changes)
   if (mlStore.isSplit && mlStore.splitInfo) {
     const train = mlStore.splitInfo.trainRows || 0
     const test = mlStore.splitInfo.testRows || 0
     if (train + test > 0) return train + test
   }
 
-  // 2. Fallback: in-memory dataset array length
+  // 3. Fallback: in-memory dataset array length from mlStore
   if (mlStore.dataset && mlStore.dataset.length > 0) return mlStore.dataset.length
   
-  // 3. Fallback to registeredDatasets (if available)
+  // 4. Fallback to registeredDatasets (if available)
   const registered = mlStore.registeredDatasets[mlStore.datasetId]
   if (registered?.shape?.[0]) return registered.shape[0]
   if (registered?.row_count) return registered.row_count
   
-  // 4. Fallback to allUserDatasets (from dashboard view)
+  // 5. Fallback to allUserDatasets (from dashboard view)
   const meta = mlStore.allUserDatasets?.find(d => d.id === mlStore.datasetId || d.dataset_id === mlStore.datasetId)
   if (meta) {
     return meta.row_count || meta.rows || meta.total_rows || (meta.shape?.[0]) || 0
