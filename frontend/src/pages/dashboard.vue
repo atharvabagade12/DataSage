@@ -77,6 +77,7 @@
             </div>
           </div>
 
+          <!--------------------Quick Actions ---------------------->
           <div class="quick-actions-section">
             <h2 class="section-title">Quick Actions</h2>
             <div class="quick-actions-grid">
@@ -102,6 +103,19 @@
                   <h3>Resume Last Session</h3>
                   <p v-if="sortedDatasets.length">Continue with <strong>{{ sortedDatasets[0].name }}</strong></p>
                   <p v-else>No previous sessions found</p>
+                </div>
+              </div>
+
+              <div class="action-card" @click="showGuideModal = true">
+                <div class="action-icon guide">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                  </svg>
+                </div>
+                <div class="action-text">
+                  <h3>Ecosystem Guide</h3>
+                  <p>Master the DataSage flow</p>
                 </div>
               </div>
             </div>
@@ -437,6 +451,9 @@
 
   <!-- Sample Data Modal -->
   <SampleDataModal :show="showSampleModal" @close="showSampleModal = false" />
+  
+  <!-- Ecosystem Guide Modal -->
+  <EcosystemGuideModal :show="showGuideModal" @close="showGuideModal = false" />
 
 </template>
 
@@ -449,6 +466,7 @@ import { useToast } from '@/composables/useToast'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
 import SampleDataModal from '@/components/SampleDataModal.vue'
+import EcosystemGuideModal from '@/components/EcosystemGuideModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -482,6 +500,7 @@ let performanceChart = null
 const showDeleteModal = ref(false)
 const showLimitModal = ref(false)
 const showSampleModal = ref(false)
+const showGuideModal = ref(false)
 const datasetToDelete = ref(null)
 const isDeleting = ref(false)
 
@@ -1016,6 +1035,7 @@ onUnmounted(() => performanceChart?.destroy())
 .action-icon.upload { background: rgba(102, 126, 234, 0.1); color: #667eea; }
 .action-icon.sample { background: rgba(168, 139, 235, 0.1); color: #a88beb; }
 .action-icon.resume { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.action-icon.guide { background: rgba(129, 140, 248, 0.1); color: #818cf8; }
 
 .action-text h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
 .action-text p { margin: 4px 0 0; font-size: 0.85rem; color: #6a6a8a; }
