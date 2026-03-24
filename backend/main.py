@@ -4709,7 +4709,8 @@ class MissingValueRequest(BaseModel):
 
 class OutlierRequest(BaseModel):
     method: str  # 'cap', 'remove'
-    target_column: Union[str, Dict, None] = None
+    columns: List[str] = None
+    target_column: Union[str, Dict, None] = None 
 
 class DuplicateRequest(BaseModel):
     keep: str  # 'first', 'last', 'all'
@@ -4985,11 +4986,13 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, curren
         processor = DataPreprocessor(df, column_metadata=metadata)
         
         # Detect numeric columns for outlier handling
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        
-        # Check semantic types to verify they are actually numeric
-        if metadata:
-            numeric_cols = [c for c in numeric_cols if metadata.get(c, {}).get('semantic_type') == 'numeric']
+        if request.columns:
+            numeric_cols = [c for c in request.columns if c in df.columns]
+        else:
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            # Check semantic types to verify they are actually numeric
+            if metadata:
+                numeric_cols = [c for c in numeric_cols if metadata.get(c, {}).get('semantic_type') == 'numeric']
             
         # ✅ Identify and exclude target column
         target_column = request.target_column
@@ -5006,6 +5009,9 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, curren
         if target_column and target_column in numeric_cols:
             print(f"   Skipping target column '{target_column}' during outlier handling")
             numeric_cols.remove(target_column)
+        
+        if not numeric_cols:
+             return {"success": True, "message": "No columns to process", "current_shape": list(df.shape)}
         
         print(f"Checking outliers in {len(numeric_cols)} numeric columns using {request.method} method")
         

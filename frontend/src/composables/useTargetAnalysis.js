@@ -3,6 +3,23 @@ import { ref, computed } from 'vue';
 
 export function useTargetAnalysis() {
   
+  // Whitelist of keywords that strongly indicate a target column
+  const TARGET_KEYWORDS = [
+    "target", "label", "class", "outcome", "result", "success", "fail",
+    "status", "category", "type", "grade", "score", "rating", "price",
+    "amount", "value", "predict", "forecast", "response", "dependent",
+    "output", "y", "salary", "income", "aqi", "pm25", "pm10", "co2", 
+    "temperature", "humidity", "pressure", "valuation", "market_cap", 
+    "cost", "revenue", "profit", "premium", "total", "count", "quantity", 
+    "consumption", "level", "house_price", "house_value", "median_house_value",
+    "tenure", "exit", "attrition", "churn", "fraud", "default"
+  ];
+
+  const BUSINESS_KEYWORDS = [
+    "approved", "rejected", "conversion", "retention", "satisfaction", 
+    "quality", "performance", "efficiency", "risk", "demand", "sales", "growth"
+  ];
+
   // ============================================================================
   // HELPER FUNCTIONS - Advanced Analysis
   // ============================================================================
@@ -121,9 +138,19 @@ export function useTargetAnalysis() {
    * Calculate cardinality score based on unique values ratio
    * Helps distinguish between good categorical targets and IDs/text
    */
-  const calculateCardinalityScore = (uniqueValues, totalRows) => {
+  const calculateCardinalityScore = (uniqueValues, totalRows, type = 'categorical') => {
     const ratio = uniqueValues / totalRows;
     
+    // Numeric/Continuous values (Regression targets)
+    if (type === 'number' || type === 'numerical') {
+      // For regression, high cardinality is good!
+      if (uniqueValues > 20 && ratio < 0.95) return 95; // Excellent continuous target
+      if (uniqueValues > 20) return 60; // High cardinality, but maybe an ID (ratio > 0.95)
+      if (uniqueValues >= 2) return 40; // Low cardinality numeric is okay but better for classification
+      return 10;
+    }
+
+    // Categorical/String values (Classification targets)
     // Perfect binary (2 unique values)
     if (uniqueValues === 2) return 100;
     
@@ -184,21 +211,41 @@ export function useTargetAnalysis() {
     const namePattern = /^(id|ID|.*_id|.*_ID|key|.*_key|uuid|guid|.*_uuid|.*_guid|index|idx)$/i;
     const uniqueRatio = analysis.uniqueValues / analysis.totalRows;
     
+    // Check if semanticType is explicitly set to identifier
+    if (analysis.semanticType === 'identifier') return true;
+
+    // Check if name or semantic type suggests this is a known target, not an ID
+    const isLikelyTargetName = TARGET_KEYWORDS.some(k => analysis.name.toLowerCase().includes(k));
+    const isExplicitlyTyped = ['numeric', 'number', 'categorical', 'string', 'boolean'].includes(analysis.semanticType) || 
+                             ['numeric', 'number', 'categorical', 'string', 'boolean'].includes(analysis.type);
+
+    // If it's a numeric/categorical column and has a descriptive name or matches target keywords, 
+    // we do NOT flag it as an ID even if cardinality is high.
+    if (isExplicitlyTyped && (isLikelyTargetName || analysis.name.length > 5)) {
+        return false;
+    }
+
     // Check for UUID/GUID pattern in sample values
     const hasUUIDPattern = analysis.sampleValues?.some(val => 
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val))
     );
     
-    // Check for sequential numeric IDs
-    const isSequential = analysis.type === 'number' && uniqueRatio > 0.95;
+    // Check if the values are strictly integers
+    const allIntegers = analysis.sampleValues?.every(val => {
+        const num = parseFloat(val);
+        return !isNaN(num) && Number.isInteger(num);
+    });
+
+    // Sequential ID detection: strictly integers and very high unique ratio
+    const isSequential = analysis.type === 'number' && allIntegers && uniqueRatio > 0.95;
     
-    // Check for high cardinality (>95% unique)
-    const isHighCardinality = uniqueRatio > 0.95;
+    // High cardinality check: only flag as ID if it looks like a string ID or is integer-based
+    const isHighCardinalityID = uniqueRatio > 0.95 && (analysis.type === 'string' || allIntegers);
     
-    // Check if semanticType is explicitly set to identifier
-    if (analysis.semanticType === 'identifier') return true;
-    
-    return namePattern.test(analysis.name) || hasUUIDPattern || isSequential || isHighCardinality;
+    // If it's a numeric float with high cardinality, it's likely a measurement, not an ID
+    if (analysis.type === 'number' && !allIntegers && uniqueRatio > 0.9) return false;
+
+    return namePattern.test(analysis.name) || hasUUIDPattern || isSequential || isHighCardinalityID;
   };
 
   // ============================================================================
@@ -306,7 +353,7 @@ export function useTargetAnalysis() {
     // HELPFUL: Type suitability
     if (!analysis.isEncoded) {
       if (analysis.originalType === "numerical" || analysis.type === "number") {
-        helpfulScore += 40; // Great for regression
+        helpfulScore += 45; // Great for regression
       }
       if (analysis.originalType === "categorical" || analysis.type === "string") {
         helpfulScore += 35; // Great for classification
@@ -314,32 +361,21 @@ export function useTargetAnalysis() {
     }
 
     //  HELPFUL: Target-like names
-    const targetKeywords = [
-      "target", "label", "class", "outcome", "result", "success", "fail",
-      "status", "category", "type", "grade", "score", "rating", "price",
-      "amount", "value", "predict", "forecast", "response", "dependent",
-      "output", "y", "salary", "income", "cost", "revenue", "profit"
-    ];
-
-    if (targetKeywords.some((keyword) => analysis.name.toLowerCase().includes(keyword))) {
-      helpfulScore += 60;
+    if (TARGET_KEYWORDS.some((keyword) => analysis.name.toLowerCase().includes(keyword))) {
+      helpfulScore += 65;
     }
 
     //  HELPFUL: Business/Domain terms
-    const businessKeywords = [
-      "churn", "fraud", "default", "approved", "rejected", "conversion",
-      "retention", "satisfaction", "quality", "performance", "efficiency",
-      "risk", "demand", "sales", "growth", "attrition"
-    ];
-
-    if (businessKeywords.some((keyword) => analysis.name.toLowerCase().includes(keyword))) {
-      helpfulScore += 45;
+    if (BUSINESS_KEYWORDS.some((keyword) => analysis.name.toLowerCase().includes(keyword))) {
+      helpfulScore += 50;
     }
 
-    // ❌ HELPFUL: Underscore penalty (likely engineered features)
-    if (analysis.name.includes("_") && !analysis.isEncoded) {
-      helpfulScore -= 50;
-    }
+    // ❌ HELPFUL: Engineered feature penalty
+    const engineeringPatterns = ["_encoded", "_scaled", "_normalized", "_transformed", "_centered"];
+    if (engineeringPatterns.some(p => analysis.name.toLowerCase().includes(p))) {
+      helpfulScore -= 60;
+    } 
+    // We NO LONGER penalize generic underscores (e.g. sale_price) because many valid targets use snake_case.
 
     // ============================================================================
     // BONUS FACTORS (10% weight) - Nice extras
@@ -481,7 +517,7 @@ export function useTargetAnalysis() {
       analysis.entropy = calculateEntropy(cleanData);
 
       // Calculate cardinality score
-      analysis.cardinalityScore = calculateCardinalityScore(uniqueValues, dataset.length);
+      analysis.cardinalityScore = calculateCardinalityScore(uniqueValues, dataset.length, currentType);
 
       // Process numeric columns
       if (currentType === "numerical" || currentType === "number") {

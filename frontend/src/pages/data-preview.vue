@@ -638,8 +638,7 @@
 
 
 
-<!-- Outlier Handling Tool - SAME PATTERN -->
-            <!-- Outlier Handling Tool - REFACTORED WITH MODAL -->
+            <!-- Outlier Handling Tool -with MODAL -->
             <Card class="preprocessing-tool-card" hover>
               <div class="tool-header">
                 <div class="tool-icon">
@@ -670,68 +669,103 @@
                   Configure Handling
                 </Button>
               </div>
-            </Card>
-            
-            <!-- Outlier Handling Modal -->
-            <Modal v-model="showOutlierModal" title="Outlier Handling" size="md">
+                       <!-- Outlier Handling Modal -->
+            <Modal v-model="showOutlierModal" title="Granular Outlier Handling" size="xl">
               <div class="modal-section">
-                <Card>
-                  <div class="duplicate-info">
-                    <div class="info-stat">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="color: var(--color-warning)">
-                        <path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z" />
-                      </svg>
-                      <div>
-                        <strong>{{ outlierStats.count }} outliers detected</strong>
-                        
-                      </div>
+                <!-- Info Alert -->
+                <div class="info-alert" style="margin-bottom: 1.5rem; display: flex; gap: 1rem; background: rgba(99, 102, 241, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.2);">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#6366f1" style="flex-shrink: 0;">
+                        <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                    </svg>
+                    <div>
+                        <strong style="color: #e2e8f0; display: block; margin-bottom: 0.25rem;">Why handle outliers?</strong>
+                        <p style="color: #94a3b8; font-size: 0.875rem; margin: 0;">Outliers can significantly bias machine learning models. You can either <strong>Cap</strong> them (recommended to keep data) or <strong>Remove</strong> the entire row if the value is likely incorrect.</p>
                     </div>
-                  </div>
-                </Card>
-                
-                <div class="strategy-options">
-                  <h4>Select Handling Strategy</h4>
-                  
-                  <label class="radio-option">
-                    <input type="radio" v-model="outlierStrategy" value="cap_iqr" class="native-radio" />
-                    <div class="option-content">
-                      <strong>Cap Outliers (IQR Method) - Recommended</strong>
-                      <p>Clip extreme values using IQR bounds</p>
-                    </div>
-                  </label>
+                </div>
 
-                  
-                  <label class="radio-option">
-                    <input type="radio" v-model="outlierStrategy" value="remove" class="native-radio" />
-                    <div class="option-content">
-                      <strong>Remove Rows</strong>
-                      <p>Remove rows containing outlier values</p>
+                <!-- Global Strategy Quick-Apply -->
+                <div class="global-config" style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 0.9rem; font-weight: 600; color: #cbd5e1;">Quick Apply Strategy:</span>
+                        <select v-model="globalOutlierStrategy" class="page-size-select" style="min-width: 150px;">
+                            <option value="cap_iqr">Cap Outliers</option>
+                            <option value="remove">Remove Rows</option>
+                            <option value="keep">Keep Original</option>
+                        </select>
+                        <Button variant="ghost" size="sm" @click="applyGlobalOutlierStrategy" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Apply to All</Button>
                     </div>
-                  </label>
-                  
-                  <label class="radio-option">
-                    <input type="radio" v-model="outlierStrategy" value="keep" class="native-radio" />
-                    <div class="option-content">
-                      <strong>Keep (Do Nothing)</strong>
-                      <p>Keep outliers as they are (for analysis)</p>
+                    <div class="tool-badge" style="background: rgba(99, 102, 241, 0.2); color: #818cf8;">
+                        {{ outlierColumnsDetailed.length }} Columns Affected
                     </div>
-                  </label>
+                </div>
+
+                <!-- Column Detailed List -->
+                <div class="columns-config-list" style="max-height: 400px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="position: sticky; top: 0; background: #1e293b; z-index: 10;">
+                            <tr style="text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <th style="padding: 1rem; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase;">Column Name</th>
+                                <th style="padding: 1rem; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase;">Outliers</th>
+                                <th style="padding: 1rem; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase;">Handling Strategy</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="col in outlierColumnsDetailed" :key="col.name" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" hover>
+                                <td style="padding: 1rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <div class="column-icon numeric" style="width: 32px; height: 32px; background: rgba(99, 102, 241, 0.1); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #6366f1;">#</div>
+                                        <div>
+                                            <div style="font-weight: 600; color: #f1f5f9;">{{ col.name }}</div>
+                                            <div style="font-size: 0.7rem; color: #64748b;">{{ col.type }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="padding: 1rem;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <span style="color: #f59e0b; font-weight: 700; font-size: 1rem;">{{ col.outlierCount }}</span>
+                                        <span style="font-size: 0.7rem; color: #64748b;">extreme values</span>
+                                    </div>
+                                </td>
+                                <td style="padding: 1rem;">
+                                    <select 
+                                        :value="col.strategy"
+                                        @change="updateOutlierStrategy(col.name, $event.target.value)"
+                                        class="page-size-select"
+                                        style="width: 100%; background: rgba(15, 23, 42, 0.5);"
+                                    >
+                                        <option value="cap_iqr">Cap Outliers (IQR)</option>
+                                        <option value="remove">Remove Rows</option>
+                                        <option value="keep">Keep (No Action)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
               </div>
               
               <template #footer>
-                <Button variant="ghost" @click="showOutlierModal = false">
-                  Cancel
-                </Button>
-                <Button 
-                  variant="primary" 
-                  :loading="isProcessing"
-                  @click="applyOutlierHandling"
-                >
-                  Apply Strategy
-                </Button>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <div style="font-size: 0.85rem; color: #94a3b8;">
+                        Total detection count: <strong>{{ outlierStats.count }}</strong>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <Button variant="ghost" @click="showOutlierModal = false">
+                            Cancel
+                        </Button>
+                        <Button 
+                            variant="primary" 
+                            :loading="isProcessing"
+                            @click="applyOutlierHandling"
+                            :disabled="outlierColumnsDetailed.length === 0"
+                        >
+                            Apply Selected Strategies
+                        </Button>
+                    </div>
+                </div>
               </template>
             </Modal>
+          </Card>
 
 
 
@@ -1597,6 +1631,8 @@ const globalMissingStrategy = ref("droprows");
 
 // Outliers
 const outlierStats = ref({ count: 0, columns: 0 });
+const outlierColumnsDetailed = ref([]);
+const globalOutlierStrategy = ref("cap_iqr");
 const outlierStrategy = ref("cap_iqr");
 
 // Duplicates
@@ -1843,6 +1879,22 @@ const analyzeDataQuality = () => {
                 strategy: currentSType === 'identifier' ? 'droprows' : (currentSType === 'numeric' ? 'fillmean' : 'fillmode')
             };
         });
+
+    // Populate outlierColumnsDetailed for modal
+    outlierColumnsDetailed.value = columns.value
+        .filter(c => {
+            if (!dataStats.value?.column_stats) return false;
+            const stat = dataStats.value.column_stats.find(s => s.name === c.name);
+            return (stat?.detailed_metrics?.outliers_count || 0) > 0;
+        })
+        .map(c => {
+            const stat = dataStats.value.column_stats.find(s => s.name === c.name);
+            return {
+                ...c,
+                outlierCount: stat.detailed_metrics.outliers_count,
+                strategy: 'cap_iqr'
+            };
+        });
 };
 
 // --- Actions ---
@@ -2039,27 +2091,35 @@ const applyMissingStrategies = async () => {
 
 // OUTLIERS
 const applyOutlierHandling = async () => {
-    // If 'keep', just close modal (do nothing)
-    if (outlierStrategy.value === 'keep') {
-        showOutlierModal.value = false;
-        return;
-    }
-
     isProcessing.value = true;
+    processingMessage.value = "Handling outliers...";
     try {
-        await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/outliers`, {
-             method: outlierStrategy.value,
-             target_column: experimentStore.targetColumn
+        // Group columns by strategy
+        const groups = {};
+        outlierColumnsDetailed.value.forEach(c => {
+            if (c.strategy === 'keep') return; // Skip
+            if (!groups[c.strategy]) groups[c.strategy] = [];
+            groups[c.strategy].push(c.name);
         });
+
+        // Execute API calls for each group
+        for (const [strategy, cols] of Object.entries(groups)) {
+            await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/outliers`, {
+                 method: strategy, // Backend uses 'method' for strategy
+                 columns: cols,
+                 target_column: experimentStore.targetColumn
+            });
+        }
+
         await dataStore.loadData(datasetId.value, true);
         processColumns();
         analyzeDataQuality();
 
-        // Sync with Experiment Store
-        experimentStore.setOutliersApplied(true);
+        // Sync with Experiment Store - Removed to keep tool active if outliers remain
+        // experimentStore.setOutliersApplied(true);
 
         showOutlierModal.value = false;
-        showSuccess("Outliers Processed", `Outliers handled using ${outlierStrategy.value} method.`);
+        showSuccess("Outliers Processed", "Outlier handling applied to selected columns.");
         mlStore.isDirty = true;
         insightsRefreshKey.value++;
     } catch (e) {
@@ -2297,6 +2357,17 @@ const saveSemanticOverrides = async () => {
 const updateMissingStrategy = (name, strategy) => {
     const col = missingColumnsDetailed.value.find(c => c.name === name);
     if(col) col.strategy = strategy;
+};
+
+const updateOutlierStrategy = (name, strategy) => {
+    const col = outlierColumnsDetailed.value.find(c => c.name === name);
+    if(col) col.strategy = strategy;
+};
+
+const applyGlobalOutlierStrategy = () => {
+    outlierColumnsDetailed.value.forEach(c => {
+        c.strategy = globalOutlierStrategy.value;
+    });
 };
 
 // --- DateTime Warning Helpers ---

@@ -3,7 +3,7 @@
     <GlobalNavbar v-if="showGlobalNavbar" />
     <DatasetContextBar v-if="showContextBar" @save-version="openSaveModal" />
     
-    <main class="content-area">
+    <main class="content-area"> 
       <slot />
     </main>
 

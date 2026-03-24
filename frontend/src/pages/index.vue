@@ -331,7 +331,7 @@
         </div>
   
         <div class="footer-bottom">
-          <p>&copy; 2025–2026 DataSage. Built with ❤️ as a student project.</p>
+          <p>&copy; 2025–2026 DataSage. Built with ❤️</p>
         </div>
       </footer>
   
