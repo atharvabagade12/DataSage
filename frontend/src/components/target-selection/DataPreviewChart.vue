@@ -17,21 +17,16 @@
           <template v-if="selectedColumn && (selectedColumn.originalType === 'number' || selectedColumn.originalType === 'numerical')">
             <option value="histogram">📊 Histogram</option>
             <option value="box">📦 Box Plot</option>
-            <option value="line">📈 Distribution Curve</option>
             <option value="scatter">🔵 Scatter Plot</option>
-            <option value="violin">🎻 Violin Plot</option>
           </template>
 
           <template v-else-if="selectedColumn && (selectedColumn.originalType === 'string' || selectedColumn.originalType === 'categorical' || selectedColumn.originalType === 'boolean')">
-            <option value="doughnut">🍩 Value Distribution</option>
             <option value="bar">📊 Bar Chart</option>
             <option value="pie">🥧 Pie Chart</option>
-            <option value="treemap">🗂️ Treemap View</option>
           </template>
 
           <template v-else>
             <option value="bar">📊 Bar Chart</option>
-            <option value="pie">🥧 Pie Chart</option>
           </template>
         </select>
 
@@ -73,106 +68,7 @@
           ></canvas>
         </div>
 
-        <!-- ENHANCED CHART INSIGHTS -->
-        <div v-if="!isLoadingChart" class="chart-insights">
-          <div class="insight-cards">
-            <!-- NUMERICAL METRICS -->
-            <template v-if="selectedColumn.metrics && (selectedColumn.originalType === 'number' || selectedColumn.originalType === 'numerical')">
-              <div class="insight-card">
-                <span class="insight-label">Mean</span>
-                <span class="insight-value">{{ selectedColumn.metrics.mean.toFixed(2) }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Median</span>
-                <span class="insight-value">{{ selectedColumn.metrics.median.toFixed(2) }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Range</span>
-                <span class="insight-value">{{ selectedColumn.metrics.min !== undefined ? `${selectedColumn.metrics.min.toFixed(1)} - ${selectedColumn.metrics.max.toFixed(1)}` : selectedColumn.metrics.range.toFixed(2) }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Skewness</span>
-                <span class="insight-value">{{ selectedColumn.metrics.skewness.toFixed(2) }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Outliers</span>
-                <span class="insight-value">{{ getOutlierCount() }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Completeness</span>
-                <span class="insight-value">{{ getCompletenessPercentage() }}%</span>
-                <span class="insight-badge full">FULL DATASET</span>
-              </div>
-            </template>
-
-            <!-- CATEGORICAL METRICS -->
-            <template v-else-if="selectedColumn.metrics && (selectedColumn.originalType === 'string' || selectedColumn.originalType === 'categorical')">
-              <div class="insight-card">
-                <span class="insight-label">Classes</span>
-                <span class="insight-value">{{ selectedColumn.metrics.class_count }}</span>
-              </div>
-              <div class="insight-card" v-if="selectedColumn.metrics.majority_class">
-                <span class="insight-label">Majority</span>
-                <span class="insight-value" :title="selectedColumn.metrics.majority_class.name">
-                    {{ selectedColumn.metrics.majority_class.percent }}%
-                </span>
-                <span class="insight-sub">{{ getTruncatedName(selectedColumn.metrics.majority_class.name) }}</span>
-              </div>
-              <div class="insight-card" v-if="selectedColumn.metrics.minority_class">
-                <span class="insight-label">Minority</span>
-                <span class="insight-value" :title="selectedColumn.metrics.minority_class.name">
-                    {{ selectedColumn.metrics.minority_class.percent }}%
-                </span>
-                <span class="insight-sub">{{ getTruncatedName(selectedColumn.metrics.minority_class.name) }}</span>
-              </div>
-              <div class="insight-card" :title="getImbalanceTooltip(selectedColumn.metrics.imbalance_ratio)">
-                <span class="insight-label">Imbalance ℹ️</span>
-                <span class="insight-value">{{ formatImbalance(selectedColumn.metrics.imbalance_ratio) }}</span>
-              </div>
-              <div class="insight-card">
-                 <span class="insight-label">Completeness</span>
-                 <span class="insight-value">{{ getCompletenessPercentage() }}%</span>
-                 <span class="insight-badge full">FULL DATASET</span>
-              </div>
-            </template>
-
-            <template v-else>
-              <div class="insight-card">
-                <span class="insight-label">Distribution</span>
-                <span class="insight-value">{{ getDistributionType() }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Outliers</span>
-                <span class="insight-value">{{ getOutlierCount() }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Skewness</span>
-                <span class="insight-value">{{ getSkewness() }}</span>
-              </div>
-              <div class="insight-card">
-                <span class="insight-label">Completeness</span>
-                <span class="insight-value"
-                  >{{ getCompletenessPercentage() }}%</span
-                >
-                <span class="insight-badge sampled">SAMPLED</span>
-              </div>
-            </template>
-          </div>
-
-          <!-- ENCODING INFORMATION -->
-          <div
-            v-if="selectedColumn.encoding && selectedColumn.encoding !== 'none'"
-            class="encoding-info"
-          >
-            <h4>🔄 Data Encoding Applied</h4>
-            <div class="encoding-details">
-              <p>
-                <strong>Type:</strong>
-                {{ selectedColumn.encoding }}
-              </p>
-            </div>
-          </div>
-        </div>
+        <div v-show="false"></div> <!-- Placeholder to keep structure if needed, or just remove -->
       </div>
     </div>
   </main>
@@ -215,7 +111,7 @@ watch(() => props.selectedColumn, async (newColumn, oldColumn) => {
   } else if (newColumn.originalType === "date") {
     chartType.value = "bar"; // Dates don't have a special chart in this component yet
   } else {
-    chartType.value = "doughnut";
+    chartType.value = "bar";
   }
   
   console.log("📊 Chart update triggered for:", newColumn.name);
@@ -238,8 +134,6 @@ const getChartTypeName = () => {
     histogram: "Histogram",
     box: "Box Plot",
     scatter: "Scatter Plot",
-    line: "Distribution Curve",
-    doughnut: "Doughnut Chart",
     bar: "Bar Chart",
     pie: "Pie Chart",
   };
@@ -252,62 +146,9 @@ const isFullDatasetChart = () => {
   return !!props.selectedColumn.distribution;
 };
 
-const getDistributionType = () => {
-  if (!props.selectedColumn) return "Unknown";
-
-  if (props.selectedColumn.originalType === "number" || props.selectedColumn.originalType === "numerical") {
-    if (props.selectedColumn.encoding === "binary") return "Binary";
-    if (props.selectedColumn.encoding === "ordinal") return "Ordinal";
-    const uniqueRatio =
-      props.selectedColumn.uniqueValues / props.dataset.length;
-    return uniqueRatio > 0.8 ? "Continuous" : "Discrete";
-  }
-
-  const count = props.selectedColumn.uniqueValues;
-  if (count <= 2) return "Binary";
-  if (count <= 10) return "Categorical";
-  return "High Cardinality";
-};
-
-const getOutlierCount = () => {
-  if (!props.selectedColumn || (props.selectedColumn.originalType !== "number" && props.selectedColumn.originalType !== "numerical"))
-    return "N/A";
-  return props.selectedColumn.outliers || 0;
-};
-
-const getSkewness = () => {
-  if (!props.selectedColumn?.statistics) return "N/A";
-  const { mean, median } = props.selectedColumn.statistics;
-  if (Math.abs(mean - median) < 0.1) return "Normal";
-  return mean > median ? "Right Skewed" : "Left Skewed";
-};
-
-const getCompletenessPercentage = () => {
-  return props.selectedColumn
-    ? Math.round(100 - props.selectedColumn.missingPercent)
-    : 0;
-};
-
 const getTruncatedName = (name) => {
     if (!name) return "";
-    return String(name).length > 10 ? String(name).substring(0, 10) + "..." : String(name);
-};
-
-const formatImbalance = (ratio) => {
-  if (!ratio || ratio === Infinity) return "N/A";
-  // Format as "X:1"
-  return `${Number(ratio).toFixed(0)}:1`;
-};
-
-const getImbalanceTooltip = (ratio) => {
-  if (!ratio) return "";
-  const r = Number(ratio);
-  let status = "";
-  if (r < 1.5) status = "Balanced";
-  else if (r < 3.0) status = "Mild Imbalance";
-  else status = "Severe Imbalance 🚨";
-  
-  return `Ratio: ${r.toFixed(2)}:1\nStatus: ${status}\n\nReference:\n< 1.5: Balanced\n1.5 - 3.0: Mild Imbalance\n> 3.0: Severe Imbalance`;
+    return String(name).length > 20 ? String(name).substring(0, 20) + "..." : String(name);
 };
 
 // ============= CHART GENERATION =============
@@ -403,15 +244,6 @@ const generateNumericChart = async (Chart, ctx, data) => {
       // Scatter plot still requires raw data points, so use sample
       await createScatterChart(Chart, ctx, data);
       break;
-    case "line":
-       // Distribution curve
-       if (useBackend && distribution.histogram) {
-          // Approximate curve from histogram
-           await createBackendHistogramChart(Chart, ctx, distribution.histogram); // Fallback to histogram for now or implement curve approx
-       } else {
-          await createLineChart(Chart, ctx, data);
-       }
-      break;
     default:
       if (useBackend && distribution.histogram) {
         await createBackendHistogramChart(Chart, ctx, distribution.histogram);
@@ -440,14 +272,14 @@ const generateCategoricalChart = async (Chart, ctx, data) => {
   }
 
   switch (chartType.value) {
-    case "doughnut":
-      await createDoughnutChart(Chart, ctx, entries);
-      break;
     case "bar":
       await createBarChart(Chart, ctx, entries);
       break;
+    case "pie":
+      await createPieChart(Chart, ctx, entries);
+      break;
     default:
-      await createDoughnutChart(Chart, ctx, entries);
+      await createBarChart(Chart, ctx, entries);
   }
 };
 
@@ -554,9 +386,9 @@ const createBoxPlotChart = async (Chart, ctx, data) => {
   });
 };
 
-const createDoughnutChart = async (Chart, ctx, entries) => {
+const createPieChart = async (Chart, ctx, entries) => {
   chartInstance.value = new Chart(ctx, {
-    type: "doughnut",
+    type: "pie",
     data: {
       labels: entries.map(([name]) =>
         String(name).length > 20 ? String(name).substring(0, 20) + "..." : String(name)
@@ -566,7 +398,6 @@ const createDoughnutChart = async (Chart, ctx, entries) => {
           data: entries.map(([, count]) => count),
           backgroundColor: generateColors(entries.length),
           borderWidth: 2,
-          cutout: "60%",
         },
       ],
     },
@@ -638,72 +469,6 @@ const createScatterChart = async (Chart, ctx, data) => {
   });
 };
 
-const createLineChart = async (Chart, ctx, data) => {
-  // Sort data for distribution curve
-  const sorted = [...data].sort((a, b) => a - b);
-  
-  chartInstance.value = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: sorted.map((_, i) => i),
-      datasets: [
-        {
-          label: "Distribution Curve",
-          data: sorted,
-          borderColor: "rgba(102, 126, 234, 1)",
-          backgroundColor: "rgba(102, 126, 234, 0.1)",
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          borderWidth: 2,
-        },
-      ],
-    },
-    options: {
-      ...getChartOptions(`Distribution Curve (${isFullDatasetChart() ? "Full Dataset" : "Sampled"})`),
-      scales: {
-        ...getChartOptions("Distribution Curve").scales,
-        x: {
-          ...getChartOptions("Distribution Curve").scales.x,
-          title: {
-            display: true,
-            text: "Sorted Index",
-            color: "rgba(255, 255, 255, 0.8)",
-          },
-        },
-        y: {
-          ...getChartOptions("Distribution Curve").scales.y,
-          title: {
-            display: true,
-            text: "Value",
-            color: "rgba(255, 255, 255, 0.8)",
-          },
-        },
-      },
-    },
-  });
-};
-
-const getChartOptions = (title) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  scales: {
-    y: {
-      beginAtZero: true,
-      grid: { color: "rgba(255, 255, 255, 0.1)" },
-      ticks: { color: "rgba(255, 255, 255, 0.8)" },
-    },
-    x: {
-      grid: { color: "rgba(255, 255, 255, 0.1)" },
-      ticks: { color: "rgba(255, 255, 255, 0.8)" },
-    },
-  },
-  plugins: {
-    legend: { labels: { color: "rgba(255, 255, 255, 0.8)" } },
-    title: { display: true, text: title, color: "rgba(255, 255, 255, 0.9)" },
-  },
-});
-
 const getPieChartOptions = (title) => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -733,6 +498,26 @@ const generateColors = (count) => {
     .fill()
     .map((_, i) => colors[i % colors.length]);
 };
+
+const getChartOptions = (title) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: {
+      beginAtZero: true,
+      grid: { color: "rgba(255, 255, 255, 0.1)" },
+      ticks: { color: "rgba(255, 255, 255, 0.8)" },
+    },
+    x: {
+      grid: { color: "rgba(255, 255, 255, 0.1)" },
+      ticks: { color: "rgba(255, 255, 255, 0.8)" },
+    },
+  },
+  plugins: {
+    legend: { labels: { color: "rgba(255, 255, 255, 0.8)" } },
+    title: { display: true, text: title, color: "rgba(255, 255, 255, 0.9)" },
+  },
+});
 
 const generateHistogramBins = (numbers, binCount) => {
   const min = Math.min(...numbers);
@@ -803,6 +588,11 @@ onBeforeUnmount(() => {
   color: #ffffff;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.chart-selector option {
+  color: #000000;
+  background: #ffffff;
 }
 
 .chart-container {
@@ -924,38 +714,6 @@ onBeforeUnmount(() => {
   max-height: 100%;
 }
 
-.chart-insights {
-  margin-top: auto;
-}
-
-.insight-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-}
-
-.insight-card {
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  border-radius: 8px;
-  padding: 1rem;
-  text-align: center;
-}
-
-.insight-label {
-  display: block;
-  font-size: 0.75rem;
-  color: #b3b3d1;
-  margin-bottom: 0.25rem;
-}
-
-.insight-value {
-  display: block;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #ffffff;
-}
-
 .encoding-badge {
   background: rgba(139, 92, 246, 0.2);
   color: #a78bfa;
@@ -965,25 +723,5 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.encoding-info {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: rgba(139, 92, 246, 0.1);
-  border-radius: 8px;
-  border: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-.encoding-info h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.875rem;
-  color: #a78bfa;
-}
-
-.encoding-details p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #d8b4fe;
 }
 </style>
