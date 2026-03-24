@@ -13,3 +13,7 @@ DEBUG=True
 
 # Frontend URL
 FRONTEND_URL=https://datasage-ui.vercel.app 
+
+# Dataset Management & Resource Limits
+DATASET_TTL_MINUTES=30
+MAX_SAVED_VERSIONS=5

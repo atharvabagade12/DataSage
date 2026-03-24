@@ -36,7 +36,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", 
 # Password hashing
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
-# OAuth2 scheme
+# OAuth2 scheme 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/token")
 
 # Router

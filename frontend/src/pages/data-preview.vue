@@ -1382,20 +1382,7 @@
       </div>
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.75rem;">
-          <Button
-            v-if="pendingRoute"
-            variant="ghost"
-            @click="leaveWithoutSaving"
-            style="color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; background: rgba(248, 113, 113, 0.08); white-space: nowrap;"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px; flex-shrink: 0;">
-              <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
-            </svg>
-            Leave Without Saving
-          </Button>
-          <div v-else></div>
           <div style="display: flex; gap: 0.75rem; flex-shrink: 0;">
-            <Button variant="ghost" @click="showVersionModal = false; pendingRoute = null" style="padding: 0.5rem 1.25rem;">Cancel</Button>
             <Button
               variant="primary"
               :loading="isProcessing"
@@ -1408,7 +1395,21 @@
               </svg>
               Save Version
             </Button>
+            <Button variant="ghost" @click="showVersionModal = false; pendingRoute = null" style="padding: 0.5rem 1.25rem;">Cancel</Button>
           </div>
+          
+          <Button
+            v-if="pendingRoute"
+            variant="ghost"
+            @click="leaveWithoutSaving"
+            style="color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; background: rgba(248, 113, 113, 0.08); white-space: nowrap;"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px; flex-shrink: 0;">
+              <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
+            </svg>
+            Proceed without saving
+          </Button>
+          <div v-else></div>
         </div>
       </template>
     </Modal>
@@ -1496,13 +1497,16 @@ const pendingRoute = ref(null);
 
 onBeforeRouteLeave((to, _from, next) => {
   const leavingPipeline = !PIPELINE_ROUTES.includes(to.name);
-  if (leavingPipeline && mlStore.isDirty) {
+  
+  if (mlStore.isDirty) {
+    // Unsaved changes detected — prompt to save before navigating anywhere
     pendingRoute.value = to.fullPath;
     const now = new Date();
     newVersionName.value = `${(fileName.value || 'dataset').split('.')[0]}_v${now.getHours()}${now.getMinutes()}`;
     showVersionModal.value = true;
     next(false);
   } else if (leavingPipeline) {
+    // Clear session when leaving the pipeline
     experimentStore.clearAll();
     dataStore.clearData();
     next();
@@ -1530,6 +1534,13 @@ const handleSaveVersion = async () => {
         if (pendingRoute.value) {
           const target = pendingRoute.value;
           pendingRoute.value = null;
+          
+          const leavingPipeline = !PIPELINE_ROUTES.includes(router.resolve(target)?.name);
+          if (leavingPipeline) {
+            experimentStore.clearAll();
+            dataStore.clearData();
+          }
+          
           router.push(target);
         }
     } catch (err) {
@@ -1547,6 +1558,12 @@ const leaveWithoutSaving = () => {
   
   const target = pendingRoute.value;
   pendingRoute.value = null;
+  
+  const leavingPipeline = !PIPELINE_ROUTES.includes(router.resolve(target)?.name);
+  if (leavingPipeline) {
+    experimentStore.clearAll();
+    dataStore.clearData();
+  }
   
   if (target) router.push(target);
 };

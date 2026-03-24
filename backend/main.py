@@ -74,7 +74,7 @@ from missing_value_markers import MISSING_VALUE_MARKERS
 # ===== DATABASE & STORAGE =====
 from database import get_db, engine
 from models import Dataset as DatasetModel, Model as ModelModel
-from services.file_service import FileService
+from services.file_service import FileService, DatasetMemoryManager
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from fastapi import Depends
@@ -156,7 +156,12 @@ except ImportError as e:
     print(f"Auth router not available: {e}")
 
 # ===== SINGLE SOURCE OF TRUTH: GLOBAL STORAGE =====
-datasets: Dict[str, Dict[str, Any]] = {}  # { dataset_id: { 'dataframe': df, 'metadata': {...} } }
+# datasets is now a DatasetMemoryManager — a dict-compatible wrapper with TTL
+# eviction. All existing datasets[id] / `id in datasets` / del datasets[id]
+# code continues to work with zero changes at those call sites.
+_DATASET_TTL = int(os.getenv("DATASET_TTL_MINUTES", "30"))
+datasets = DatasetMemoryManager(ttl_minutes=_DATASET_TTL)
+
 trained_models: Dict[str, Dict[str, Any]] = {}
 scalers: Dict[str, Any] = {}
 X_train_storage: Dict[str, Any] = {}
@@ -1118,12 +1123,30 @@ async def get_visualization_data(model_id: str):
 # ===== API ENDPOINTS =====
 
 
+# ===== BACKGROUND EVICTION TASK =====
+@app.on_event("startup")
+async def start_eviction_task():
+    """Periodically evict datasets that haven't been accessed within the TTL window."""
+    async def _eviction_loop():
+        while True:
+            await asyncio.sleep(10 * 60)  # run every 10 minutes
+            try:
+                evicted = datasets.evict_stale()
+                if evicted:
+                    print(f"♻️  [MemoryManager] Evicted {evicted} stale dataset(s) from RAM")
+            except Exception as ev_err:
+                print(f"⚠️  [MemoryManager] Eviction error: {ev_err}")
+    asyncio.create_task(_eviction_loop())
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check with detailed status"""
     try:
         import sklearn
         
+        disk_stats = file_service.get_storage_stats()
+        memory_stats = datasets.stats()
         return {
             "status": "healthy",
             "message": "DataSage ML Backend Running",
@@ -1148,6 +1171,8 @@ async def health_check():
                 "trained_models": len(trained_models),
                 "active_scalers": len(scalers)
             },
+            "memory": memory_stats,
+            "disk": disk_stats,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -4759,16 +4784,36 @@ async def save_dataset_version(
         user_id = current_user['id']
         version_name = request.version_name
         
-        # 1. Save to disk
-        file_path = file_service.save_dataframe(df, user_id, version_name, is_processed=True)
-        
-        # 2. Fetch parent ID
+        # 1. Fetch parent ID
         try:
             parent_id = int(dataset_id)
         except:
             parent_id = None
+
+        # 2. Enforce Saved Version Cap (Disk Control)
+        if parent_id is not None:
+            MAX_VERSIONS = int(os.getenv("MAX_SAVED_VERSIONS", "5"))
+            existing_versions = db.query(DatasetModel).filter(
+                DatasetModel.parent_dataset_id == parent_id,
+                DatasetModel.user_id == user_id
+            ).order_by(DatasetModel.upload_date.asc()).all()
+            
+            # If at limit, delete the oldest version(s) to make room
+            while len(existing_versions) >= MAX_VERSIONS:
+                oldest = existing_versions.pop(0)
+                if oldest.storage_path and os.path.exists(oldest.storage_path):
+                    try:
+                        os.remove(oldest.storage_path)
+                    except Exception as e:
+                        print(f"⚠️  Error removing oldest version file: {e}")
+                db.delete(oldest)
+                db.flush()
+                print(f"🗑️  Removed oldest version '{oldest.name}' to enforce {MAX_VERSIONS}-version cap")
+                
+        # 3. Save to disk
+        file_path = file_service.save_dataframe(df, user_id, version_name, is_processed=True)
         
-        # 3. Create DB Record
+        # 4. Create DB Record
         new_dataset = DatasetModel(
             user_id=user_id,
             name=version_name,
