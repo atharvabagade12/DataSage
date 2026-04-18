@@ -332,13 +332,81 @@
             <canvas id="importanceChart"></canvas>
           </div>
         </div>
+
+        <!-- ===== SHAP EXPLAINABILITY ===== -->
+        <div class="vis-section full-width shap-section">
+          <div class="section-info">
+            <div class="shap-header-row">
+              <div>
+                <h3>SHAP Explainability <span class="shap-badge">XAI</span></h3>
+                <p class="description">SHapley Additive exPlanations — the gold standard for understanding <em>why</em> a model made each prediction.</p>
+              </div>
+              <!-- Tab Switcher -->
+              <div class="shap-tabs" v-if="plotData.shap">
+                <button
+                  class="shap-tab-btn"
+                  :class="{ active: activeShapTab === 'beeswarm' }"
+                  @click="activeShapTab = 'beeswarm'"
+                  id="shap-tab-beeswarm"
+                >Beeswarm Plot</button>
+                <button
+                  class="shap-tab-btn"
+                  :class="{ active: activeShapTab === 'bar' }"
+                  @click="activeShapTab = 'bar'"
+                  id="shap-tab-bar"
+                >Mean |SHAP|</button>
+              </div>
+            </div>
+            <div class="instructional-box" v-if="plotData.shap">
+              <p class="howto" v-if="activeShapTab === 'beeswarm'">
+                <strong>Beeswarm Plot:</strong> Each dot = one prediction in your data. The X-axis is the SHAP value (positive = pushed prediction <em>up</em>, negative = pushed it <em>down</em>). Color shows the original feature value — <span style="color:#ef4444">red = high</span>, <span style="color:#6366f1">blue = low</span>.
+              </p>
+              <p class="howto" v-else>
+                <strong>Mean |SHAP| Bar Chart:</strong> The average absolute impact of each feature across all predictions. This is model-agnostic ground truth — derived mathematically from game theory, not from impurity or coefficients.
+              </p>
+            </div>
+          </div>
+
+          <!-- No SHAP Data Fallback -->
+          <div class="shap-unavailable" v-if="!plotData.shap">
+            <span class="shap-unavail-icon">🔬</span>
+            <h4>SHAP data not available for this model</h4>
+            <p>Retrain your model to generate SHAP explainability values. SHAP is computed automatically for all newly trained models.</p>
+          </div>
+
+          <!-- SHAP Charts -->
+          <template v-if="plotData.shap">
+            <!-- Beeswarm Tab -->
+            <div v-show="activeShapTab === 'beeswarm'">
+              <div class="shap-legend">
+                <span class="legend-label">Feature Value</span>
+                <div class="legend-gradient"></div>
+                <span class="legend-high">High</span>
+                <span class="legend-low">Low</span>
+              </div>
+              <div class="chart-wrapper shap-chart">
+                <canvas id="shapBeeswarmChart"></canvas>
+              </div>
+              <p class="shap-sample-note">Based on {{ plotData.shap.n_samples }} samples · Top {{ Math.min(15, plotData.shap.feature_names.length) }} features by impact</p>
+            </div>
+
+            <!-- Bar Tab -->
+            <div v-show="activeShapTab === 'bar'">
+              <div class="chart-wrapper shap-chart">
+                <canvas id="shapBarChart"></canvas>
+              </div>
+              <p class="shap-sample-note">Mean absolute SHAP value — higher = more influential across all predictions</p>
+            </div>
+          </template>
+        </div>
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { useAuthenticatedFetch } from '@/composables/useAuthenticatedFetch';
 import { useExperimentStore } from '@/stores/experiment';
@@ -356,6 +424,9 @@ const insights = ref([]);
 const classes = ref([]);
 const confusionMatrix = ref([]);
 
+// Active SHAP tab
+const activeShapTab = ref('beeswarm');
+
 // Chart instances
 let actualVsPredChart = null;
 let residualsChart = null;
@@ -363,6 +434,8 @@ let errorDistChart = null;
 let rocChart = null;
 let prChart = null;
 let importanceChart = null;
+let shapBeeswarmChart = null;
+let shapBarChart = null;
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatNumber = (num) => new Intl.NumberFormat().format(num);
@@ -396,33 +469,58 @@ const fetchVisualizationData = async () => {
     return;
   }
   
+  let data = null;
   try {
     const { authenticatedGet } = useAuthenticatedFetch();
     const response = await authenticatedGet(`/api/get-visualization-data/${modelId}`);
-    const data = await response.json();
-    
-    if (data.success) {
-      modelSummary.value = data.model_summary;
-      plotData.value = data.plot_data;
-      insights.value = data.insights;
-      
-      if (modelSummary.value.problem_type === 'classification') {
-        processClassificationData();
-      }
-      
+
+    // Handle non-2xx HTTP responses before parsing JSON
+    if (!response.ok) {
+      let detail = `Server error: ${response.status}`;
+      try {
+        const errBody = await response.json();
+        detail = errBody.detail || errBody.message || detail;
+      } catch (_) {}
+      error.value = detail;
       loading.value = false;
-      
-      // Allow DOM to update before initializing charts
-      await nextTick();
-      initCharts();
-    } else {
-      error.value = data.message || "Failed to load visualization data.";
-      loading.value = false;
+      return;
     }
+
+    data = await response.json();
   } catch (err) {
-    console.error("Fetch error:", err);
-    error.value = "Connection error. Please ensure the backend is running.";
+    console.error("Network/parse error:", err);
+    error.value = `Network error: ${err.message || "Could not reach the backend."}`;
     loading.value = false;
+    return;
+  }
+
+  if (!data.success) {
+    error.value = data.message || "No visualization data available for this model. The model may need to be retrained.";
+    loading.value = false;
+    return;
+  }
+
+  modelSummary.value = data.model_summary;
+  plotData.value = data.plot_data;
+  insights.value = data.insights;
+
+  if (modelSummary.value.problem_type === 'classification') {
+    try {
+      processClassificationData();
+    } catch (e) {
+      console.error("Error processing classification data:", e);
+    }
+  }
+
+  loading.value = false;
+
+  // Allow DOM to update before initializing charts
+  await nextTick();
+  try {
+    initCharts();
+  } catch (e) {
+    console.error("Chart initialization error:", e);
+    // Charts failed but data is shown — non-fatal
   }
 };
 
@@ -468,6 +566,9 @@ const initCharts = () => {
   
   if (plotData.value.feature_importance) {
     initImportanceChart();
+  }
+  if (plotData.value.shap) {
+    initSHAPCharts();
   }
 };
 
@@ -1102,12 +1203,218 @@ onBeforeRouteLeave((to, _from, next) => {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Re-render SHAP charts when tab changes (canvas may have been hidden)
+watch(activeShapTab, async (newTab) => {
+  await nextTick();
+  if (!plotData.value.shap) return;
+  if (newTab === 'beeswarm') {
+    if (shapBeeswarmChart) { shapBeeswarmChart.destroy(); shapBeeswarmChart = null; }
+    initShapBeeswarm(plotData.value.shap);
+  } else {
+    if (shapBarChart) { shapBarChart.destroy(); shapBarChart = null; }
+    initShapBar(plotData.value.shap);
+  }
+});
+
+// ===== SHAP CHART INITIALIZERS =====
+
+const initSHAPCharts = () => {
+  const shap = plotData.value.shap;
+  if (!shap) return;
+  initShapBeeswarm(shap);
+  initShapBar(shap);
+};
+
+/**
+ * Builds a beeswarm-style scatter chart.
+ * X = SHAP value, Y = feature rank (with jitter), color = feature value (blue-red)
+ */
+const initShapBeeswarm = (shap) => {
+  const { mean_abs_shap, feature_names, shap_matrix, X_sample } = shap;
+  if (!shap_matrix || !shap_matrix.length) return;
+
+  // Pick top N features by mean |SHAP|
+  const TOP_N = Math.min(15, feature_names.length);
+  const indexed = mean_abs_shap.map((v, i) => ({ i, v })).sort((a, b) => b.v - a.v);
+  const topIdx = indexed.slice(0, TOP_N).map(x => x.i);
+  // Reverse so highest is at top of chart (Chart.js y goes bottom-up)
+  const orderedIdx = [...topIdx].reverse();
+  const featureLabels = orderedIdx.map(i => feature_names[i] || `f${i}`);
+
+  // For each top feature, build scatter points
+  const datasets = [];
+  const nSamples = shap_matrix.length;
+
+  // Precompute per-feature min/max of raw values for color scaling
+  const featureStats = topIdx.map(fi => {
+    const vals = X_sample.map(row => row[fi] ?? 0);
+    const mn = Math.min(...vals);
+    const mx = Math.max(...vals);
+    return { mn, mx };
+  });
+
+  // One dataset per feature so we can color by feature value
+  orderedIdx.forEach((fi, rankInChart) => {
+    const statIdx = topIdx.indexOf(fi);
+    const { mn, mx } = featureStats[statIdx];
+    const points = [];
+    const colors = [];
+
+    for (let s = 0; s < nSamples; s++) {
+      const shapVal = shap_matrix[s][fi] ?? 0;
+      const rawVal = X_sample[s]?.[fi] ?? 0;
+      // Y: feature rank in chart + small random jitter
+      const jitter = (Math.random() - 0.5) * 0.35;
+      points.push({ x: shapVal, y: rankInChart + jitter });
+
+      // Color: normalize raw value → 0-1 → blue (#6366f1) to red (#ef4444)
+      const norm = mx > mn ? (rawVal - mn) / (mx - mn) : 0.5;
+      const r = Math.round(99 + (239 - 99) * norm);
+      const g = Math.round(102 * (1 - norm) + 68 * norm);
+      const b = Math.round(241 * (1 - norm) + 68 * norm);
+      colors.push(`rgba(${r},${g},${b},0.75)`);
+    }
+
+    datasets.push({
+      label: featureLabels[rankInChart],
+      data: points,
+      backgroundColor: colors,
+      borderColor: 'transparent',
+      pointRadius: 4,
+      pointHoverRadius: 6,
+    });
+  });
+
+  const ctx = document.getElementById('shapBeeswarmChart')?.getContext('2d');
+  if (!ctx) return;
+  if (shapBeeswarmChart) shapBeeswarmChart.destroy();
+
+  shapBeeswarmChart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const featureName = ctx.dataset.label;
+              const shapVal = ctx.parsed.x;
+              return [
+                `Feature: ${featureName}`,
+                `SHAP value: ${shapVal >= 0 ? '+' : ''}${shapVal.toFixed(4)}`,
+                shapVal > 0 ? '↑ Pushed prediction up' : '↓ Pushed prediction down',
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'SHAP Value (impact on model output)', color: '#b3b3d1', font: { size: 12 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: '#b3b3d1' },
+          afterDataLimits: (scale) => {
+            // Ensure zero is visible
+            if (scale.min > 0) scale.min = 0;
+            if (scale.max < 0) scale.max = 0;
+          },
+        },
+        y: {
+          type: 'linear',
+          min: -0.5,
+          max: orderedIdx.length - 0.5,
+          ticks: {
+            color: '#fff',
+            font: { weight: 'bold', size: 11 },
+            callback: (val) => {
+              const i = Math.round(val);
+              return i >= 0 && i < featureLabels.length ? featureLabels[i] : '';
+            },
+            stepSize: 1,
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+        },
+      },
+    },
+  });
+};
+
+/**
+ * Builds a horizontal bar chart of mean |SHAP| values
+ */
+const initShapBar = (shap) => {
+  const { mean_abs_shap, feature_names } = shap;
+  if (!mean_abs_shap || !mean_abs_shap.length) return;
+
+  const TOP_N = Math.min(15, feature_names.length);
+  const indexed = mean_abs_shap.map((v, i) => ({ v, name: feature_names[i] || `f${i}` }))
+    .sort((a, b) => b.v - a.v)
+    .slice(0, TOP_N);
+  // Reverse for bottom-to-top rendering
+  const ordered = [...indexed].reverse();
+
+  const ctx = document.getElementById('shapBarChart')?.getContext('2d');
+  if (!ctx) return;
+  if (shapBarChart) shapBarChart.destroy();
+
+  shapBarChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ordered.map(d => d.name),
+      datasets: [{
+        label: 'Mean |SHAP|',
+        data: ordered.map(d => d.v),
+        backgroundColor: ordered.map((_, i) => {
+          // Gradient from indigo to emerald for visual flair
+          const t = i / Math.max(ordered.length - 1, 1);
+          const r = Math.round(99 + (16 - 99) * t);
+          const g = Math.round(102 + (185 - 102) * t);
+          const b = Math.round(241 + (129 - 241) * t);
+          return `rgba(${r},${g},${b},0.85)`;
+        }),
+        borderRadius: 5,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `Mean |SHAP|: ${ctx.parsed.x.toFixed(5)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: '#b3b3d1' },
+          title: { display: true, text: 'Mean |SHAP Value|', color: '#b3b3d1' },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#fff', font: { weight: 'bold' } },
+        },
+      },
+    },
+  });
+};
+
 onMounted(() => {
   fetchVisualizationData();
 });
 
 onUnmounted(() => {
-  [actualVsPredChart, residualsChart, errorDistChart, rocChart, prChart, importanceChart].forEach(chart => {
+  [actualVsPredChart, residualsChart, errorDistChart, rocChart, prChart,
+   importanceChart, shapBeeswarmChart, shapBarChart].forEach(chart => {
     if (chart) chart.destroy();
   });
 });
@@ -1717,5 +2024,161 @@ onUnmounted(() => {
     border-right: none;
     border-bottom: 1px solid rgba(102, 126, 234, 0.1);
   }
+}
+
+/* ===== SHAP SECTION STYLES ===== */
+
+.shap-section {
+  background: linear-gradient(
+    135deg,
+    rgba(26, 26, 46, 0.8) 0%,
+    rgba(15, 15, 35, 0.9) 100%
+  );
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.shap-section::before {
+  content: 'SHAP';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 8rem;
+  font-weight: 900;
+  color: rgba(99, 102, 241, 0.04);
+  pointer-events: none;
+  line-height: 1;
+  user-select: none;
+}
+
+.shap-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.shap-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.shap-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  flex-shrink: 0;
+}
+
+.shap-tab-btn {
+  padding: 0.4rem 1rem;
+  border: none;
+  background: transparent;
+  color: #b3b3d1;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.shap-tab-btn:hover {
+  color: #fff;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.shap-tab-btn.active {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.35);
+}
+
+.shap-chart {
+  height: 480px;
+}
+
+.shap-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  color: #b3b3d1;
+  gap: 1rem;
+}
+
+.shap-unavail-icon {
+  font-size: 3rem;
+  filter: grayscale(0.3);
+}
+
+.shap-unavailable h4 {
+  font-size: 1.1rem;
+  color: #fff;
+  margin: 0;
+}
+
+.shap-unavailable p {
+  font-size: 0.875rem;
+  max-width: 400px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.shap-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  justify-content: flex-end;
+}
+
+.legend-label {
+  font-size: 0.75rem;
+  color: #b3b3d1;
+}
+
+.legend-gradient {
+  width: 80px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #6366f1, #a78bfa, #f87171, #ef4444);
+}
+
+.legend-low {
+  font-size: 0.7rem;
+  color: #6366f1;
+  font-weight: 600;
+  order: -1;
+}
+
+.legend-high {
+  font-size: 0.7rem;
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.shap-sample-note {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-align: center;
 }
 </style>

@@ -19,6 +19,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     // Persistence & State Tracking
     isDirty: false, // Tracks unsaved in-memory changes
     activeVersion: 'Initial', // Tracks the current version label (e.g., 'Initial', 'v2 REFINED')
+    lastSavedAt: null, // ISO timestamp of the last explicit save — null means never saved
 
     // Dataset Registry (Object of all uploaded datasets)
     registeredDatasets: {},
@@ -152,6 +153,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
       this.datasetId = datasetId;
       this.currentDataset = datasetId;
       this.isDirty = false;
+      this.lastSavedAt = null; // Reset save history for new dataset
       this.activeVersion = 'Initial';
 
       // Extract columns from data
@@ -253,6 +255,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
     this.fileName = fileName;
     this.columns = columns || [];
     this.isDirty = false;
+    this.lastSavedAt = null; // Reset save history for new dataset
     this.activeVersion = 'Initial';
 
     // Register in datasets map
@@ -519,6 +522,7 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
           const result = await response.json();
           console.log("✅ Version saved:", result);
           this.isDirty = false;
+          this.lastSavedAt = new Date().toISOString(); // ✅ Mark explicit save time
           this.activeVersion = versionName || result.version_name || result.filename;
           // Refresh datasets list
           await this.fetchAllDatasets();
@@ -550,7 +554,8 @@ export const useMLDataFlowStore = defineStore("mlDataFlow", {
           "selectedAlgorithm",
           "currentStep",
           "isDirty",
-          // ✅ NEW: Persist split/scaling state
+          "lastSavedAt", // ✅ Persist save timestamp to distinguish "never saved" from "clean"
+          // ✅ Persist split/scaling state
           "isSplit",
           "isScaled",
           "isEncoded",

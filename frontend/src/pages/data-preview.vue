@@ -131,12 +131,6 @@
                   class="search-input"
                 />
               </div>
-              <button @click="openVersionModal" class="save-version-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3); margin-right: 0.5rem;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17,3H5C3.89,3 3,3.9 3,5V19C3,20.1 3.89,21 5,21H19C20.1,21 21,20.1 21,19V7L17,3M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M15,9H5V5H15V9Z" />
-                </svg>
-                Save Version
-              </button>
               <button @click="exportData" class="export-btn">
                 <svg
                   width="16"
@@ -421,9 +415,7 @@
                         />
                         <span class="checkbox-label">{{ column.name }}</span>
                       </label>
-                      <!-- <span class="column-type-badge" :class="`type-${column.type}`">
-                        {{ column.type }}
-                      </span> -->
+                      
                       <span class="semantic-type-pill" :class="getColumnSemanticType(column.name)" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1);">
                         {{ getColumnSemanticType(column.name).toUpperCase() }}
                       </span>
@@ -1339,53 +1331,53 @@
     
     <!-- Datetime Warning Modal -->
     <Modal v-model="showDateTimeWarningModal" title="Unhandled Datetime Columns Detected" size="md">
-        <div class="space-y-4">
-            <div class="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <span class="text-2xl">⚠️</span>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+
+            <!-- Warning Banner -->
+            <div style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.875rem 1rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b" style="flex-shrink: 0; margin-top: 1px;">
+                    <path d="M12,2L1,21H23L12,2M12,6L19.53,19H4.47L12,6M11,10V14H13V10H11M11,16V18H13V16H11Z"/>
+                </svg>
                 <div>
-                    <h4 class="font-semibold text-yellow-500 mb-1">Feature Engineering Recommended</h4>
-                    <p class="text-sm text-gray-300">
-                        Raw datetime columns cannot be directly used by most machine learning models. 
-                        We noticed you have <strong>{{ datetimeColumns.length }}</strong> unhandled datetime column(s).
+                    <p style="margin: 0; font-weight: 600; color: #fbbf24; font-size: 0.875rem;">Feature Engineering Recommended</p>
+                    <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
+                        Found <strong style="color: #e2e8f0;">{{ datetimeColumns.length }}</strong> datetime column{{ datetimeColumns.length !== 1 ? 's' : '' }} that can't be used directly by ML models.
+                        Use the <strong style="color: #e2e8f0;">Datetime Tool</strong> to extract features like Year, Month, DayOfWeek, etc.
                     </p>
                 </div>
             </div>
-            
-            <p class="text-gray-400 text-sm">
-                We strongly recommend using the <strong>Datetime Tool</strong> to extract useful features like 
-                <em>Year, Month, Day, Hour, DayOfWeek</em>, etc.
-            </p>
 
-            <div class="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
-                <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Detected Columns:</p>
-                <div class="flex flex-wrap gap-2">
-                    <span 
-                        v-for="col in datetimeColumns" 
+            <!-- Detected Columns -->
+            <div style="background: rgba(15,23,42,0.5); border: 1px solid rgba(100,116,139,0.2); border-radius: 8px; padding: 0.75rem 0.875rem;">
+                <p style="margin: 0 0 0.5rem; font-size: 0.7rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em;">Detected Columns</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                    <span
+                        v-for="col in datetimeColumns"
                         :key="col.name"
-                        class="px-2 py-1 bg-gray-700 rounded text-xs text-gray-200 font-mono"
+                        style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; background: rgba(102,126,234,0.12); border: 1px solid rgba(102,126,234,0.25); border-radius: 5px; font-size: 0.75rem; font-family: monospace; color: #a5b4fc;"
                     >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.7;"><path d="M19,3H18V1H16V3H8V1H6V3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M19,19H5V8H19V19Z"/></svg>
                         {{ col.name }}
                     </span>
                 </div>
             </div>
+
         </div>
 
         <template #footer>
-            <div class="flex justify-between w-full">
-                <Button 
-                    variant="ghost" 
-                    @click="handleProceedAnyway"
-                    class="text-gray-400 hover:text-white"
-                >
-                    Proceed Anyway
-                </Button>
-                <Button 
-                    variant="primary" 
-                    @click="openDateTimeToolFromWarning"
-                >
-                    Use Datetime Tool
-                </Button>
-            </div>
+            <Button
+                variant="ghost"
+                @click="handleProceedAnyway"
+                style="color: #64748b;"
+            >
+                Proceed Anyway
+            </Button>
+            <Button
+                variant="primary"
+                @click="openDateTimeToolFromWarning"
+            >
+                Use Datetime Tool
+            </Button>
         </template>
     </Modal>
     
@@ -1459,6 +1451,7 @@ import { useDataStore } from "../stores/data";
 import { useExperimentStore } from "../stores/experiment";
 import { useAuthenticatedFetch } from "../composables/useAuthenticatedFetch";
 import { useToast } from '~/composables/useToast';
+import { addPreprocessingStep } from '@/utils/preprocessingTracker';
 
 // Components
 import Card from "../components/Card.vue";
@@ -1515,8 +1508,8 @@ const newVersionName = ref("");
 const openVersionModal = () => {
     // Generate default version name based on current time
     const now = new Date();
-    const ts = `${now.getHours()}${now.getMinutes()}`;
-    const baseName = (fileName.value || "dataset").split('.')[0];
+    const ts = `${now.getHours()}${String(now.getMinutes()).padStart(2, '0')}`;
+    const baseName = (mlStore.fileName || fileName.value || "dataset").split('.')[0];
     newVersionName.value = `${baseName}_v${ts}`;
     showVersionModal.value = true;
 };
@@ -1536,7 +1529,8 @@ onBeforeRouteLeave((to, _from, next) => {
     // Unsaved changes detected — prompt to save before navigating anywhere
     pendingRoute.value = to.fullPath;
     const now = new Date();
-    newVersionName.value = `${(fileName.value || 'dataset').split('.')[0]}_v${now.getHours()}${now.getMinutes()}`;
+    const ts = `${now.getHours()}${String(now.getMinutes()).padStart(2, '0')}`;
+    newVersionName.value = `${(mlStore.fileName || fileName.value || 'dataset').split('.')[0]}_v${ts}`;
     showVersionModal.value = true;
     next(false);
   } else if (leavingPipeline) {
@@ -2061,7 +2055,6 @@ const applyMissingStrategies = async () => {
             strategies[c.strategy].push(c.name);
         });
 
-        // Execute API calls sequentially
         for (const [strategy, cols] of Object.entries(strategies)) {
             await authenticatedPost(`/api/datasets/${datasetId.value}/preprocessing/missing-values`, {
                 strategy: strategy, 
@@ -2076,6 +2069,7 @@ const applyMissingStrategies = async () => {
 
         // Sync with Experiment Store
         experimentStore.setMissingValuesApplied(true);
+        addPreprocessingStep('Missing Values Handling');
 
         showMissingModal.value = false;
         showSuccess("Missing Values Handled", "Strategies applied successfully.");
@@ -2115,8 +2109,9 @@ const applyOutlierHandling = async () => {
         processColumns();
         analyzeDataQuality();
 
-        // Sync with Experiment Store - Removed to keep tool active if outliers remain
-        // experimentStore.setOutliersApplied(true);
+        // Sync with Experiment Store
+        experimentStore.setOutliersApplied(true);
+        addPreprocessingStep('Outlier Handling');
 
         showOutlierModal.value = false;
         showSuccess("Outliers Processed", "Outlier handling applied to selected columns.");
@@ -2147,6 +2142,7 @@ const applyDuplicateRemoval = async () => {
 
         // Sync with Experiment Store
         experimentStore.setDuplicatesApplied(true);
+        addPreprocessingStep('Duplicate Removal');
 
         showDuplicateModal.value = false;
         showSuccess("Duplicates Removed", "Duplicate removal complete.");
@@ -2202,6 +2198,7 @@ const applyDateTimeHandling = async () => {
 
             // Sync with Experiment Store
             experimentStore.setDateTimeApplied(true);
+            addPreprocessingStep('Date/Time Encoding');
 
             showDateTimeModal.value = false;
             showSuccess("Success", `Extracted features from ${selectedDateTimeColumns.value.length} columns.`);

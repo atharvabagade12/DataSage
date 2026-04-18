@@ -23,7 +23,7 @@
         <div class="meta-pill">
           <strong>{{ rowCount.toLocaleString() }}</strong> rows
         </div>
-      </div>
+      </div> 
 
       <div v-if="targetColumn" class="separator"></div>
 
@@ -35,9 +35,9 @@
     </div>
     
     <div v-if="showSaveControls" class="context-right">
-      <div class="status-indicator" :class="{ 'is-dirty': isDirty }">
+      <div class="status-indicator" :class="saveStatus">
         <span class="status-dot"></span>
-        <span class="status-text">{{ isDirty ? 'Status: Unsaved Changes' : 'Status: Saved ✓' }}</span>
+        <span class="status-text">{{ saveStatus === 'unsaved' ? 'Unsaved Changes' : saveStatus === 'saved' ? 'Saved ✓' : 'No changes' }}</span>
       </div>
 
       <button 
@@ -66,7 +66,7 @@ const router = useRouter()
 const route = useRoute()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
-const dataStore = useDataStore()
+const dataStore = useDataStore() 
 
 // Pages where the save controls (status + save button) should be hidden
 const SAVE_HIDDEN_ROUTES = ['algorithm-select', 'model-training', 'model-visualization']
@@ -81,34 +81,45 @@ const originalFileName = computed(() => {
 
 const isDirty = computed(() => mlStore.isDirty)
 
+// Tri-state save status:
+// 1. isDirty=true  → 'Unsaved Changes'
+// 2. isDirty=false AND lastSavedAt is set → 'Saved ✓' (explicit save happened)
+// 3. isDirty=false AND lastSavedAt is null → 'Ready' (no edits, no save yet)
+const saveStatus = computed(() => {
+  if (isDirty.value) return 'unsaved'
+  if (mlStore.lastSavedAt) return 'saved'
+  return 'ready'
+})
+
 // Whether to show the status indicator and save button
 const showSaveControls = computed(() => {
   return !SAVE_HIDDEN_ROUTES.includes(route.name)
 })
 
 const rowCount = computed(() => {
-  // New Priority: experimentStore (Latest metadata from backend/preprocessing)
-  if (experimentStore.datasetSize?.rows) return experimentStore.datasetSize.rows
-
-  // 1. Fallback: dataStore statistics (which has the real total_rows)
-  if (dataStore.statistics?.total_rows) return dataStore.statistics.total_rows
-
-  // 2. If dataset is split, use trainRows + testRows (reflects SMOTE changes)
+  // 1. If dataset is split, use trainRows + testRows (reflects SMOTE changes)
+  // This is most reliable for SMOTE/Transformations that change row count
   if (mlStore.isSplit && mlStore.splitInfo) {
     const train = mlStore.splitInfo.trainRows || 0
     const test = mlStore.splitInfo.testRows || 0
     if (train + test > 0) return train + test
   }
 
-  // 3. Fallback: in-memory dataset array length from mlStore
+  // 2. Fallback: experimentStore (Latest metadata from backend/preprocessing)
+  if (experimentStore.datasetSize?.rows) return experimentStore.datasetSize.rows
+
+  // 3. Fallback: dataStore statistics (which has the real total_rows)
+  if (dataStore.statistics?.total_rows) return dataStore.statistics.total_rows
+
+  // 4. Fallback: in-memory dataset array length from mlStore
   if (mlStore.dataset && mlStore.dataset.length > 0) return mlStore.dataset.length
   
-  // 4. Fallback to registeredDatasets (if available)
+  // 5. Fallback to registeredDatasets (if available)
   const registered = mlStore.registeredDatasets[mlStore.datasetId]
   if (registered?.shape?.[0]) return registered.shape[0]
   if (registered?.row_count) return registered.row_count
   
-  // 5. Fallback to allUserDatasets (from dashboard view)
+  // 6. Fallback to allUserDatasets (from dashboard view)
   const meta = mlStore.allUserDatasets?.find(d => d.id === mlStore.datasetId || d.dataset_id === mlStore.datasetId)
   if (meta) {
     return meta.row_count || meta.rows || meta.total_rows || (meta.shape?.[0]) || 0
@@ -201,11 +212,17 @@ const goBack = () => {
 .context-right { display: flex; align-items: center; gap: 20px; }
 
 .status-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 600; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
-.status-text { color: #10b981; }
+/* Default / 'ready': neutral gray — data is clean but nothing was explicitly saved */
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #64748b; }
+.status-text { color: #64748b; }
 
-.status-indicator.is-dirty .status-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
-.status-indicator.is-dirty .status-text { color: #f59e0b; }
+/* 'saved': user explicitly hit Save Version */
+.status-indicator.saved .status-dot { background: #10b981; }
+.status-indicator.saved .status-text { color: #10b981; }
+
+/* 'unsaved': in-memory changes pending save */
+.status-indicator.unsaved .status-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.status-indicator.unsaved .status-text { color: #f59e0b; }
 
 .save-btn { 
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 

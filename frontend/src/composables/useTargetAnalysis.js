@@ -53,7 +53,6 @@ export function useTargetAnalysis() {
   /**
    * Calculate Gini Impurity - measures class imbalance
    * 0 = perfect balance, 1 = severe imbalance
-   * Better than simple max ratio for multi-class problems
    */
   const calculateGiniImpurity = (distribution) => {
     if (!distribution || Object.keys(distribution).length === 0) return 1;
@@ -190,6 +189,28 @@ export function useTargetAnalysis() {
   };
 
   /**
+   * Detect columns extracted by the Datetime Tool (e.g. date_year, ts_dayofweek).
+   * These features are engineering intermediaries and are almost never
+   * meaningful ML targets — users should pick a real business outcome instead.
+   * Matches the suffix patterns that the backend datetime endpoint produces.
+   */
+  const isDatetimeExtractedFeature = (columnName) => {
+    const dtSuffixes = [
+      '_year', '_month', '_day', '_hour', '_minute', '_second',
+      '_dayofweek', '_is_weekend',
+      // cyclic encoding variants
+      '_month_sin', '_month_cos',
+      '_day_sin',   '_day_cos',
+      '_hour_sin',  '_hour_cos',
+      '_dayofweek_sin', '_dayofweek_cos',
+      '_minute_sin', '_minute_cos',
+      '_second_sin', '_second_cos',
+    ];
+    const lower = columnName.toLowerCase();
+    return dtSuffixes.some(suffix => lower.endsWith(suffix));
+  };
+
+  /**
    * Detect outliers using IQR method
    */
   const detectOutliers = (numbers) => {
@@ -308,6 +329,13 @@ export function useTargetAnalysis() {
     // ❌ CRITICAL: Email and Phone (PII/Identifiers)
     if (analysis.semanticType === 'email' || analysis.semanticType === 'phone') {
       criticalScore -= 85;
+    }
+
+    // ❌ CRITICAL: Datetime-extracted features (year, month, dayofweek, is_weekend, etc.)
+    // These are engineering intermediaries produced by the Datetime Tool.
+    // They carry temporal granularity but are rarely meaningful prediction targets.
+    if (isDatetimeExtractedFeature(analysis.name)) {
+      criticalScore -= 75;
     }
 
     //   Aggregated features
@@ -650,6 +678,7 @@ export function useTargetAnalysis() {
     isDateTimeColumn,
     isTextColumn,
     calculateCardinalityScore,
-    isAggregatedFeature
+    isAggregatedFeature,
+    isDatetimeExtractedFeature
   };
 }

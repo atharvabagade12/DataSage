@@ -372,31 +372,30 @@ const formatValue = (val) => {
   return val.toFixed(2);
 };
 
-// ── Smart action chip categorisation ─────────────────────────────────────────
+
 const categorizeAction = (text) => {
 
-  // ✅ Check positive / stable outcome FIRST before any keyword matching
-  // e.g. "No outlier handling or transformation required. Distribution is stable."
+  
   if (/stable|no outlier|no transform/i.test(text)) {
     return { cls: 'chip-success', icon: '✅', label: 'Looks Good',      link: null, linkLabel: null, note: null };
   }
-  // 🔴 Warning / degenerate columns
+  
   if (/constant|single unique|near-zero variance|iqr\s*=\s*0|carries no information/i.test(text)) {
     return { cls: 'chip-danger',  icon: '⚠️', label: 'Warning',         link: null, linkLabel: null, note: null };
   }
-  // 🟣 Zero-inflated
+  
   if (/zero.inflat|hurdle|two.part/i.test(text)) {
     return { cls: 'chip-purple',  icon: '〰️', label: 'Distribution',    link: null, linkLabel: null, note: null };
   }
-  // 🟠 Outlier handling → deeplink to data-preview (cleaning tools are there)
+ 
   if (/outlier|cap(ping)?|anoma/i.test(text)) {
     return { cls: 'chip-orange',  icon: '🎯', label: 'Outlier Handling', link: '/data-preview', linkLabel: 'Data Preview', note: null };
   }
-  // 🔵 Transformation → no deeplink (split-gated), show note
+  
   if (/transform|box.cox|yeo.johnson|log(1p)?|sqrt/i.test(text)) {
     return { cls: 'chip-indigo',  icon: '📐', label: 'Transformation',   link: null, linkLabel: null, note: 'Apply after splitting in Advanced Preprocessing' };
   }
-  // 🟡 Missing values → deeplink to data-preview
+  // Missing values → deeplink to data-preview
   if (/missing|imputation|impute|drop column/i.test(text)) {
     return { cls: 'chip-amber',   icon: '🕳️', label: 'Missing Values',   link: '/data-preview', linkLabel: 'Data Preview', note: null };
   }

@@ -125,12 +125,6 @@
                   class="search-input"
                 />
               </div>
-              <button @click="openVersionModal" class="save-version-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3); margin-right: 0.5rem;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17,3H5C3.89,3 3,3.9 3,5V19C3,20.1 3.89,21 5,21H19C20.1,21 21,20.1 21,19V7L17,3M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M15,9H5V5H15V9Z" />
-                </svg>
-                Save Version
-              </button>
               <button @click="exportData" class="export-btn">
                 <svg
                   width="16"
@@ -763,9 +757,9 @@
           <!-- Target Encoding Modal -->
           <Modal v-model="showTargetEncodingModal" title="Target Encoding Configuration" size="xl">
             <div class="modal-section">
-              <div class="info-alert">
+              <div class="info-alert" v-if="targetEncodingEligibleColumns.length > 0">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
                 </svg>
                 <div>
                   <strong>What is Target Encoding?</strong>
@@ -796,7 +790,7 @@
                 
                 <div class="encoding-list">
                   <div
-                    v-for="column in categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name))"
+                    v-for="column in targetEncodingEligibleColumns"
                     :key="column.name"
                     class="encoding-row"
                     :class="{ active: column.targetEncode }"
@@ -816,21 +810,19 @@
                     <div class="recommendation-badge" v-if="column.unique > 30">
                       <span class="strongly-rec" title="High cardinality detected. Target encoding is strongly recommended over One-Hot.">🔥 Strongly Recommended</span>
                     </div>
-                    <div class="recommendation-badge" v-else-if="column.unique >= 10">
-                      <span class="recommended" title="Medium cardinality detected. Target encoding helps prevent overfitting compared to One-Hot.">👍 Recommended</span>
-                    </div>
-                    <div class="recommendation-badge" v-else-if="column.unique <= 8">
-                      <span class="not-recommended" title="Low cardinality detected. One-Hot encoding is generally better for very few categories.">ℹ️ One-Hot may be better</span>
+                    <div class="recommendation-badge" v-else>
+                      <span class="recommended" title="Medium cardinality (10–30). Target encoding prevents overfitting vs One-Hot.">👍 Recommended</span>
                     </div>
                   </div>
 
-                  <div v-if="categoricalColumns.filter(c => c.name !== selectedTarget && !targetEncodedColumns.has(c.name)).length === 0" class="empty-state">
+                  <div v-if="targetEncodingEligibleColumns.length === 0" class="empty-state">
                     No categorical columns found available for target encoding.
+                    <span style="display: block; margin-top: 0.4rem; font-size: 0.8rem; color: #64748b;">Target encoding is recommended for columns with ≥ {{ TARGET_ENCODING_MIN_CATEGORIES }} unique categories. Columns with fewer categories are better handled by the Categorical Encoding tool.</span>
                   </div>
                 </div>
               </div>
 
-              <div class="config-group">
+              <div class="config-group" v-if="targetEncodingEligibleColumns.length > 0">
                 <label class="config-label">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12,3L2,12h3v8h14v-8h3L12,3z M12,7.7c1.4,0,2.5,1.1,2.5,2.5S13.4,12.7,12,12.7s-2.5-1.1-2.5-2.5S10.6,7.7,12,7.7z"/>
@@ -860,7 +852,7 @@
                 </p>
               </div>
 
-              <div class="leakage-warning">
+              <div class="leakage-warning" v-if="targetEncodingEligibleColumns.length > 0">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
                 </svg>
@@ -876,7 +868,7 @@
                 variant="primary" 
                 :loading="isProcessing"
                 @click="applyTargetEncoding"
-                :disabled="!categoricalColumns.some(c => c.targetEncode)"
+                :disabled="!targetEncodingEligibleColumns.some(c => c.targetEncode)"
               >
                 Apply Target Encoding
               </Button>
@@ -1512,7 +1504,10 @@ const showVersionModal = ref(false);
 const newVersionName = ref("");
 
 const openVersionModal = () => {
-    newVersionName.value = mlStore.getNextVersionName();
+    const now = new Date();
+    const ts = `${now.getHours()}${String(now.getMinutes()).padStart(2, '0')}`;
+    const base = (mlStore.fileName || fileName.value || 'dataset').split('.')[0];
+    newVersionName.value = `${base}_v${ts}`;
     showVersionModal.value = true;
 }; 
 
@@ -1532,7 +1527,10 @@ onBeforeRouteLeave((to, _from, next) => {
   if (mlStore.isDirty) {
     // Dirty state — prompt to save before leaving
     pendingRoute.value = to.fullPath;
-    newVersionName.value = mlStore.getNextVersionName?.() || '';
+    const _now = new Date();
+    const _ts = `${_now.getHours()}${String(_now.getMinutes()).padStart(2, '0')}`;
+    const _base = (mlStore.fileName || fileName.value || 'dataset').split('.')[0];
+    newVersionName.value = `${_base}_v${_ts}`;
     showVersionModal.value = true;
     next(false); // block navigation until user decides
   } else if (leavingPipeline) {
@@ -1773,6 +1771,21 @@ const categoricalColumns = computed(() => {
     // 6. Fallback for untyped columns
     return col.type === 'categorical' || col.type === 'string' || col.type === 'unknown';
   });
+});
+
+/**
+ * Only categorical columns that genuinely benefit from target encoding:
+ * ≥ 10 unique categories (where One-Hot becomes expensive / Label risky).
+ * Columns with < 10 categories are better served by One-Hot or Ordinal encoding.
+ */
+const TARGET_ENCODING_MIN_CATEGORIES = 10;
+
+const targetEncodingEligibleColumns = computed(() => {
+  return categoricalColumns.value.filter(col =>
+    col.name !== selectedTarget.value &&
+    !targetEncodedColumns.value.has(col.name) &&
+    (col.unique ?? 0) >= TARGET_ENCODING_MIN_CATEGORIES
+  );
 });
 
 const numericalColumns = computed(() => {
@@ -2070,27 +2083,22 @@ function autoSelectForEncoding(targetName) {
   });
 }
 
-// Select recommended columns for target encoding (high cardinality)
+// Select recommended columns for target encoding (strongly recommended: > 30 categories)
 function selectRecommendedTargetEncoding() {
-  categoricalColumns.value.forEach(col => {
-    if (col.name !== selectedTarget.value && !targetEncodedColumns.value.has(col.name)) {
-      if (col.unique >= 10) {
-        col.targetEncode = true;
-      }
-    }
+  targetEncodingEligibleColumns.value.forEach(col => {
+    col.targetEncode = col.unique > 30;
   });
 }
 
+// Select all eligible columns for target encoding
 function selectAllTargetEncoding() {
-  categoricalColumns.value.forEach(col => {
-    if (col.name !== selectedTarget.value && !targetEncodedColumns.value.has(col.name)) {
-      col.targetEncode = true;
-    }
+  targetEncodingEligibleColumns.value.forEach(col => {
+    col.targetEncode = true;
   });
 }
 
 function deselectAllTargetEncoding() {
-  categoricalColumns.value.forEach(col => {
+  targetEncodingEligibleColumns.value.forEach(col => {
     col.targetEncode = false;
   });
 }
@@ -2472,8 +2480,18 @@ const analyzeColumns = () => {
     // Preserve existing metrics/state if available
     const existingCol = columns.value?.find(c => c.name === colName);
 
-    // Identify if it's a new One-Hot column (check name pattern if not in existingCol)
-    const isOneHot = existingCol?.isOneHot || colName.includes('_');
+    // Identify if it's a One-Hot dummy column.
+    // A column is considered a one-hot dummy ONLY if:
+    //   1. It was already flagged as such (persisted from a previous analyzeColumns pass), OR
+    //   2. Its name contains an underscore AND the part before the last '_' matches
+    //      a column that was actually one-hot encoded (tracked in categoricallyEncodedColumns).
+    // This prevents legitimate columns like 'housing_median_age' from being mislabelled.
+    const isOneHotByPattern = (() => {
+      if (!colName.includes('_')) return false;
+      const prefix = colName.substring(0, colName.lastIndexOf('_'));
+      return categoricallyEncodedColumns.value.has(prefix);
+    })();
+    const isOneHot = existingCol?.isOneHot || isOneHotByPattern;
 
     return {
       name: colName,
@@ -2774,10 +2792,10 @@ const applySmote = async () => {
       });
 
       
-      const originalTotalRows = experimentStore.datasetSize?.rows || 0;
+      const newTotalRows = data.new_samples + testRows.value;
       experimentStore.updateDatasetMetadata({
         size: {
-          rows: originalTotalRows + data.samples_added,
+          rows: newTotalRows,
           columns: columns.value.length
         }
       });

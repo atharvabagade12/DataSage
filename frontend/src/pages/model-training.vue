@@ -337,7 +337,7 @@
       </section>
     </div>
 
-    <!-- Main Container (Training & Results) - Shows Below Configuration -->
+    
     <div v-if="trainingPhase === 'training'" id="training-section" class="main-container">
       <!-- Training Progress Section -->
       <section class="progress-section">
@@ -350,29 +350,18 @@
               class="control-btn start"
               v-if="!isTraining && !isCompleted"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
               </svg>
               Start Training
             </button>
-
             <button
               @click="stopTraining"
               :disabled="!isTraining"
               class="control-btn stop"
               v-if="isTraining"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M18,18H6V6H18V18Z" />
               </svg>
               Stop Training
@@ -382,31 +371,82 @@
 
         <!-- Progress Dashboard -->
         <div class="progress-dashboard">
-          <!-- Current Stage Banner -->
-          <div class="current-stage-banner">
-            <div class="stage-info-left">
-              <span class="stage-icon-large">{{ getCurrentStageIcon() }}</span>
-              <div class="stage-text">
-                <div class="stage-title">{{ currentStageTitle }}</div>
-                <div class="stage-subtitle">{{ currentStageMessage }}</div>
-              </div>
+
+          <!-- Top info row: Model context + elapsed/ETA -->
+          <div class="progress-context-row">
+            <div class="progress-context-pills">
+              <span class="ctx-pill model-pill">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
+                {{ modelConfig?.algorithm?.name || 'Model' }}
+              </span>
+              <span class="ctx-pill strategy-pill">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/></svg>
+                {{ getValidationMethodDisplay() }}
+              </span>
+              <span class="ctx-pill type-pill">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3,3H21V5H3V3M3,7H15V9H3V7M3,11H21V13H3V11M3,15H15V17H3V15M3,19H21V21H3V19Z"/></svg>
+                {{ problemType.includes('classification') ? 'Classification' : 'Regression' }}
+              </span>
             </div>
-            <div class="stage-progress-right">
-              <div class="progress-percentage-large">
-                {{ Math.round(trainingProgress) }}%
+            <div class="progress-time-stats">
+              <div class="time-stat">
+                <span class="time-stat-label">Elapsed</span>
+                <span class="time-stat-value">{{ formatTime(elapsedTime) }}</span>
               </div>
-              <div class="progress-dots">
-                <span
-                  v-for="i in 5"
-                  :key="i"
-                  class="progress-dot"
-                  :class="{ active: i <= Math.ceil(trainingProgress / 20) }"
-                ></span>
+              <div class="time-stat" v-if="isTraining && trainingProgress > 5">
+                <span class="time-stat-label">ETA</span>
+                <span class="time-stat-value">
+                  {{ formatTime(Math.max(0, Math.round(elapsedTime / (trainingProgress / 100)) - elapsedTime)) }}
+                </span>
               </div>
             </div>
           </div>
 
-          
+          <!-- Main progress bar + percentage -->
+          <div class="progress-bar-section">
+            <div class="progress-bar-track">
+              <div
+                class="progress-bar-fill"
+                :class="{ 'is-complete': isCompleted, 'is-training': isTraining }"
+                :style="{ width: trainingProgress + '%' }"
+              >
+                <div class="progress-bar-shimmer" v-if="isTraining && !isCompleted"></div>
+              </div>
+            </div>
+            <div class="progress-pct-badge" :class="{ 'pct-complete': isCompleted }">
+              {{ Math.round(trainingProgress) }}%
+            </div>
+          </div>
+
+          <!-- Stage pipeline -->
+          <div class="stage-pipeline">
+            <div
+              v-for="(stage, idx) in trainingStages"
+              :key="idx"
+              class="pipeline-item"
+              :class="stage.status"
+            >
+              <div class="pipeline-node">
+                <span v-if="stage.status === 'completed'" class="pipeline-check">✓</span>
+                <span v-else-if="stage.status === 'active'" class="pipeline-spinner"></span>
+                <span v-else class="pipeline-num">{{ idx + 1 }}</span>
+              </div>
+              <div class="pipeline-label">{{ stage.name }}</div>
+              <div class="pipeline-connector" v-if="idx < trainingStages.length - 1"
+                :class="{ 'connector-done': trainingStages[idx + 1]?.status !== 'pending' || stage.status === 'completed' }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Status message banner -->
+          <div class="stage-status-banner" :class="{ 'banner-complete': isCompleted, 'banner-active': isTraining }">
+            <span class="stage-icon-large">{{ isCompleted ? '🎉' : getCurrentStageIcon() }}</span>
+            <div class="stage-text">
+              <div class="stage-title">{{ currentStageTitle }}</div>
+              <div class="stage-subtitle">{{ currentStageMessage }}</div>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -808,14 +848,66 @@
       <!-- Logs Section -->
       <section class="logs-section">
         <div class="section-header">
-          <h2>Training Logs</h2>
+          <div class="logs-title-group">
+            <h2>Training Logs</h2>
+            <span class="log-count-badge" :class="{ 'badge-has-logs': trainingLogs.length > 0 }">{{ trainingLogs.length }}</span>
+          </div>
           <div class="log-controls">
-            <button @click="clearLogs" class="clear-btn">Clear</button>
+            <!-- Search filter -->
+            <div class="log-search-wrapper">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="log-search-icon"><path d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z"/></svg>
+              <input
+                v-model="logSearchQuery"
+                type="text"
+                placeholder="Filter logs…"
+                class="log-search-input"
+              />
+              <button v-if="logSearchQuery" @click="logSearchQuery = ''" class="log-search-clear">✕</button>
+            </div>
+            <!-- Level filter buttons -->
+            <div class="log-level-filters">
+              <button
+                v-for="lvl in ['all', 'info', 'success', 'warning', 'error']"
+                :key="lvl"
+                class="log-level-btn"
+                :class="[`level-${lvl}`, { active: logLevelFilter === lvl }]"
+                @click="logLevelFilter = lvl"
+              >{{ lvl === 'all' ? 'All' : lvl.charAt(0).toUpperCase() + lvl.slice(1) }}</button>
+            </div>
+            <!-- Auto-scroll toggle -->
+            <button @click="logAutoScroll = !logAutoScroll" class="log-toggle-btn" :class="{ 'toggle-on': logAutoScroll }" :title="logAutoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11,4H13V16L18.5,10.5L19.92,11.92L12,19.84L4.08,11.92L5.5,10.5L11,16V4Z"/></svg>
+              Auto-scroll
+            </button>
+            <button @click="exportLogs" class="export-btn" title="Export logs as .txt">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+              Export
+            </button>
+            <button @click="clearLogs" class="clear-btn" title="Clear all logs">Clear</button>
           </div>
         </div>
         <div class="logs-container" ref="logsContainer">
-          <div v-for="(log, index) in trainingLogs" :key="index" class="log-entry" :class="log.type">
+          <div
+            v-if="filteredLogs.length === 0"
+            class="log-empty"
+          >
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.3; margin-bottom: 0.5rem"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
+            <div>{{ trainingLogs.length === 0 ? 'No logs yet — training events will appear here' : 'No logs match your filter' }}</div>
+          </div>
+          <div
+            v-for="(log, index) in filteredLogs"
+            :key="index"
+            class="log-entry"
+            :class="log.type"
+          >
+            <span class="log-level-icon">
+              <span v-if="log.type === 'success'">✅</span>
+              <span v-else-if="log.type === 'error'">❌</span>
+              <span v-else-if="log.type === 'warning'">⚠️</span>
+              <span v-else>ℹ️</span>
+            </span>
             <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
+            <span class="log-type-badge" :class="`badge-${log.type}`">{{ log.type.toUpperCase() }}</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
         </div>
@@ -893,6 +985,11 @@ const logsContainer = ref(null);
 const chartContainer = ref(null);
 let trainingChart = null;
 
+// Log controls
+const logSearchQuery = ref('');
+const logLevelFilter = ref('all');
+const logAutoScroll = ref(true);
+
 // Progress simulation
 let progressSimulator = null;
 const targetProgress = ref(0);
@@ -924,6 +1021,14 @@ const trainingStages = ref([
 
 // Computed
 const testSize = computed({ get: () => 1 - splitRatio.value, set: (val) => { splitRatio.value = 1 - val; } });
+
+const filteredLogs = computed(() => {
+  return trainingLogs.value.filter(log => {
+    const matchesLevel = logLevelFilter.value === 'all' || log.type === logLevelFilter.value;
+    const matchesSearch = !logSearchQuery.value || log.message.toLowerCase().includes(logSearchQuery.value.toLowerCase());
+    return matchesLevel && matchesSearch;
+  });
+});
 
 // Functions
 const formatNumber = (num) => new Intl.NumberFormat().format(num);
@@ -2190,7 +2295,9 @@ const handleTrainingMessage = (data) => {
     console.log('🎉 Training completed! Full data received:', data);
     console.log('🔍 Checking final_metrics:', data.final_metrics);
     
-    trainingStages.value[3].status = 'completed';
+    // Force ALL stages to completed — intermediate messages (evaluating/saving)
+    // may have been missed, leaving stages stuck as active or pending.
+    trainingStages.value.forEach(stage => { stage.status = 'completed'; });
     
     // Animate to 100% first, then show completion state and metrics
     simulateProgress(100, 2.5, () => {
@@ -2200,6 +2307,12 @@ const handleTrainingMessage = (data) => {
       lastTrainedModelId.value = data.model_id; // Store model_id for visualization
       currentStageTitle.value = 'Training Complete!';
       currentStageMessage.value = 'Model trained successfully';
+
+      // Stop the elapsed time counter
+      if (timeInterval) {
+        clearInterval(timeInterval);
+        timeInterval = null;
+      }
 
       // Note: Configuration inputs will auto-unlock because isTraining = false
       // We keep trainingPhase = 'training' to show the metrics section
@@ -2218,8 +2331,6 @@ const handleTrainingMessage = (data) => {
         console.error('❌ No final_metrics in completion data!');
       }
     });
-    
-    addLog('error', message || 'Training failed');
   } else if (status === 'stopped') {
     isTraining.value = false;
     isCompleted.value = false;
@@ -2261,12 +2372,14 @@ const addLog = (type, message) => {
     timestamp: Date.now()
   });
   
-  // Auto-scroll logs to bottom
-  nextTick(() => {
-    if (logsContainer.value) {
-      logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
-    }
-  });
+  // Auto-scroll logs to bottom (only if enabled)
+  if (logAutoScroll.value) {
+    nextTick(() => {
+      if (logsContainer.value) {
+        logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
+      }
+    });
+  }
 };
 
 const clearLogs = () => {
@@ -4880,6 +4993,448 @@ onUnmounted(() => {
   border-radius: 4px;
   transition: width 0.5s ease;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* ===== ENHANCED TRAINING PROGRESS ===== */
+
+.progress-context-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.progress-context-pills {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ctx-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.ctx-pill svg { flex-shrink: 0; opacity: 0.85; }
+
+.model-pill {
+  background: rgba(102, 126, 234, 0.15);
+  border: 1px solid rgba(102, 126, 234, 0.35);
+  color: #a5b4fc;
+}
+
+.strategy-pill {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.type-pill {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+.progress-time-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.time-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.time-stat-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.time-stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e0e7ff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress bar */
+.progress-bar-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.progress-bar-track {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.progress-bar-fill {
+  position: relative;
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  overflow: hidden;
+}
+
+.progress-bar-fill.is-complete {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.progress-bar-shimmer {
+  position: absolute;
+  top: 0; left: -60%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -60%; }
+  100% { left: 110%; }
+}
+
+.progress-pct-badge {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #a5b4fc;
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+.progress-pct-badge.pct-complete {
+  color: #6ee7b7;
+}
+
+/* Stage pipeline */
+.stage-pipeline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.pipeline-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.pipeline-node {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #6b7280;
+}
+
+.pipeline-item.completed .pipeline-node {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #10b981;
+  color: white;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+}
+
+.pipeline-item.active .pipeline-node {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: #667eea;
+  color: white;
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+  animation: nodeGlow 2s ease-in-out infinite;
+}
+
+@keyframes nodeGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(102, 126, 234, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(102, 126, 234, 0.7); }
+}
+
+.pipeline-check {
+  font-size: 1.1rem;
+}
+
+.pipeline-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.pipeline-num { font-size: 0.875rem; }
+
+.pipeline-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-align: center;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+}
+
+.pipeline-item.completed .pipeline-label { color: #6ee7b7; }
+.pipeline-item.active .pipeline-label { color: #a5b4fc; }
+
+.pipeline-connector {
+  position: absolute;
+  top: 20px;
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  height: 2px;
+  background: rgba(255,255,255,0.08);
+  transition: background 0.4s ease;
+  z-index: 0;
+}
+
+.pipeline-connector.connector-done {
+  background: linear-gradient(90deg, #10b981, rgba(16, 185, 129, 0.3));
+}
+
+/* Status banner */
+.stage-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: rgba(102, 126, 234, 0.06);
+  border: 1px solid rgba(102, 126, 234, 0.18);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.stage-status-banner.banner-active {
+  border-color: rgba(102, 126, 234, 0.3);
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.stage-status-banner.banner-complete {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.stage-status-banner .stage-text .stage-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.15rem;
+}
+
+.stage-status-banner .stage-text .stage-subtitle {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.55);
+}
+
+/* ===== ENHANCED TRAINING LOGS ===== */
+
+.logs-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.log-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6b7280;
+  transition: all 0.3s ease;
+}
+
+.log-count-badge.badge-has-logs {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #a5b4fc;
+}
+
+.log-controls {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Search */
+.log-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.log-search-icon {
+  position: absolute;
+  left: 0.6rem;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.log-search-input {
+  padding: 0.4rem 2rem 0.4rem 2rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  border-radius: 6px;
+  color: #e0e7ff;
+  font-size: 0.8rem;
+  width: 160px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.log-search-input:focus {
+  border-color: rgba(102, 126, 234, 0.55);
+  background: rgba(0,0,0,0.4);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.log-search-input::placeholder { color: #4b5563; }
+
+.log-search-clear {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+}
+.log-search-clear:hover { color: #e0e7ff; }
+
+/* Level filter */
+.log-level-filters {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.log-level-btn {
+  padding: 0.3rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.04);
+  color: #6b7280;
+}
+.log-level-btn:hover { background: rgba(255,255,255,0.08); color: #e0e7ff; }
+.log-level-btn.level-all.active { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.5); color: #a5b4fc; }
+.log-level-btn.level-info.active { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #93c5fd; }
+.log-level-btn.level-success.active { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.4); color: #6ee7b7; }
+.log-level-btn.level-warning.active { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #fcd34d; }
+.log-level-btn.level-error.active { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+/* Auto-scroll toggle */
+.log-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #6b7280;
+}
+
+.log-toggle-btn.toggle-on {
+  background: rgba(16,185,129,0.12);
+  border-color: rgba(16,185,129,0.35);
+  color: #6ee7b7;
+}
+
+.log-toggle-btn:hover { background: rgba(255,255,255,0.08); color: #e0e7ff; }
+
+/* Log entry enhancements */
+.log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.07);
+  transition: background 0.15s ease;
+}
+
+.log-entry:hover { background: rgba(255,255,255,0.03); }
+.log-entry:last-child { border-bottom: none; }
+
+.log-level-icon {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.log-type-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.badge-info    { background: rgba(59,130,246,0.12); color: #93c5fd; }
+.badge-success { background: rgba(16,185,129,0.12); color: #6ee7b7; }
+.badge-warning { background: rgba(245,158,11,0.12); color: #fcd34d; }
+.badge-error   { background: rgba(239,68,68,0.12); color: #fca5a5; }
+
+.log-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 3rem 2rem;
+  color: #4b5563;
+  font-style: italic;
+  font-size: 0.875rem;
+  text-align: center;
 }
 
 </style>

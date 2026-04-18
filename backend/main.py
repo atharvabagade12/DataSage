@@ -51,6 +51,15 @@ except ImportError:
     SMOTE_AVAILABLE = False
     print("⚠️ Warning: imbalanced-learn not installed. SMOTE functionality will be disabled.")
 
+# ===== SHAP (EXPLAINABILITY) =====
+try:
+    import shap
+    SHAP_AVAILABLE = True
+    print("✅ SHAP available for model explainability.")
+except ImportError:
+    SHAP_AVAILABLE = False
+    print("⚠️ Warning: shap not installed. SHAP explainability will be disabled.")
+
 
 # ===== METRICS IMPORTS =====
 from sklearn.metrics import (
@@ -213,7 +222,7 @@ ALGORITHMS = {**CLASSIFICATION_ALGORITHMS, **REGRESSION_ALGORITHMS}
 
 # ===== USER ACTION LOGGING =====
 
-def log_user_action(db: Session, user_id: int, action_type: str, details: dict = None, resource_id: int = None, resource_type: str = None):
+def log_user_action(db: Session, user_id: int, action_type: str, details: Optional[dict] = None, resource_id: Optional[int] = None, resource_type: Optional[str] = None):
     """Log a user action to the database"""
     try:
         from models import UserAction
@@ -406,26 +415,28 @@ def initialize_algorithm_with_params(algorithm_name: str, problem_type: str, hyp
     # ===== SPECIAL HANDLING FOR NAIVE BAYES =====
     if algorithm_name == 'Naive Bayes':
         variant = hyperparameters.get('variant', 'gaussian')
-        
+        # Pre-initialize so they are always defined before use
+        params: dict = {}
+        nb_class = model_class  # fallback to whatever get_algorithm_for_problem_type returned
+
         if variant == 'gaussian':
-            model_class = GaussianNB
+            nb_class = GaussianNB
             params = {
                 'var_smoothing': float(hyperparameters.get('var_smoothing', 1e-9))
             }
         elif variant == 'multinomial':
-            model_class = MultinomialNB
+            nb_class = MultinomialNB
             params = {
                 'alpha': float(hyperparameters.get('alpha', 1.0)),
                 'fit_prior': bool(hyperparameters.get('fit_prior', True))
             }
         elif variant == 'bernoulli':
-            model_class = BernoulliNB
+            nb_class = BernoulliNB
             params = {
                 'alpha': float(hyperparameters.get('alpha', 1.0)),
                 'fit_prior': bool(hyperparameters.get('fit_prior', True))
             }
-        else:
-            params = {}
+        model_class = nb_class
         
         print(f"🎯 Initializing {variant.capitalize()} Naive Bayes with params: {params}")
         return model_class(**params)
@@ -505,10 +516,10 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
         if validation_method in ['train_test_split', 'simple']:
             result_queue.put({'status': 'training', 'message': f'⏳ Training {algorithm_name}...'})
             print(f"⏳ Fitting model on training data...")
-            model.fit(X_train, y_train)
+            model.fit(X_train, y_train) ## training model for simple train-test spllit
             
             # Predict on both sets
-            print(f"🔮 Making predictions...")
+            print(f"🔮 Making predictions...") 
             y_pred_test = model.predict(X_test)
             y_pred_train = model.predict(X_train)
             
@@ -571,12 +582,13 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
                 cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
                 scoring = ['accuracy', 'f1_weighted', 'precision_weighted', 'recall_weighted']
             else:
+                cv = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
                 scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error']
             
             # IMPORTANT: For multiprocessing environments on Windows, n_jobs=1 is safer inside worker processes
             print(f"🔄 Running {cv_folds}-fold CV (n_jobs=1)...")
             cv_results = cross_validate(model, X_full, y_full, cv=cv, scoring=scoring, return_train_score=True, n_jobs=1)
-            print(f"✅ CV completed")
+            print(f"✅ CV completed") 
             
             if problem_type == 'classification':
                 metrics = {
@@ -809,6 +821,109 @@ def training_worker(config, X_train, X_test, y_train, y_test, result_queue, feat
         # Ensure feature names are present for visualization
         if feature_names and viz_data.get('feature_importance'):
              viz_data['feature_names'] = feature_names
+
+        # ===== SHAP EXPLAINABILITY =====
+        if SHAP_AVAILABLE and feature_names:
+            try:
+                print(f"🔍 Computing SHAP values for {algorithm_name}...")
+                # Pick the data to explain — prefer held-out test set
+                if validation_method in ['train_test_split', 'simple']:
+                    X_explain = X_test
+                else:
+                    X_explain = X_full
+
+                # Convert sparse matrices to dense for SHAP
+                if hasattr(X_explain, 'toarray'):
+                    X_explain = X_explain.toarray()
+                # Ensure it's a plain numpy array (no pandas DataFrames etc.)
+                X_explain = np.array(X_explain)
+
+                # Cap samples for speed: 200 for trees/linear, 50 for kernel
+                algo_class = model.__class__.__name__
+                is_tree  = algo_class in [
+                    'RandomForestClassifier', 'RandomForestRegressor',
+                    'DecisionTreeClassifier', 'DecisionTreeRegressor',
+                    'XGBClassifier', 'XGBRegressor',
+                    'GradientBoostingClassifier', 'GradientBoostingRegressor',
+                    'ExtraTreesClassifier', 'ExtraTreesRegressor',
+                ]
+                is_linear = algo_class in [
+                    'LogisticRegression', 'LinearRegression',
+                    'Ridge', 'Lasso', 'ElasticNet',
+                    'SGDClassifier', 'SGDRegressor',
+                ]
+
+                max_samples = 50 if not (is_tree or is_linear) else 200
+                n_samples = min(max_samples, len(X_explain))
+                rng = np.random.default_rng(42)
+                idx = rng.choice(len(X_explain), n_samples, replace=False)
+                X_sample = X_explain[idx]
+
+                
+                def _bg_sample(X, k):
+                    k = min(k, len(X))
+                    bg_idx = np.random.default_rng(42).choice(len(X), k, replace=False)
+                    return X[bg_idx]
+
+                if is_tree:
+                    explainer = shap.TreeExplainer(model)
+                    shap_values = explainer.shap_values(X_sample, check_additivity=False)
+                elif is_linear:
+                    bg = _bg_sample(X_explain, min(100, len(X_explain)))
+                    explainer = shap.LinearExplainer(model, bg)
+                    shap_values = explainer.shap_values(X_sample)
+                else:
+                    # KernelExplainer: slowest, use tiny background + sample
+                    bg = _bg_sample(X_explain, min(30, len(X_explain)))
+                    explainer = shap.KernelExplainer(model.predict, bg)
+                    shap_values = explainer.shap_values(X_sample)
+
+                # shap 0.44+ may return Explanation objects — unwrap to numpy
+                if hasattr(shap_values, 'values'):
+                    shap_values = shap_values.values
+
+                # Normalise multiclass output (list of arrays) to single 2-D matrix
+                if isinstance(shap_values, list):
+                    shap_abs_mean = np.mean([np.abs(sv) for sv in shap_values], axis=0)
+                    shap_raw = np.mean(shap_values, axis=0)
+                else:
+                    shap_abs_mean = np.abs(shap_values)
+                    shap_raw = np.array(shap_values)
+
+                # Ensure shap_raw is 2D [n_samples, n_features]
+                if shap_raw.ndim == 1:
+                    shap_raw = shap_raw.reshape(1, -1)
+                    shap_abs_mean = shap_abs_mean.reshape(1, -1)
+
+                # Use only the feature names that are actually in the SHAP output
+                n_feats = shap_raw.shape[1]
+                fn_shap = (feature_names or [])[:n_feats]
+
+                # Base value
+                base_val = explainer.expected_value
+                if hasattr(base_val, 'tolist'):
+                    base_val = float(np.mean(base_val))
+                elif isinstance(base_val, (list, np.ndarray)):
+                    base_val = float(np.mean(base_val))
+                else:
+                    base_val = float(base_val)
+
+                viz_data['shap'] = {
+                    'mean_abs_shap': shap_abs_mean.mean(axis=0).tolist(),
+                    'feature_names': fn_shap,
+                    'shap_matrix': shap_raw.tolist(),     # [n_samples, n_features]
+                    'X_sample': X_sample.tolist(),         # raw feature values for color coding
+                    'base_value': base_val,
+                    'n_samples': int(n_samples),
+                }
+                print(f"✅ SHAP computed: {n_samples} samples, {n_feats} features ({algo_class})")
+            except Exception as shap_err:
+                print(f"⚠️ SHAP computation failed (non-fatal): {type(shap_err).__name__}: {shap_err}")
+                import traceback as _tb
+                _tb.print_exc()
+                viz_data['shap'] = None
+        else:
+            viz_data['shap'] = None
             
         # ===== FINALIZE & SAVE =====
         from datetime import datetime
@@ -4883,7 +4998,7 @@ async def save_dataset_version(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/datasets/{dataset_id}/preprocessing/drop-columns")
-async def drop_columns(dataset_id: str, request: DropColumnsRequest, current_user: dict = Depends(auth.get_current_user)):
+async def drop_columns(dataset_id: str, request: DropColumnsRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Drop specified columns"""
     if dataset_id not in datasets:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -4918,7 +5033,7 @@ async def drop_columns(dataset_id: str, request: DropColumnsRequest, current_use
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/datasets/{dataset_id}/preprocessing/missing-values")
-async def handle_missing_values_route(dataset_id: str, request: MissingValueRequest, current_user: dict = Depends(auth.get_current_user)):
+async def handle_missing_values_route(dataset_id: str, request: MissingValueRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Handle missing values"""
     if dataset_id not in datasets:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -4975,7 +5090,7 @@ async def handle_missing_values_route(dataset_id: str, request: MissingValueRequ
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/datasets/{dataset_id}/preprocessing/outliers")
-async def handle_outliers_route(dataset_id: str, request: OutlierRequest, current_user: dict = Depends(auth.get_current_user)):
+async def handle_outliers_route(dataset_id: str, request: OutlierRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Handle outliers"""
     if dataset_id not in datasets:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -5049,7 +5164,7 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, curren
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/datasets/{dataset_id}/preprocessing/remove-duplicates")
-async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, current_user: dict = Depends(auth.get_current_user)):
+async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Remove duplicates"""
     if dataset_id not in datasets:
         raise HTTPException(status_code=404, detail="Dataset not found")

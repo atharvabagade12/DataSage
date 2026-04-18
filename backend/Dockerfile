@@ -1,6 +1,4 @@
 # Backend Dockerfile for DataSage ML Platform
-# Python 3.9 with development-friendly configuration
-
 FROM python:3.9-slim
 
 # Set environment variables
@@ -9,11 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
-# - postgresql-client: for pg_isready and database connectivity
-# - build-essential, gcc, g++: for compiling Python packages
-# - libpq-dev: PostgreSQL development headers
-# - libgomp1: OpenMP library for scikit-learn
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     build-essential \
@@ -33,8 +27,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Install imbalanced-learn for SMOTE functionality
-RUN pip install imbalanced-learn
+# Install optional ML packages not in requirements.txt (version resolved at build time)
+RUN pip install imbalanced-learn shap
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh

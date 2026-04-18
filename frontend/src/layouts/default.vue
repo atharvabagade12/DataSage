@@ -7,25 +7,41 @@
       <slot />
     </main>
 
-    <!-- Internal Save Modal for Context Bar -->
-    <div v-if="showSaveModal" class="save-modal-overlay" @click.self="showSaveModal = false">
-      <div class="save-modal" @click.stop>
-        <h3>Save Dataset Version</h3>
-        <p>Save the current state of your dataset as a new version in your inventory.</p>
-        <label class="version-label">Version Name</label>
-        <input 
-          v-model="versionName" 
-          type="text" 
-          placeholder="e.g., v2 REFINED" 
-          class="version-input"
-          @keyup.enter="saveVersion"
-        />
-        <div class="modal-actions">
-          <button @click="showSaveModal = false" class="btn-cancel">Cancel</button>
-          <button @click="saveVersion" class="btn-confirm" :disabled="!versionName">Save Version</button>
+    <!-- Save Version Modal (Context Bar) -->
+    <Modal v-model="showSaveModal" title="Save Dataset Version" size="md">
+      <div class="modal-section" style="padding: 1.5rem;">
+        <p class="modal-intro" style="margin-bottom: 1.5rem; color: #b3b3d1; font-size: 0.95rem;">Save the current state of your dataset as a new version in your inventory.</p>
+        <div class="input-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <label for="layoutVersionName" style="font-weight: 600; color: #e2e8f0; font-size: 0.9rem;">Version Name</label>
+          <input 
+            id="layoutVersionName"
+            v-model="versionName" 
+            type="text" 
+            :placeholder="versionNamePlaceholder"
+            class="native-input"
+            @keyup.enter="saveVersion"
+            style="background: rgba(13, 17, 23, 0.6); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; padding: 0.75rem 1rem; color: white; width: 100%; font-size: 0.95rem; outline: none; transition: border-color 0.2s;"
+          />
         </div>
       </div>
-    </div>
+      <template #footer>
+        <div style="display: flex; gap: 0.75rem; flex-shrink: 0;">
+          <Button
+            variant="primary"
+            :loading="isSaving"
+            @click="saveVersion"
+            :disabled="!versionName"
+            style="padding: 0.5rem 1.25rem; font-weight: 600;"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
+              <path d="M17,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3M19,19H5V5H16.17L19,7.83V19M12,12A3,3 0 0,0 9,15A3,3 0 0,0 12,18A3,3 0 0,0 15,15A3,3 0 0,0 12,12M6,6H15V10H6V6Z"/>
+            </svg>
+            Save Version
+          </Button>
+          <Button variant="ghost" @click="showSaveModal = false" style="padding: 0.5rem 1.25rem;">Cancel</Button>
+        </div>
+      </template>
+    </Modal>
 
     <!-- Save Success Toast -->
     <transition name="toast-slide">
@@ -46,6 +62,8 @@ import { useMLDataFlowStore } from '~/stores/mlDataFlow'
 import { useExperimentStore } from '~/stores/experiment'
 import GlobalNavbar from '~/components/GlobalNavbar.vue'
 import DatasetContextBar from '~/components/DatasetContextBar.vue'
+import Modal from '~/components/Modal.vue'
+import Button from '~/components/Button.vue'
 
 const route = useRoute()
 const mlStore = useMLDataFlowStore()
@@ -53,6 +71,13 @@ const experimentStore = useExperimentStore()
 
 const showSaveModal = ref(false)
 const versionName = ref('')
+const isSaving = ref(false)
+
+// Placeholder hint for naming convention
+const versionNamePlaceholder = computed(() => {
+  const base = (mlStore.fileName || 'dataset').split('.')[0]
+  return `e.g., ${base}_v1`
+})
 
 // Toast state
 const saveToast = ref({ visible: false, message: '' })
@@ -89,8 +114,11 @@ const showGlobalNavbar = computed(() => {
 
 // Context-bar "Save Dataset Version" button handler
 const openSaveModal = () => {
-  // Prefill with a suggested name
-  versionName.value = mlStore.getNextVersionName()
+  // Prefill with naming convention: <filename>_v<HHmm>
+  const now = new Date()
+  const ts = `${now.getHours()}${String(now.getMinutes()).padStart(2, '0')}`
+  const base = (mlStore.fileName || 'dataset').split('.')[0]
+  versionName.value = `${base}_v${ts}`
   showSaveModal.value = true
 }
 
@@ -111,13 +139,17 @@ const saveVersion = async () => {
   }
 
   try {
+    isSaving.value = true
     await mlStore.saveDatasetVersion(datasetId, savedName)
+    mlStore.isDirty = false
     showSaveModal.value = false
     versionName.value = ''
     showSaveSuccessToast(savedName)
   } catch (err) {
     saveToast.value = { visible: true, message: `Save failed: ${err.message}` }
     setTimeout(() => { saveToast.value.visible = false }, 4000)
+  } finally {
+    isSaving.value = false
   }
 }
 </script>
@@ -136,65 +168,20 @@ const saveVersion = async () => {
   overflow-y: auto;
 }
 
-.save-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10001;
-}
-
-.save-modal {
-  background: #1a1a2e;
-  padding: 24px;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 400px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.save-modal h3 { margin-bottom: 8px; }
-.save-modal p { color: #b3b3d1; font-size: 0.9rem; margin-bottom: 12px; }
-
-.version-label {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #b3b3d1;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.version-input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 12px;
+.native-input {
+  background: rgba(13, 17, 23, 0.6);
+  border: 1px solid rgba(102, 126, 234, 0.3);
   border-radius: 8px;
+  padding: 0.75rem 1rem;
   color: white;
-  margin-bottom: 24px;
-  font-size: 1rem;
+  width: 100%;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
 }
-
-.modal-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
-
-.btn-cancel { background: transparent; border: none; color: #b3b3d1; cursor: pointer; padding: 8px 16px; }
-.btn-confirm { 
-    background: linear-gradient(135deg, #667eea, #764ba2); 
-    color: white; 
-    border: none; 
-    padding: 8px 16px; 
-    border-radius: 6px; 
-    cursor: pointer;
-    font-weight: 600;
+.native-input:focus {
+  border-color: rgba(102, 126, 234, 0.7);
 }
-.btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Save Success Toast */
 .save-toast {

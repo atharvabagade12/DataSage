@@ -40,7 +40,7 @@ export const useExperimentStore = defineStore('experiment', {
       
       // Data Cleaning & Feature Engineering (from Preview)
       isMissingValuesApplied: false,
-      isOutliersApplied: false,
+      isOutliersApplied: false, 
       isDuplicatesApplied: false,
       isDateTimeApplied: false
     },

@@ -328,14 +328,9 @@
                     <span v-if="algorithm.recommended" class="badge recommended"
                       >Recommended</span
                     >
-                    <!-- <span
-                      class="badge complexity"
-                      :class="algorithm.complexity.toLowerCase()"
-                      >{{ algorithm.complexity}}<p>Complexity</p></span
-                    > -->
-                    <span v-if="algorithm.needsScaling" class="badge scaling"
-                      >Needs Scaling</span
-                    >
+                    
+                    
+                    
                   </div>
                 </div>
               </div>
@@ -390,52 +385,41 @@
             </div>
 
             <div class="card-footer">
-              <!-- 🆕 ADD THIS: Two-button layout -->
-              <div class="footer-buttons">
-                <!-- Learn More Button -->
+              <!-- Row 1: secondary actions -->
+              <div class="footer-row-top">
                 <button
                   @click.stop="showAlgorithmDetails(algorithm)"
                   class="learn-more-btn"
                   title="Learn how this algorithm works"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"
-                    />
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" />
                   </svg>
                   Learn More
                 </button>
 
-                <!-- Select Algorithm Button -->
                 <button
-                  class="select-algorithm-btn"
-                  :class="{
-                    selected: selectedAlgorithm?.name === algorithm.name,
-                  }"
+                  @click.stop="showWhyPanel(algorithm)"
+                  class="why-btn"
+                  title="See why this algorithm was recommended for your data"
                 >
-                  <svg
-                    v-if="selectedAlgorithm?.name === algorithm.name"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
-                    />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11.5 2C6.81 2 3 5.81 3 10.5S6.81 19 11.5 19h.5v3c4.86-2.34 8-7 8-11.5C20 5.81 16.19 2 11.5 2zm1 14.5h-2v-2h2v2zm0-4h-2c0-3.25 3-3 3-5 0-1.1-.9-2-2-2s-2 .9-2 2h-2c0-2.21 1.79-4 4-4s4 1.79 4 4c0 2.5-3 2.75-3 5z"/>
                   </svg>
-                  {{
-                    selectedAlgorithm?.name === algorithm.name
-                      ? "Selected"
-                      : "Select Algorithm"
-                  }}
+                  Why Recommended?
                 </button>
               </div>
+
+              <!-- Row 2: primary action full-width -->
+              <button
+                class="select-algorithm-btn"
+                :class="{ selected: selectedAlgorithm?.name === algorithm.name }"
+              >
+                <svg v-if="selectedAlgorithm?.name === algorithm.name" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z" />
+                </svg>
+                {{ selectedAlgorithm?.name === algorithm.name ? 'Selected' : 'Select Algorithm' }}
+              </button>
             </div>
           </div>
         </div>
@@ -467,19 +451,7 @@
           </div>
 
           <div class="action-buttons">
-            <button @click="exportConfiguration" class="export-config-btn">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
-                />
-              </svg>
-              Export Configuration
-            </button>
+            
 
             <button
               @click="startTraining"
@@ -670,6 +642,155 @@
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- 🧠 WHY RECOMMENDED? — Slide-over Explainability Panel              -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <Transition name="why-panel">
+    <div v-if="whyPanel" class="why-overlay" @click.self="closeWhyPanel">
+      <div class="why-drawer">
+
+        <!-- Drawer Header -->
+        <div class="why-header">
+          <div class="why-header-left">
+            <span class="why-algo-icon">{{ whyPanel.icon }}</span>
+            <div>
+              <h2 class="why-title">Why <em>{{ whyPanel.name }}</em>?</h2>
+              <p class="why-subtitle">How DataSage scored this algorithm for your dataset</p>
+            </div>
+          </div>
+          <button class="why-close-btn" @click="closeWhyPanel">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Score Hero -->
+        <div class="why-score-hero">
+          <div class="why-score-ring" :class="getScoreLevel(whyPanel.score)">
+            <span class="why-score-number">{{ Math.round(whyPanel.score * 100) }}</span>
+            <span class="why-score-unit">/ 100</span>
+          </div>
+          <div class="why-score-meta">
+            <span class="why-score-label">Overall Match Score</span>
+            <div class="why-rank-badge" v-if="whyPanel.rank">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              Rank #{{ whyPanel.rank }} out of {{ recommendedAlgorithms.length }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Pillar Breakdown -->
+        <div class="why-section">
+          <h3 class="why-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+            Scoring Breakdown
+          </h3>
+          <div class="why-pillars">
+            <div v-for="pillar in whyPillars" :key="pillar.key" class="why-pillar">
+              <div class="pillar-header">
+                <span class="pillar-icon">{{ pillar.icon }}</span>
+                <span class="pillar-label">{{ pillar.label }}</span>
+                <span class="pillar-weight">{{ pillar.weight }}</span>
+                <span class="pillar-pct">{{ Math.round((whyPanel.scoreBreakdown?.[pillar.key] ?? 0) * 100) }}%</span>
+              </div>
+              <div class="pillar-bar-track">
+                <div
+                  class="pillar-bar-fill"
+                  :class="getPillarLevel(whyPanel.scoreBreakdown?.[pillar.key] ?? 0)"
+                  :style="{ width: ((whyPanel.scoreBreakdown?.[pillar.key] ?? 0) * 100) + '%' }"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Positive Signals -->
+        <div class="why-section" v-if="whyPanel.scoreReasons?.length">
+          <h3 class="why-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#4ade80"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            Why it scores well
+          </h3>
+          <ul class="why-reasons">
+            <li v-for="(reason, i) in whyPanel.scoreReasons" :key="i" class="why-reason-item">
+              <span class="reason-dot green"></span>
+              <span>{{ reason.replace(/^✅\s*/, '') }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Warnings -->
+        <div class="why-section why-section-warn" v-if="whyPanel.scoreWarnings?.length">
+          <h3 class="why-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#fbbf24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            Cautions to consider
+          </h3>
+          <ul class="why-reasons">
+            <li v-for="(warning, i) in whyPanel.scoreWarnings" :key="i" class="why-reason-item">
+              <span class="reason-dot amber"></span>
+              <span>{{ warning.replace(/^⚠️\s*/, '') }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Data Context used for scoring -->
+        <div class="why-section">
+          <h3 class="why-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/></svg>
+            Data context used for scoring
+          </h3>
+          <div class="why-context-grid">
+            <div class="ctx-chip">
+              <span class="ctx-label">Rows</span>
+              <span class="ctx-val">{{ formatNumber(datasetStats.rows) }}</span>
+            </div>
+            <div class="ctx-chip">
+              <span class="ctx-label">Features</span>
+              <span class="ctx-val">{{ datasetStats.features }}</span>
+            </div>
+            <div class="ctx-chip">
+              <span class="ctx-label">FSR</span>
+              <span class="ctx-val">{{ datasetStats.rows > 0 ? (datasetStats.features / datasetStats.rows).toFixed(3) : 'N/A' }}</span>
+            </div>
+            <div class="ctx-chip">
+              <span class="ctx-label">Problem</span>
+              <span class="ctx-val">{{ formatProblemType(problemType.type) }}</span>
+            </div>
+            <div class="ctx-chip" :class="{ active: storePreprocessing.isScalingApplied }">
+              <span class="ctx-label">Scaling</span>
+              <span class="ctx-val">{{ storePreprocessing.isScalingApplied ? storePreprocessing.scalingMethod || 'Applied' : 'None' }}</span>
+            </div>
+            <div class="ctx-chip" :class="{ active: storePreprocessing.isEncodingApplied }">
+              <span class="ctx-label">Encoding</span>
+              <span class="ctx-val">{{ storePreprocessing.isEncodingApplied ? storePreprocessing.encodedColumns?.length + ' cols' : 'None' }}</span>
+            </div>
+            <div class="ctx-chip" :class="{ active: storePreprocessing.smote?.applied }">
+              <span class="ctx-label">SMOTE</span>
+              <span class="ctx-val">{{ storePreprocessing.smote?.applied ? 'Applied' : 'No' }}</span>
+            </div>
+            <div class="ctx-chip" :class="{ active: storePreprocessing.isOutliersApplied }">
+              <span class="ctx-label">Outliers</span>
+              <span class="ctx-val">{{ storePreprocessing.isOutliersApplied ? 'Handled' : 'Raw' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="why-footer">
+          <button class="why-select-btn" @click="selectAlgorithm(whyPanel); closeWhyPanel()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/></svg>
+            Select {{ whyPanel.name }}
+          </button>
+          <button class="why-learn-btn" @click="showAlgorithmDetails(whyPanel); closeWhyPanel()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/></svg>
+            Learn How It Works
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </Transition>
+
 </template>
 
 <script setup>
@@ -786,12 +907,24 @@ const loadDataFromPreviousSteps = () => {
     }
     
     // Dataset Stats
-    if (datasetMetadata.value) {
-       datasetStats.value = {
-         rows: datasetMetadata.value.totalRows || 0,
-         features: datasetMetadata.value.columns || 0
-       };
+    let totalRows = 0;
+    if (mlStore.isSplit && mlStore.splitInfo) {
+      const train = mlStore.splitInfo.trainRows || 0;
+      const test = mlStore.splitInfo.testRows || 0;
+      if (train + test > 0) totalRows = train + test;
     }
+    if (!totalRows && datasetMetadata.value?.totalRows) {
+      totalRows = datasetMetadata.value.totalRows;
+    }
+    if (!totalRows && statistics.value?.total_rows) {
+      totalRows = statistics.value.total_rows;
+    }
+
+    datasetStats.value = {
+      rows: totalRows,
+      features: datasetMetadata.value?.columns || statistics.value?.total_columns || 0
+    };
+
     
     // Preprocessing Steps Visualization
     const steps = [];
@@ -885,18 +1018,15 @@ const detectProblemType = (target) => {
 
   // ============================================================================
   // PRIORITY 2: Semantic Type Check (Most Reliable)
-  // ============================================================================
+  
   const isNumeric = ['numerical', 'numeric', 'int', 'integer', 'float', 'double', 'decimal', 'number'].includes(dataType);
   const isCategorical = ['categorical', 'category', 'string', 'object', 'text', 'bool', 'boolean'].includes(dataType);
 
   if (isNumeric) {
-     // Default to Regression for numerical data
-     // Exception: If user intends classification on numeric labels, they should override, 
-     // but statistically/structurally it's a regression space.
+   
      problemType = "regression";
      confidence = 0.9;
      
-     // Lower confidence if cardinality is very low (could be ordinal/class labels)
      if (uniqueValues > 0 && uniqueValues <= 10) {
          confidence = 0.7;
          console.log(`⚠️ Detected as REGRESSION (Numerical type, low cardinality: ${uniqueValues})`);
@@ -915,9 +1045,7 @@ const detectProblemType = (target) => {
       return { type: problemType, confidence };
   }
 
-  // ============================================================================
-  // PRIORITY 3: Fallback Heuristics (Unknown Type)
-  // ============================================================================
+
   
   if (uniqueValues > 20) {
     problemType = "regression";
@@ -938,19 +1066,447 @@ const detectProblemType = (target) => {
   return { type: "binary_classification", confidence: 0.5 };
 };
 
+// ============================================================================
+// 🧠 DATASAGE ALGORITHM RECOMMENDATION ENGINE v2.0
+// ============================================================================
+// Multi-dimensional, context-aware scoring system.
+// Produces a weighted composite score across 6 independent pillars.
+// Each pillar is scored 0-1 and multiplied by its weight.
+// Score breakdowns are stored per-algorithm as foundation for explainability.
+// ============================================================================
+
+/**
+ * Build a rich context object from current store state.
+ * This is the single source of truth for all signals used in scoring.
+ */
+const buildRecommendationContext = () => {
+  const prep = storePreprocessing.value;
+
+  // --- Dataset geometry ---
+  const rows    = datasetStats.value.rows    || 0;
+  const features = datasetStats.value.features || 0;
+  // feature-to-sample ratio: key signal for overfitting risk
+  const fsr = features > 0 && rows > 0 ? features / rows : 0;
+
+  // --- Preprocessing flags (read directly from store for accuracy) ---
+  const isScaled          = prep.isScalingApplied === true;
+  const isEncoded         = prep.isEncodingApplied === true;
+  const isMissingHandled  = prep.isMissingValuesApplied === true;
+  const isOutliersHandled = prep.isOutliersApplied === true;
+  const isDuplicatesClean = prep.isDuplicatesApplied === true;
+  const hasDateTimeFeats  = prep.isDateTimeApplied === true;
+  const isSmoteApplied    = prep.smote?.applied === true;
+  const droppedCount      = prep.droppedColumns?.length || 0;
+  const encodedCount      = prep.encodedColumns?.length || 0;
+  const scalingMethod     = prep.scalingMethod || 'standard';  // 'standard' | 'minmax' | 'robust' | 'none'
+  const splitStrategy     = prep.splitStrategy || 'random';   // 'random' | 'stratified'
+
+  // --- Problem type ---
+  const pType      = problemType.value?.type       || 'binary_classification';
+  const confidence = problemType.value?.confidence || 0.5;
+
+  // --- Dataset size category ---
+  // tiny: <200, small: <1k, medium: <50k, large: <500k, massive: >=500k
+  const sizeCategory =
+    rows < 200     ? 'tiny'    :
+    rows < 1000    ? 'small'   :
+    rows < 50000   ? 'medium'  :
+    rows < 500000  ? 'large'   : 'massive';
+
+  // --- Feature density ---
+  const featureDensity =
+    features < 10  ? 'very_low' :
+    features < 30  ? 'low'      :
+    features < 100 ? 'medium'   : 'high';
+
+  // --- Target cardinality signal (for multiclass complexity) ---
+  const targetUnique = selectedTarget.value?.uniqueValues || selectedTarget.value?.unique_values || 0;
+  const isHighCardinality = pType === 'multiclass_classification' && targetUnique > 10;
+
+  return {
+    rows, features, fsr,
+    isScaled, scalingMethod, isEncoded, encodedCount,
+    isMissingHandled, isOutliersHandled, isDuplicatesClean,
+    hasDateTimeFeats, isSmoteApplied, droppedCount, splitStrategy,
+    pType, confidence,
+    sizeCategory, featureDensity,
+    targetUnique, isHighCardinality,
+  };
+};
+
+/**
+ * Core scoring function.
+ * Returns a composite score [0,1] AND a detailed breakdown object
+ * that explains WHY each sub-score was awarded.
+ *
+ * Score pillars and weights:
+ *  1. Problem Type Compatibility  (hard gate)
+ *  2. Dataset Size Fit            (weight: 0.25)
+ *  3. Feature Dimensionality Fit  (weight: 0.20)
+ *  4. Preprocessing Alignment     (weight: 0.25)
+ *  5. Algorithm Intrinsic Quality (weight: 0.15)
+ *  6. Problem-Specific Bonus      (weight: 0.15)
+ */
+const scoreAlgorithmWithBreakdown = (algorithm, ctx) => {
+  // ─── PILLAR 0: Hard Compatibility Gate ───────────────────────────────────
+  if (!algorithm.problemTypes.includes(ctx.pType)) {
+    return {
+      finalScore: 0,
+      breakdown: {
+        compatibility: 0,
+        datasetFit:    0,
+        featureFit:    0,
+        prepAlignment: 0,
+        intrinsic:     0,
+        problemBonus:  0,
+      },
+      reasons: ['❌ Incompatible with detected problem type'],
+      warnings: [],
+    };
+  }
+
+  const reasons  = [];
+  const warnings = [];
+
+  // ─── PILLAR 1: Dataset Size Fit (weight 0.25) ────────────────────────────
+  let datasetFit = 0.5; // neutral start
+
+  if (ctx.sizeCategory === 'tiny' || ctx.sizeCategory === 'small') {
+    // Very small data → favour low-complexity, high-bias models to fight overfitting
+    if (algorithm.complexity === 'Low') {
+      datasetFit = 0.9;
+      reasons.push('✅ Low complexity suits small dataset (reduces overfitting risk)');
+    } else if (algorithm.complexity === 'Medium') {
+      datasetFit = 0.6;
+    } else {
+      // High complexity → overfit risk
+      datasetFit = 0.25;
+      warnings.push('⚠️ High complexity may overfit on a small dataset');
+    }
+    // KNN is actually decent on tiny data (no training phase)
+    if (algorithm.name === 'K-Nearest Neighbors') { datasetFit = Math.min(0.85, datasetFit + 0.15); reasons.push('✅ KNN works well on small datasets'); }
+    // Naive Bayes excels with little data
+    if (algorithm.name === 'Naive Bayes') { datasetFit = Math.min(0.92, datasetFit + 0.15); reasons.push('✅ Naive Bayes is extremely sample-efficient'); }
+    // SVM can work well on small/medium data
+    if (algorithm.name === 'Support Vector Machine') { datasetFit = Math.min(0.88, datasetFit + 0.1); reasons.push('✅ SVM has strong generalisation on small datasets'); }
+
+  } else if (ctx.sizeCategory === 'medium') {
+    // Sweet spot for most algorithms
+    datasetFit = 0.7;
+    // Ensembles shine here
+    if (['Random Forest', 'XGBoost'].includes(algorithm.name)) { datasetFit = 0.9; reasons.push('✅ Ensemble methods excel on medium-sized datasets'); }
+    if (algorithm.name === 'Support Vector Machine') { datasetFit = 0.8; reasons.push('✅ SVM scales acceptably on medium datasets'); }
+
+  } else if (ctx.sizeCategory === 'large') {
+    // Scalability becomes critical
+    datasetFit = 0.5;
+    if (['XGBoost', 'Random Forest', 'Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression'].includes(algorithm.name)) {
+      datasetFit = 0.85;
+      reasons.push('✅ Scales efficiently to large datasets');
+    }
+    if (['Support Vector Machine', 'Support Vector Regression', 'K-Nearest Neighbors'].includes(algorithm.name)) {
+      datasetFit = 0.15;
+      warnings.push('⚠️ Quadratic/cubic training complexity — very slow on large datasets');
+    }
+
+  } else if (ctx.sizeCategory === 'massive') {
+    datasetFit = 0.4;
+    if (['XGBoost', 'Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression'].includes(algorithm.name)) {
+      datasetFit = 0.88;
+      reasons.push('✅ One of the few algorithms that remain practical on massive datasets');
+    }
+    if (['Support Vector Machine', 'Support Vector Regression', 'K-Nearest Neighbors', 'Decision Tree'].includes(algorithm.name)) {
+      datasetFit = 0.05;
+      warnings.push('⚠️ Not recommended for massive datasets — will be extremely slow or run out of memory');
+    }
+    if (algorithm.name === 'Random Forest') {
+      datasetFit = 0.6;
+      warnings.push('⚠️ Random Forest is usable but may be slow on very large datasets');
+    }
+  }
+
+  // ─── PILLAR 2: Feature Dimensionality Fit (weight 0.20) ──────────────────
+  let featureFit = 0.5;
+
+  // Feature-to-sample ratio is the primary signal
+  if (ctx.fsr > 0.5) {
+    // Very high FSR → severe overfitting risk; need regularisation or feature selection built in
+    if (['Ridge Regression', 'Lasso Regression', 'Logistic Regression', 'Support Vector Machine', 'Naive Bayes'].includes(algorithm.name)) {
+      featureFit = 0.85;
+      reasons.push('✅ Built-in regularisation handles high feature-to-sample ratio well');
+    } else if (['Random Forest', 'XGBoost'].includes(algorithm.name)) {
+      featureFit = 0.72;
+      reasons.push('✅ Random feature subsampling mitigates high-dimensionality overfitting');
+    } else if (algorithm.name === 'K-Nearest Neighbors') {
+      featureFit = 0.05;
+      warnings.push('⚠️ KNN suffers severely from curse of dimensionality at high FSR');
+    } else if (algorithm.name === 'Decision Tree') {
+      featureFit = 0.35;
+      warnings.push('⚠️ Decision trees overfit easily when features ≥ samples');
+    } else {
+      featureFit = 0.4;
+    }
+  } else if (ctx.featureDensity === 'high') {
+    // Many features but many samples — manageable
+    if (['Random Forest', 'XGBoost', 'Support Vector Machine', 'Naive Bayes'].includes(algorithm.name)) {
+      featureFit = 0.82;
+      reasons.push('✅ Handles high-dimensional feature spaces efficiently');
+    }
+    if (algorithm.name === 'K-Nearest Neighbors') {
+      featureFit = 0.2;
+      warnings.push('⚠️ Distance metrics degrade with many features (curse of dimensionality)');
+    }
+    if (['Lasso Regression', 'Ridge Regression'].includes(algorithm.name)) {
+      featureFit = 0.75;
+      reasons.push('✅ L1/L2 regularisation manages high-dimensional inputs');
+    }
+  } else if (ctx.featureDensity === 'very_low' || ctx.featureDensity === 'low') {
+    // Few features — linear and simple models are a natural fit
+    featureFit = 0.65;
+    if (['Logistic Regression', 'Linear Regression', 'Decision Tree', 'K-Nearest Neighbors'].includes(algorithm.name)) {
+      featureFit = 0.82;
+      reasons.push('✅ Performs well on compact feature sets');
+    }
+    if (['XGBoost', 'Random Forest'].includes(algorithm.name)) {
+      featureFit = 0.7; // still good, just not as pronounced advantage
+    }
+  } else {
+    // Medium feature count — most algorithms work well
+    featureFit = 0.7;
+    if (['Random Forest', 'XGBoost', 'Support Vector Machine'].includes(algorithm.name)) {
+      featureFit = 0.82;
+      reasons.push('✅ Well-suited to this feature count');
+    }
+  }
+
+  // ─── PILLAR 3: Preprocessing Alignment (weight 0.25) ────────────────────
+  let prepAlignment = 0.5;
+
+  // 3a. Scaling requirement — most critical alignment factor
+  if (algorithm.needsScaling && !ctx.isScaled) {
+    prepAlignment = 0.05; // near-fatal: distance/gradient algos degrade without scaling
+    warnings.push('⚠️ This algorithm requires feature scaling — apply StandardScaler or MinMaxScaler first');
+  } else if (algorithm.needsScaling && ctx.isScaled) {
+    prepAlignment = 0.85;
+    reasons.push('✅ Feature scaling applied — unlocks full algorithm potential');
+    // Bonus for correct scaler choice
+    if (algorithm.name === 'Support Vector Machine' || algorithm.name === 'Support Vector Regression') {
+      if (ctx.scalingMethod === 'standard') {
+        prepAlignment = 0.92;
+        reasons.push('✅ StandardScaler is optimal for SVM');
+      }
+    }
+    if (algorithm.name === 'K-Nearest Neighbors') {
+      if (ctx.scalingMethod === 'minmax') {
+        prepAlignment = 0.92;
+        reasons.push('✅ MinMaxScaler is optimal for distance-based KNN');
+      }
+    }
+  } else if (!algorithm.needsScaling && ctx.isScaled) {
+    prepAlignment = 0.8; // slight benefit (normalised data never hurts tree methods)
+    reasons.push('✅ Scaling applied (neutral-to-positive for tree-based methods)');
+  } else {
+    // No scaling needed, no scaling applied — perfect alignment
+    prepAlignment = 0.9;
+    reasons.push('✅ No scaling required — tree-based methods handle raw features natively');
+  }
+
+  // 3b. Class imbalance handling (SMOTE)
+  if (ctx.isSmoteApplied) {
+    if (['Random Forest', 'XGBoost', 'Decision Tree'].includes(algorithm.name)) {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.08);
+      reasons.push('✅ SMOTE-balanced classes synergise well with ensemble/tree methods');
+    }
+    if (algorithm.name === 'Logistic Regression') {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.05);
+      reasons.push('✅ SMOTE-balanced classes improve Logistic Regression boundary quality');
+    }
+    if (algorithm.name === 'Support Vector Machine') {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.04);
+      reasons.push('✅ SMOTE rebalancing helps SVM find a better decision boundary');
+    }
+  }
+
+  // 3c. Outlier handling
+  if (ctx.isOutliersHandled) {
+    if (['Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression', 'Support Vector Machine'].includes(algorithm.name)) {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.06);
+      reasons.push('✅ Outlier removal directly benefits this sensitivity-prone algorithm');
+    }
+    // Tree methods are robust; outlier removal doesn't hurt but isn't critical
+    if (['Random Forest', 'XGBoost', 'Decision Tree'].includes(algorithm.name)) {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.02);
+    }
+  } else {
+    if (['Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression', 'K-Nearest Neighbors'].includes(algorithm.name)) {
+      prepAlignment = Math.max(0, prepAlignment - 0.06);
+      warnings.push('⚠️ Outliers not handled — linear/distance-based methods are sensitive to extreme values');
+    }
+  }
+
+  // 3d. Categorical encoding coverage
+  if (ctx.isEncoded && ctx.encodedCount > 0) {
+    if (['Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression', 'K-Nearest Neighbors', 'Support Vector Machine', 'Naive Bayes'].includes(algorithm.name)) {
+      // These require numeric features — encoding is mandatory
+      prepAlignment = Math.min(1.0, prepAlignment + 0.07);
+      reasons.push(`✅ ${ctx.encodedCount} categorical feature(s) encoded — required for this algorithm`);
+    }
+    if (['Random Forest', 'XGBoost', 'Decision Tree'].includes(algorithm.name)) {
+      // Trees can handle ordinal-encoded cats natively without OHE
+      prepAlignment = Math.min(1.0, prepAlignment + 0.03);
+      reasons.push(`✅ Encoded categoricals further improve tree-split quality`);
+    }
+    // High number of OHE columns → slight penalty for linear models (multicollinearity)
+    if (ctx.encodedCount > 20 && ['Logistic Regression', 'Linear Regression'].includes(algorithm.name)) {
+      prepAlignment = Math.max(0, prepAlignment - 0.06);
+      warnings.push('⚠️ Many one-hot encoded columns may introduce multicollinearity — consider Ridge/Lasso');
+    }
+  } else if (!ctx.isEncoded) {
+    // Raw categoricals present — some algorithms can still handle them
+    if (['Logistic Regression', 'Linear Regression', 'Support Vector Machine', 'K-Nearest Neighbors'].includes(algorithm.name)) {
+      prepAlignment = Math.max(0, prepAlignment - 0.1);
+      warnings.push('⚠️ Categorical encoding not applied — this algorithm needs numeric-only inputs');
+    }
+  }
+
+  // 3e. DateTime feature extraction signal
+  if (ctx.hasDateTimeFeats) {
+    if (['Random Forest', 'XGBoost', 'Decision Tree'].includes(algorithm.name)) {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.05);
+      reasons.push('✅ Extracted date/time features pair well with tree-based split logic');
+    }
+  }
+
+  // 3f. Missing values handling
+  if (!ctx.isMissingHandled) {
+    if (!['Random Forest', 'XGBoost'].includes(algorithm.name)) {
+      // Most sklearn algorithms don't support NaN natively
+      prepAlignment = Math.max(0, prepAlignment - 0.08);
+      warnings.push('⚠️ Missing values detected but not handled — may cause training errors');
+    } else {
+      warnings.push('⚠️ Missing values present — XGBoost/RF can handle them but imputing is recommended');
+    }
+  }
+
+  // ─── PILLAR 4: Algorithm Intrinsic Quality (weight 0.15) ─────────────────
+  // This encodes baseline real-world performance and robustness reputation
+  let intrinsic = algorithm.accuracy; // already a 0-1 value from catalog
+
+  // Slight boost for algorithms that are state-of-the-art on tabular data
+  if (['XGBoost', 'Random Forest'].includes(algorithm.name)) {
+    intrinsic = Math.min(1.0, intrinsic + 0.05);
+    reasons.push('✅ State-of-the-art performance on tabular datasets in benchmarks');
+  }
+  // Penalise algorithms with poor complexity-to-accuracy tradeoff for this context
+  if (algorithm.name === 'Decision Tree') {
+    intrinsic = Math.max(0, intrinsic - 0.05); // single trees are outclassed by forests
+  }
+
+  // ─── PILLAR 5: Problem-Specific Bonus (weight 0.15) ──────────────────────
+  let problemBonus = 0.5;
+
+  if (ctx.pType === 'binary_classification') {
+    if (algorithm.name === 'Logistic Regression') { problemBonus = 0.9; reasons.push('✅ Logistic Regression is the canonical algorithm for binary classification'); }
+    else if (algorithm.name === 'Support Vector Machine') { problemBonus = 0.85; reasons.push('✅ SVM is specifically optimised for binary margin maximisation'); }
+    else if (['XGBoost', 'Random Forest'].includes(algorithm.name)) { problemBonus = 0.82; }
+    else if (algorithm.name === 'Naive Bayes') { problemBonus = 0.75; }
+    else { problemBonus = 0.6; }
+
+  } else if (ctx.pType === 'multiclass_classification') {
+    if (['XGBoost', 'Random Forest'].includes(algorithm.name)) { problemBonus = 0.88; reasons.push('✅ Native multi-class support with excellent calibration'); }
+    else if (algorithm.name === 'Naive Bayes') { problemBonus = 0.82; reasons.push('✅ Naive Bayes extends naturally to multi-class via Bayes rule'); }
+    else if (algorithm.name === 'Logistic Regression') { problemBonus = 0.78; reasons.push('✅ One-vs-Rest extension supports multi-class'); }
+    else if (algorithm.name === 'Support Vector Machine') {
+      if (ctx.isHighCardinality) {
+        problemBonus = 0.55;
+        warnings.push('⚠️ SVM multi-class scales poorly with many target classes (OvO strategy)');
+      } else {
+        problemBonus = 0.7;
+      }
+    } else { problemBonus = 0.6; }
+
+  } else if (ctx.pType === 'regression') {
+    if (['XGBoost', 'Random Forest'].includes(algorithm.name)) { problemBonus = 0.86; reasons.push('✅ Ensemble methods consistently lead regression benchmarks'); }
+    else if (algorithm.name === 'Linear Regression') { problemBonus = 0.82; reasons.push('✅ Linear Regression is the fundamental baseline for regression'); }
+    else if (algorithm.name === 'Ridge Regression') { problemBonus = 0.85; reasons.push('✅ Ridge handles multicollinearity — common in regression problems'); }
+    else if (algorithm.name === 'Lasso Regression') {
+      if (ctx.featureDensity === 'high') { problemBonus = 0.88; reasons.push('✅ Lasso performs automatic feature selection on high-dimensional regression'); }
+      else { problemBonus = 0.78; }
+    } else if (algorithm.name === 'Support Vector Regression') {
+      if (ctx.sizeCategory === 'small' || ctx.sizeCategory === 'tiny') { problemBonus = 0.82; reasons.push('✅ SVR generalises well on small regression datasets'); }
+      else { problemBonus = 0.6; }
+    } else { problemBonus = 0.55; }
+  }
+
+  // Low-confidence problem detection → bias toward versatile algorithms
+  if (ctx.confidence < 0.7) {
+    if (['XGBoost', 'Random Forest'].includes(algorithm.name)) {
+      problemBonus = Math.min(1.0, problemBonus + 0.05);
+      reasons.push('✅ Versatile ensemble — robust to problem type uncertainty');
+    }
+    warnings.push('⚠️ Problem type detected with low confidence — versatile algorithms are safer');
+  }
+
+  // ─── COMPOSITE SCORE ─────────────────────────────────────────────────────
+  const weights = {
+    datasetFit:    0.25,
+    featureFit:    0.20,
+    prepAlignment: 0.25,
+    intrinsic:     0.15,
+    problemBonus:  0.15,
+  };
+
+  const finalScore = Math.min(1.0, Math.max(0.0,
+    datasetFit    * weights.datasetFit    +
+    featureFit    * weights.featureFit    +
+    prepAlignment * weights.prepAlignment +
+    intrinsic     * weights.intrinsic     +
+    problemBonus  * weights.problemBonus
+  ));
+
+  return {
+    finalScore,
+    breakdown: {
+      datasetFit,
+      featureFit,
+      prepAlignment,
+      intrinsic,
+      problemBonus,
+    },
+    reasons,
+    warnings,
+  };
+};
+
+/**
+ * Public function called by template/initializeRecommendations.
+ * Returns just the composite score (keeps existing template API intact).
+ */
+const calculateAlgorithmScore = (algorithm) => {
+  const ctx = buildRecommendationContext();
+  return scoreAlgorithmWithBreakdown(algorithm, ctx).finalScore;
+};
+
 const initializeRecommendations = () => {
   const algorithms = getAllAvailableAlgorithms();
+  const ctx = buildRecommendationContext();  // build context ONCE for all algos
 
   recommendedAlgorithms.value = algorithms
-    .map((algo) => ({
-      ...algo,
-      score: calculateAlgorithmScore(algo),
-      rank: 0,
-    }))
+    .map((algo) => {
+      const result = scoreAlgorithmWithBreakdown(algo, ctx);
+      return {
+        ...algo,
+        score:          result.finalScore,
+        scoreBreakdown: result.breakdown,   // per-pillar breakdown → used later for "Why?" panel
+        scoreReasons:   result.reasons,     // human-readable positive signals
+        scoreWarnings:  result.warnings,    // human-readable cautions
+        rank: 0,
+      };
+    })
     .sort((a, b) => b.score - a.score)
     .map((algo, index) => ({
       ...algo,
-      rank: index + 1,
+      rank:        index + 1,
       recommended: index < 3,
     }));
 
@@ -958,78 +1514,16 @@ const initializeRecommendations = () => {
   if (recommendedAlgorithms.value.length > 0) {
     selectAlgorithm(recommendedAlgorithms.value[0]);
   }
-};
 
-
-
-const calculateAlgorithmScore = (algorithm) => {
-  // 1. Base Compatibility Check
-  if (!algorithm.problemTypes.includes(problemType.value.type)) {
-    return 0; // Not compatible
-  }
-
-  let score = 0.5; // Base score
-  const rows = datasetStats.value.rows;
-  const features = datasetStats.value.features;
-  const isScaled = preprocessingSteps.value.some(step => 
-    (typeof step === 'string' && step.includes('Scaling')) || 
-    (step.name && step.name.includes('Scaling'))
-  );
-  const isEncoded = preprocessingSteps.value.some(step => 
-    (typeof step === 'string' && step.includes('Encoding')) || 
-    (step.name && step.name.includes('Encoding'))
-  );
-
-  // 2. Dataset Size Heuristics
-  if (rows < 1000) {
-    // Small dataset: Prefer simple, low-variance models
-    if (algorithm.complexity === "Low") score += 0.25;
-    if (["Logistic Regression", "Linear Regression", "Naive Bayes", "K-Nearest Neighbors"].includes(algorithm.name)) score += 0.15;
-    
-    
-  } else if (rows >= 1000 && rows < 50000) {
-    // Medium dataset: Sweet spot for many algorithms
-    if (["Random Forest", "Support Vector Machine", "XGBoost"].includes(algorithm.name)) score += 0.2;
-  } else {
-    // Large dataset: Prefer efficient, scalable models
-    if (["XGBoost", "LightGBM", "Linear Regression", "Logistic Regression"].includes(algorithm.name)) score += 0.25;
-    if (["Support Vector Machine", "K-Nearest Neighbors"].includes(algorithm.name)) score -= 0.3; // Too slow O(n^2) or O(n) inference
-  }
-
-  // 3. Dimensionality (Features)
-  if (features > 100) {
-    // High dimensionality
-    // User Preference: Reward Trees, SVM, Naive Bayes
-    if (["Random Forest", "XGBoost", "Support Vector Machine", "Naive Bayes"].includes(algorithm.name)) score += 0.2;
-    
-    // Penalize algorithms that struggle with high dimensions without feature selection
-    if (algorithm.name === "K-Nearest Neighbors") score -= 0.4; // Curse of dimensionality distance issues
-  } else if (features < 20) {
-    // Low dimensionality
-    if (["Decision Tree", "K-Nearest Neighbors", "Logistic Regression"].includes(algorithm.name)) score += 0.1;
-  }
-
-  // 4. Preprocessing Context
-  if (algorithm.needsScaling && !isScaled) {
-    score -= 0.4; // Critical penalty: Distance/Gradient based algos fail without scaling
-  }
-  
-  if (algorithm.needsScaling && isScaled) {
-    score += 0.1; // Reward for meeting requirement
-  }
-
-  // 5. Algorithm Specific Boosts
-  if (algorithm.name === "XGBoost" || algorithm.name === "Random Forest") {
-    score += 0.1; // Generally strong performers (State of the Art for tabular)
-  }
-
-  // 6. Problem Type Specifics
-  if (problemType.value.type === "binary_classification") {
-    if (algorithm.name === "Logistic Regression") score += 0.1;
-  }
-
-  // Clamp score between 0 and 1
-  return Math.min(1.0, Math.max(0.0, score));
+  // Log recommendation context for debugging
+  console.log('🧠 Recommendation Engine v2.0 — Context:', ctx);
+  console.log('📊 Algorithm Rankings:', recommendedAlgorithms.value.map(a => ({
+    name: a.name,
+    score: (a.score * 100).toFixed(1) + '%',
+    breakdown: a.scoreBreakdown,
+    reasons: a.scoreReasons,
+    warnings: a.scoreWarnings,
+  })));
 };
 
 
@@ -1935,6 +2429,33 @@ const showAlgorithmDetails = (algo) => {
 
 const closeAlgorithmInfo = () => {
   selectedAlgorithmInfo.value = null;
+};
+
+// ─── WHY RECOMMENDED? Panel ──────────────────────────────────────────────────
+const whyPanel = ref(null);
+
+const whyPillars = [
+  { key: 'datasetFit',    label: 'Dataset Size Fit',        icon: '📦', weight: '25%' },
+  { key: 'featureFit',    label: 'Feature Dimensionality',  icon: '📐', weight: '20%' },
+  { key: 'prepAlignment', label: 'Preprocessing Alignment', icon: '⚙️', weight: '25%' },
+  { key: 'intrinsic',     label: 'Algorithm Quality',       icon: '⭐', weight: '15%' },
+  { key: 'problemBonus',  label: 'Problem Type Fit',        icon: '🎯', weight: '15%' },
+];
+
+const showWhyPanel = (algorithm) => {
+  whyPanel.value = algorithm;
+  document.body.style.overflow = 'hidden';
+};
+
+const closeWhyPanel = () => {
+  whyPanel.value = null;
+  document.body.style.overflow = '';
+};
+
+const getPillarLevel = (score) => {
+  if (score >= 0.75) return 'pillar-high';
+  if (score >= 0.45) return 'pillar-mid';
+  return 'pillar-low';
 };
 
 const getAlgorithmEducationalContent = (algo) => {
@@ -3474,21 +3995,7 @@ onMounted(async () => {
   );
 }
 
-.algorithm-card.recommended::before {
-  content: "";
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
+
 
 .algorithm-card.selected {
   border-color: #667eea;
@@ -3681,18 +4188,22 @@ onMounted(async () => {
 .card-footer {
   margin-top: auto;
   padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-.footer-buttons {
+/* Top row: two secondary buttons side-by-side */
+.footer-row-top {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.6rem;
   width: 100%;
 }
 
 /* Learn More Button */
 .learn-more-btn {
-  flex: 0 0 auto;
-  padding: 0.75rem 1rem;
+  flex: 1;
+  padding: 0.6rem 0.75rem;
   background: rgba(99, 102, 241, 0.1);
   border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: 8px;
@@ -3702,10 +4213,11 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+  gap: 0.4rem;
+  font-size: 0.8rem;
   font-weight: 500;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .learn-more-btn:hover {
@@ -3719,15 +4231,17 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* Select Algorithm Button - Updated */
+/* Select Algorithm Button - full-width second row */
 .select-algorithm-btn {
-  flex: 1;
-  padding: 0.75rem 1.5rem;
+  width: 75%;
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   color: white;
   font-weight: 600;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
@@ -3751,12 +4265,8 @@ onMounted(async () => {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .footer-buttons {
+  .footer-row-top {
     flex-direction: column;
-  }
-
-  .learn-more-btn {
-    flex: 1;
   }
 }
 
@@ -5022,5 +5532,316 @@ onMounted(async () => {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WHY RECOMMENDED? — Slide-over Panel Styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Why button on card footer */
+.why-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.6rem 0.75rem;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 8px;
+  color: #a78bfa;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.why-btn:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(59, 130, 246, 0.22));
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #c4b5fd;
+  transform: translateY(-1px);
+}
+
+/* Slide-over overlay */
+.why-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1100;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Slide-over drawer */
+.why-drawer {
+  width: 460px;
+  max-width: 96vw;
+  height: 100vh;
+  background: linear-gradient(180deg, #13132b 0%, #0d0d1f 100%);
+  border-left: 1px solid rgba(139, 92, 246, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: -12px 0 48px rgba(0, 0, 0, 0.6);
+}
+
+/* Vue transition for the panel */
+.why-panel-enter-active,
+.why-panel-leave-active {
+  transition: opacity 0.25s ease;
+}
+.why-panel-enter-active .why-drawer,
+.why-panel-leave-active .why-drawer {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.why-panel-enter-from,
+.why-panel-leave-to {
+  opacity: 0;
+}
+.why-panel-enter-from .why-drawer {
+  transform: translateX(100%);
+}
+.why-panel-leave-to .why-drawer {
+  transform: translateX(100%);
+}
+
+/* Header */
+.why-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 1.5rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #13132b 80%, transparent);
+  z-index: 2;
+}
+.why-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+.why-algo-icon {
+  font-size: 2rem;
+  filter: drop-shadow(0 0 8px rgba(139,92,246,0.5));
+}
+.why-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+.why-title em {
+  font-style: normal;
+  background: linear-gradient(135deg, #a78bfa, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.why-subtitle {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  margin: 2px 0 0;
+}
+.why-close-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.5);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.why-close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+/* Score Hero */
+.why-score-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.06));
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.why-score-ring {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 800;
+  border: 3px solid;
+  position: relative;
+}
+.why-score-ring.excellent { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.08); }
+.why-score-ring.good      { border-color: #60a5fa; color: #60a5fa; background: rgba(96,165,250,0.08); }
+.why-score-ring.fair      { border-color: #fbbf24; color: #fbbf24; background: rgba(251,191,36,0.08); }
+.why-score-ring.poor      { border-color: #f87171; color: #f87171; background: rgba(248,113,113,0.08); }
+.why-score-number { font-size: 1.75rem; line-height: 1; }
+.why-score-unit   { font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 1px; }
+.why-score-meta { display: flex; flex-direction: column; gap: 0.4rem; }
+.why-score-label { font-size: 0.9rem; font-weight: 600; color: rgba(255,255,255,0.7); }
+.why-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(251,191,36,0.12);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fbbf24;
+  width: fit-content;
+}
+
+/* Sections */
+.why-section {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.why-section-warn { background: rgba(251,191,36,0.03); }
+.why-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.45);
+  margin: 0 0 1rem;
+}
+
+/* Pillar bars */
+.why-pillars { display: flex; flex-direction: column; gap: 0.85rem; }
+.why-pillar {}
+.pillar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 5px;
+}
+.pillar-icon  { font-size: 0.85rem; width: 20px; text-align: center; }
+.pillar-label { font-size: 0.8rem; color: rgba(255,255,255,0.75); font-weight: 500; flex: 1; }
+.pillar-weight { font-size: 0.7rem; color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.06); border-radius: 4px; padding: 1px 6px; }
+.pillar-pct   { font-size: 0.82rem; font-weight: 700; color: #fff; min-width: 38px; text-align: right; }
+.pillar-bar-track {
+  height: 6px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pillar-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pillar-high { background: linear-gradient(90deg, #4ade80, #22d3ee); }
+.pillar-mid  { background: linear-gradient(90deg, #fbbf24, #60a5fa); }
+.pillar-low  { background: linear-gradient(90deg, #f87171, #fb923c); }
+
+/* Reasons / Warnings list */
+.why-reasons { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.why-reason-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.825rem;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.5;
+}
+.reason-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.reason-dot.green { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+.reason-dot.amber { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.5); }
+
+/* Context chips grid */
+.why-context-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.ctx-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.6rem 0.4rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.ctx-chip.active {
+  background: rgba(139,92,246,0.1);
+  border-color: rgba(139,92,246,0.3);
+}
+.ctx-label { font-size: 0.62rem; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+.ctx-val   { font-size: 0.78rem; font-weight: 700; color: #e2e8f0; text-align: center; }
+
+/* Footer CTAs */
+.why-footer {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(0deg, #0d0d1f 70%, transparent);
+  margin-top: auto;
+}
+.why-select-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0.85rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.why-select-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.why-learn-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0.85rem 1rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 600;
+  font-size: 0.825rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.why-learn-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+@media (max-width: 520px) {
+  .why-drawer { width: 100vw; }
+  .why-context-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

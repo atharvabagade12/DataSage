@@ -630,20 +630,32 @@ const startPipelineAnimation = () => {
   const steps = 4
   let elapsed = 0
   const tick = 50
+  let isPausing = false
 
   const interval = setInterval(() => {
-    elapsed += tick
-    const progress = (elapsed % totalDuration) / totalDuration
-    pipelineProgress.value = Math.min(progress * 100, 100)
-    activePipelineStep.value = Math.floor(progress * steps)
+    if (isPausing) return
 
-    if (elapsed % totalDuration === 0) {
-      // brief pause at end then restart
+    elapsed += tick
+
+    if (elapsed >= totalDuration) {
+      // Cycle complete — freeze at end state, then reset
+      pipelineProgress.value = 100
+      activePipelineStep.value = steps - 1
+      isPausing = true
+
       setTimeout(() => {
         activePipelineStep.value = -1
         pipelineProgress.value = 0
+        elapsed = 0
+        isPausing = false
       }, 800)
+
+      return
     }
+
+    const progress = elapsed / totalDuration
+    pipelineProgress.value = progress * 100
+    activePipelineStep.value = Math.floor(progress * steps)
   }, tick)
 
   return interval
