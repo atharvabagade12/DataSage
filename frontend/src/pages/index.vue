@@ -18,8 +18,7 @@
           </div>
   
           <div class="nav-actions">
-            <button @click="goToLogin" class="nav-btn secondary">Sign In</button>
-            <button @click="goToSignup" class="nav-btn primary">Get Started</button>
+            <button @click="goToSignup" class="nav-btn primary">Sign In</button>
           </div>
   
           <button @click="toggleMobileMenu" class="mobile-menu-btn">
@@ -202,11 +201,9 @@
             </div>
             <div class="about-card">
               <div class="about-icon">🎓</div>
-              <h3>Built by Students</h3>
+              <h3>Powered by Curiosity</h3>
               <p>
-                Developed as a final-year academic project, DataSage is built with modern 
-                technologies and real-world engineering practices. It's designed to grow with 
-                the community's feedback and contributions.
+                Born from a deep curiosity about making ML approachable, DataSage was designed and built from the ground up as a final-year project — with no shortcuts, no templates, just real engineering.
               </p>
             </div>
             <div class="about-card">
@@ -313,9 +310,8 @@
             <h4 class="footer-heading">Academic</h4>
             <div class="footer-links">
               <a @click="scrollTo('about')">About Project</a>
-              <a href="#">Documentation</a>
-              <a href="#">GitHub Repository</a>
-              <a href="#">Research Paper</a>
+              <a href="https://github.com/atharvabagade12/DataSage" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+              <a href="https://www.irjet.net/archives/V12/i11/IRJET-V12I1139.pdf" target="_blank" rel="noopener noreferrer">Research Paper</a>
             </div>
           </div>
   
@@ -323,9 +319,8 @@
             <h4 class="footer-heading">Connect</h4>
             <div class="footer-links">
               <a href="mailto:contact@datasage.com">Contact</a>
-              <a href="#">LinkedIn</a>
-              <a href="#">GitHub</a>
-              <a href="#">Support</a>
+              <a href="https://www.linkedin.com/in/atharva-bagade-85813528b/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+              <a href="https://github.com/atharvabagade12/DataSage" target="_blank" rel="noopener noreferrer">GitHub</a>
             </div>
           </div>
         </div>
@@ -395,14 +390,14 @@ const features = ref([
     highlights: ['Random Forest, XGBoost, SVM & more', 'Hyperparameter tuning', 'Cross-validation support', 'Train-test splitting']
   },
   {
-    id: 3,
+    id: 4,
     icon: '📈',
     title: 'Interactive Visualizations',
     description: 'Explore your data with dynamic distribution charts, correlation heatmaps, and feature analysis plots powered by Chart.js.',
     highlights: ['Distribution plots', 'Correlation heatmaps', 'Feature analysis charts', 'Model performance graphs']
   },
   {
-    id: 4,
+    id: 3,
     icon: '⚙️',
     title: 'Advanced Preprocessing',
     description: 'Handle class imbalance with SMOTE, apply label & ordinal encoding, detect outliers, and scale features — all from an intuitive interface.',
@@ -412,7 +407,7 @@ const features = ref([
     id: 5,
     icon: '🏆',
     title: 'Model Comparison',
-    description: 'Compare trained models side-by-side with key performance metrics, confusion matrices, and classification reports.',
+    description: 'Compare trained models through interactive visualizations and model performance metrics.',
     highlights: ['Side-by-side metrics', 'Confusion matrices', 'Classification reports', 'Accuracy, Precision & Recall']
   },
   {
@@ -434,8 +429,8 @@ const steps = ref([
   {
     id: 2,
     icon: '⚙️',
-    title: 'Automated Processing',
-    description: 'Our algorithms handle data cleaning, preprocessing, feature engineering, and prepare your data for machine learning.'
+    title: 'One Click Preprocessing',
+    description: 'Handles all preprocessing  steps through an intuitive one click form.'
   },
   {
     id: 3,

@@ -333,7 +333,7 @@
           </div>
         </div>
 
-        <!-- ===== SHAP EXPLAINABILITY ===== -->
+        <!-- ===== SHAP EXPLAINABILITY (TEMPORARILY DISABLED — backend code intact) =====
         <div class="vis-section full-width shap-section">
           <div class="section-info">
             <div class="shap-header-row">
@@ -341,7 +341,6 @@
                 <h3>SHAP Explainability <span class="shap-badge">XAI</span></h3>
                 <p class="description">SHapley Additive exPlanations — the gold standard for understanding <em>why</em> a model made each prediction.</p>
               </div>
-              <!-- Tab Switcher -->
               <div class="shap-tabs" v-if="plotData.shap">
                 <button
                   class="shap-tab-btn"
@@ -359,46 +358,34 @@
             </div>
             <div class="instructional-box" v-if="plotData.shap">
               <p class="howto" v-if="activeShapTab === 'beeswarm'">
-                <strong>Beeswarm Plot:</strong> Each dot = one prediction in your data. The X-axis is the SHAP value (positive = pushed prediction <em>up</em>, negative = pushed it <em>down</em>). Color shows the original feature value — <span style="color:#ef4444">red = high</span>, <span style="color:#6366f1">blue = low</span>.
+                <strong>Beeswarm Plot:</strong> Each dot = one prediction in your data.
               </p>
               <p class="howto" v-else>
-                <strong>Mean |SHAP| Bar Chart:</strong> The average absolute impact of each feature across all predictions. This is model-agnostic ground truth — derived mathematically from game theory, not from impurity or coefficients.
+                <strong>Mean |SHAP| Bar Chart:</strong> The average absolute impact of each feature across all predictions.
               </p>
             </div>
           </div>
-
-          <!-- No SHAP Data Fallback -->
           <div class="shap-unavailable" v-if="!plotData.shap">
             <span class="shap-unavail-icon">🔬</span>
             <h4>SHAP data not available for this model</h4>
-            <p>Retrain your model to generate SHAP explainability values. SHAP is computed automatically for all newly trained models.</p>
+            <p>Retrain your model to generate SHAP explainability values.</p>
           </div>
-
-          <!-- SHAP Charts -->
           <template v-if="plotData.shap">
-            <!-- Beeswarm Tab -->
             <div v-show="activeShapTab === 'beeswarm'">
-              <div class="shap-legend">
-                <span class="legend-label">Feature Value</span>
-                <div class="legend-gradient"></div>
-                <span class="legend-high">High</span>
-                <span class="legend-low">Low</span>
-              </div>
               <div class="chart-wrapper shap-chart">
                 <canvas id="shapBeeswarmChart"></canvas>
               </div>
-              <p class="shap-sample-note">Based on {{ plotData.shap.n_samples }} samples · Top {{ Math.min(15, plotData.shap.feature_names.length) }} features by impact</p>
+              <p class="shap-sample-note">Based on {{ plotData.shap.n_samples }} samples</p>
             </div>
-
-            <!-- Bar Tab -->
             <div v-show="activeShapTab === 'bar'">
               <div class="chart-wrapper shap-chart">
                 <canvas id="shapBarChart"></canvas>
               </div>
-              <p class="shap-sample-note">Mean absolute SHAP value — higher = more influential across all predictions</p>
+              <p class="shap-sample-note">Mean absolute SHAP value</p>
             </div>
           </template>
         </div>
+        ===== END SHAP SECTION ===== -->
 
       </div>
     </div>
@@ -424,8 +411,8 @@ const insights = ref([]);
 const classes = ref([]);
 const confusionMatrix = ref([]);
 
-// Active SHAP tab
-const activeShapTab = ref('beeswarm');
+// Active SHAP tab (kept for future re-integration)
+// const activeShapTab = ref('beeswarm');
 
 // Chart instances
 let actualVsPredChart = null;
@@ -434,8 +421,9 @@ let errorDistChart = null;
 let rocChart = null;
 let prChart = null;
 let importanceChart = null;
-let shapBeeswarmChart = null;
-let shapBarChart = null;
+// SHAP chart instances (temporarily disabled)
+// let shapBeeswarmChart = null;
+// let shapBarChart = null;
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatNumber = (num) => new Intl.NumberFormat().format(num);
@@ -567,9 +555,10 @@ const initCharts = () => {
   if (plotData.value.feature_importance) {
     initImportanceChart();
   }
-  if (plotData.value.shap) {
-    initSHAPCharts();
-  }
+  // SHAP chart init temporarily disabled
+  // if (plotData.value.shap) {
+  //   initSHAPCharts();
+  // }
 };
 
 const initRegressionCharts = () => {
@@ -1203,7 +1192,8 @@ onBeforeRouteLeave((to, _from, next) => {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Re-render SHAP charts when tab changes (canvas may have been hidden)
+// SHAP tab watcher & initializers temporarily disabled (backend code intact)
+/*
 watch(activeShapTab, async (newTab) => {
   await nextTick();
   if (!plotData.value.shap) return;
@@ -1216,19 +1206,15 @@ watch(activeShapTab, async (newTab) => {
   }
 });
 
-// ===== SHAP CHART INITIALIZERS =====
-
 const initSHAPCharts = () => {
   const shap = plotData.value.shap;
   if (!shap) return;
   initShapBeeswarm(shap);
   initShapBar(shap);
 };
+*/
 
-/**
- * Builds a beeswarm-style scatter chart.
- * X = SHAP value, Y = feature rank (with jitter), color = feature value (blue-red)
- */
+/* SHAP chart functions temporarily disabled — kept for future re-integration
 const initShapBeeswarm = (shap) => {
   const { mean_abs_shap, feature_names, shap_matrix, X_sample } = shap;
   if (!shap_matrix || !shap_matrix.length) return;
@@ -1346,6 +1332,7 @@ const initShapBeeswarm = (shap) => {
 /**
  * Builds a horizontal bar chart of mean |SHAP| values
  */
+/*
 const initShapBar = (shap) => {
   const { mean_abs_shap, feature_names } = shap;
   if (!mean_abs_shap || !mean_abs_shap.length) return;
@@ -1407,6 +1394,7 @@ const initShapBar = (shap) => {
     },
   });
 };
+end SHAP functions */ 
 
 onMounted(() => {
   fetchVisualizationData();
@@ -1414,7 +1402,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   [actualVsPredChart, residualsChart, errorDistChart, rocChart, prChart,
-   importanceChart, shapBeeswarmChart, shapBarChart].forEach(chart => {
+   importanceChart /* shapBeeswarmChart, shapBarChart — SHAP disabled */].forEach(chart => {
     if (chart) chart.destroy();
   });
 });
@@ -2026,7 +2014,7 @@ onUnmounted(() => {
   }
 }
 
-/* ===== SHAP SECTION STYLES ===== */
+/* ===== SHAP SECTION STYLES (temporarily disabled) =====
 
 .shap-section {
   background: linear-gradient(
@@ -2181,4 +2169,5 @@ onUnmounted(() => {
   color: #6b7280;
   text-align: center;
 }
+===== END SHAP STYLES ===== */
 </style>

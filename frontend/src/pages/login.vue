@@ -403,12 +403,7 @@ function validateRegister() {
   return !registerErrors.username && !registerErrors.email && !registerErrors.password && !registerErrors.confirmPassword
 }
 
-// ─── Handlers ─────────────────────────────────────────────────────────────────
 
-/**
- * Delegates to authStore.login() — the single source of truth for auth state.
- * The store writes 'token' to sessionStorage which useAuthenticatedFetch reads.
- */
 const handleLogin = async () => {
   if (!validateLogin()) return
 
@@ -424,18 +419,15 @@ const handleLogin = async () => {
     if (result?.success) {
       await router.push('/dashboard')
     } else {
-      loginError.value = result?.error || 'Login failed. Please try again.'
+      loginError.value = 'Invalid Credentials'
     }
   } catch (err) {
-    loginError.value = err.message || 'An unexpected error occurred.'
+    loginError.value = 'Invalid Credentials'
   } finally {
     loading.value = false
   }
 }
 
-/**
- * Delegates to authStore.signup() — handles registration + auto-login in one go.
- */
 const handleRegister = async () => {
   if (!validateRegister()) return
 

@@ -597,9 +597,25 @@ const initCharts = () => {
     return
   }
   
+  // Helper: resolve the best accuracy-equivalent metric across all validation methods
+  // train_test_split   -> accuracy / r2
+  // kfold_cv           -> cv_mean  / test_accuracy / test_r2
+  // grid_search        -> best_score / cv_mean / test_accuracy / test_r2
+  // randomized_search  -> best_score / cv_mean / test_accuracy / test_r2
+  const resolveAccuracy = (metrics) => {
+    if (!metrics) return 0
+    return metrics.accuracy
+      ?? metrics.cv_mean
+      ?? metrics.best_score
+      ?? metrics.test_accuracy
+      ?? metrics.r2
+      ?? metrics.test_r2
+      ?? 0
+  }
+
   const labels = sortedModels.map(m => m.name.split(' ')[0])
   const data = sortedModels.map(m => {
-    const acc = m.metrics?.accuracy || m.metrics?.r2 || 0
+    const acc = resolveAccuracy(m.metrics)
     return acc <= 1 ? acc * 100 : acc
   })
 
@@ -739,8 +755,19 @@ const formatActionTitle = (act) => {
   return `Applied ${act.action_type}`
 }
 
+const resolveModelAccuracy = (metrics) => {
+  if (!metrics) return 0
+  return metrics.accuracy
+    ?? metrics.cv_mean
+    ?? metrics.best_score
+    ?? metrics.test_accuracy
+    ?? metrics.r2
+    ?? metrics.test_r2
+    ?? 0
+}
+
 const formatAccuracy = (m) => {
-  const acc = m.metrics?.accuracy || m.metrics?.r2 || 0
+  const acc = resolveModelAccuracy(m.metrics)
   return (acc <= 1 ? acc * 100 : acc).toFixed(1)
 }
 
@@ -868,12 +895,12 @@ const getBriefMetrics = (model) => {
   if (!model.metrics) return {}
   const m = model.metrics
   
-  // Common classification metrics (with fallbacks for different key naming)
-  const acc = m.accuracy ?? m.test_accuracy ?? m.val_accuracy
+  // Common classification metrics — include cv_mean / best_score for KFold/Grid/Randomized methods
+  const acc = m.accuracy ?? m.cv_mean ?? m.best_score ?? m.test_accuracy ?? m.val_accuracy
   const f1 = m.f1 ?? m.test_f1 ?? m.val_f1 ?? m.weighted_f1 ?? m.macro_f1
   
   // Common regression metrics
-  const r2 = m.r2 ?? m.test_r2 ?? m.val_r2
+  const r2 = m.r2 ?? m.test_r2 ?? m.cv_mean ?? m.val_r2
   const mae = m.mae ?? m.test_mae ?? m.val_mae
   
   // Choose relevant pair based on availability
@@ -952,8 +979,18 @@ const viewTraining = (model) => {
   navigateTo('/model-visualization')
 }
 const goToPreview = () => {
-    if (uploadedFile.value) analyzeDataset({ id: uploadedFile.value.dataset_id, name: uploadedFile.value.filename })
-    else navigateTo('/data-preview')
+  // Set the dataset context synchronously so data-preview knows what to load
+  if (uploadedFile.value) {
+    mlStore.setCurrentDataset(
+      uploadedFile.value.dataset_id,
+      [],
+      uploadedFile.value.filename,
+      uploadedFile.value.columns || []
+    )
+    experimentStore.setDataset(uploadedFile.value.dataset_id, uploadedFile.value.filename)
+  }
+  // Navigate immediately — data-preview's own spinner handles the rest
+  router.push('/data-preview')
 }
 
 // Watchers

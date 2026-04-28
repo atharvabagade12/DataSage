@@ -1325,12 +1325,24 @@ async def get_dashboard_stats(
                 
         avg_quality = int(total_quality / calculated_datasets) if calculated_datasets > 0 else 0
         
+        # Helper to resolve the primary accuracy metric regardless of validation method:
+        # train_test_split  -> accuracy / r2
+        # kfold_cv          -> cv_mean / test_accuracy / test_r2
+        # grid/random search-> best_score / cv_mean / test_accuracy / test_r2
+        def resolve_accuracy(metrics: dict) -> float:
+            if not metrics:
+                return 0.0
+            for key in ('accuracy', 'cv_mean', 'best_score', 'test_accuracy', 'r2', 'test_r2'):
+                val = metrics.get(key)
+                if val is not None:
+                    return float(val)
+            return 0.0
+
         # Get latest model accuracy
         latest_model = db.query(ModelModel).filter(ModelModel.user_id == user_id).order_by(ModelModel.created_at.desc()).first()
         best_accuracy = 0
         if latest_model and latest_model.metrics:
-            # Check for various accuracy metric names
-            best_accuracy = latest_model.metrics.get('accuracy', latest_model.metrics.get('r2', 0))
+            best_accuracy = resolve_accuracy(latest_model.metrics)
             
         return {
             "projects": dataset_count,
@@ -2702,14 +2714,14 @@ async def preprocess(
         
         # 3. Apply Preprocessing
         # 3. Process
-        # ✅ Load semantic metadata if available
+        # Load semantic metadata if available
         column_metadata = dataset.column_metadata or {}
         preprocessor = DataPreprocessor(df, column_metadata=column_metadata)
         
         categorical_encoded = False
         encoded_columns = []
         
-        # ✅ Identify target column to exclude it from bulk processing
+        # Identify target column to exclude it from bulk processing
         target_column = None
         if dataset_id in datasets and 'target_column' in datasets[dataset_id]:
              target_column = datasets[dataset_id]['target_column']
@@ -2747,7 +2759,7 @@ async def preprocess(
                 method = step.get("method", "remove")
                 numeric_cols = preprocessor.df.select_dtypes(include=np.number).columns.tolist()
                 
-                # ✅ CRITICAL: Exclude target column from outlier handling
+                # Exclude target column from outlier handling
                 if target_column and target_column in numeric_cols:
                     print(f"  Skipping outlier handling for target column: {target_column}")
                     numeric_cols.remove(target_column)
@@ -4664,10 +4676,16 @@ async def train_model_websocket(websocket: WebSocket):
                                 db.commit()
                                 db.refresh(new_model_record)
                                 
-                                # Log Action
+                                def _resolve_acc(m):
+                                    for k in ('accuracy', 'cv_mean', 'best_score', 'test_accuracy', 'r2', 'test_r2'):
+                                        v = m.get(k)
+                                        if v is not None:
+                                            return v
+                                    return 0
+
                                 log_user_action(db, new_model_record.user_id, "train", {
                                     "algorithm": algorithm_name, 
-                                    "accuracy": model_info['final_metrics'].get('accuracy', model_info['final_metrics'].get('r2', 0))
+                                    "accuracy": _resolve_acc(model_info['final_metrics'])
                                 }, resource_id=new_model_record.id, resource_type="model")
                                 
                             except Exception as e:
