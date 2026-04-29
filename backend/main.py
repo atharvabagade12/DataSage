@@ -83,12 +83,13 @@ from missing_value_markers import MISSING_VALUE_MARKERS
 # ===== DATABASE & STORAGE =====
 from database import get_db, engine
 from models import Dataset as DatasetModel, Model as ModelModel
-from services.file_service import FileService, DatasetMemoryManager
+from services.file_service import DatasetMemoryManager
+from services.supabase_storage import SupabaseStorageService
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from fastapi import Depends
 
-file_service = FileService()
+file_service = SupabaseStorageService()
 
 # ===== FASTAPI APP INITIALIZATION =====
 app = FastAPI(
@@ -1433,38 +1434,29 @@ async def upload_dataset(
 
         print(f"Receiving file upload: {file.filename}")
         
-        # 1. Save file to disk
-        file_path = await file_service.save_dataset(file, user_id)
+        # 1. Save file to Supabase Storage (returns bucket_key + size)
+        file_path, file_size = await file_service.save_dataset(file, user_id)
         
-        # 2. Read DataFrame for analysis based on file extension
-        ext = file.filename.lower()
+        # 2. Read DataFrame for analysis — download from Supabase right away.
+        #    The DataFrame goes into memory (DatasetMemoryManager), so subsequent
+        #    requests are served from RAM and won't hit Supabase again.
         try:
-            if ext.endswith('.csv'):
-                df = pd.read_csv(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
-            elif ext.endswith('.parquet'):
-                df = pd.read_parquet(file_path)
-            elif ext.endswith('.json'):
-                df = pd.read_json(file_path)
-            elif ext.endswith('.xlsx') or ext.endswith('.xls'):
-                df = pd.read_excel(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
-            else:
-                # Fallback to CSV if extension is unknown but might be a text file
-                df = pd.read_csv(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
+            df = file_service.load_dataframe(file_path)
         except Exception as e:
-            # Clean up file if reading fails
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            # Clean up the just-uploaded file from Supabase if parsing fails
+            file_service.delete_file(file_path)
             print(f"❌ Failed to parse uploaded file {file.filename}: {e}")
-            raise HTTPException(status_code=400, detail=f"Failed to parse as {ext.split('.')[-1].upper()}: {str(e)}")
+            ext = (file.filename or "").rsplit(".", 1)[-1].upper()
+            raise HTTPException(status_code=400, detail=f"Failed to parse as {ext}: {str(e)}")
             
-        # 3. Create DB Record
+        # 3. Create DB Record  (storage_path now holds the Supabase bucket key)
         dataset = DatasetModel(
             user_id=user_id,
             name=file.filename,
-            storage_path=file_path,
+            storage_path=file_path,   # Supabase bucket key, e.g. user_5/raw/20260428_iris.csv
             row_count=len(df),
             column_count=len(df.columns),
-            size_bytes=os.path.getsize(file_path),
+            size_bytes=file_size,
             is_processed=False
         )
         
@@ -1842,7 +1834,7 @@ async def get_dataset_info(
                 }
                     
             except FileNotFoundError:
-                 raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+                raise HTTPException(status_code=404, detail="Dataset file not found in storage")
 
         # 3. Prepare Sample
         sample_size = min(200, len(df))
@@ -1968,7 +1960,7 @@ async def get_dataset_statistics(
             try:
                 df = file_service.load_dataframe(dataset.storage_path)
             except FileNotFoundError:
-                raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+                raise HTTPException(status_code=404, detail="Dataset file not found in storage")
 
         print(f"\n📊 DEBUG: get_dataset_statistics called")
         print(f"   Dataset ID: {dataset_id}")
@@ -4221,30 +4213,20 @@ async def delete_dataset(
         # 1. Delete associated models (physical files first)
         models_to_delete = db.query(ModelModel).filter(ModelModel.dataset_id == dataset_id).all()
         for model in models_to_delete:
-            if model.storage_path and os.path.exists(model.storage_path):
-                try:
-                    os.remove(model.storage_path)
-                except Exception as me:
-                    print(f"⚠️ Error removing model file {model.storage_path}: {me}")
+            if model.storage_path:
+                file_service.delete_file(model.storage_path)
             db.delete(model)
         
         # 2. Delete child versions (recursive cleanup)
         child_versions = db.query(DatasetModel).filter(DatasetModel.parent_dataset_id == dataset_id).all()
         for version in child_versions:
-            # We recursively call or just handle one level if that's the limit
-            if version.storage_path and os.path.exists(version.storage_path):
-                try:
-                    os.remove(version.storage_path)
-                except Exception as ve:
-                    print(f"⚠️ Error removing version file {version.storage_path}: {ve}")
+            if version.storage_path:
+                file_service.delete_file(version.storage_path)
             db.delete(version)
             
-        # 3. Delete physical file of the dataset itself
-        if dataset.storage_path and os.path.exists(dataset.storage_path):
-            try:
-                os.remove(dataset.storage_path)
-            except Exception as fe:
-                print(f"⚠️ Error removing file {dataset.storage_path}: {fe}")
+        # 3. Delete the dataset file itself from Supabase
+        if dataset.storage_path:
+            file_service.delete_file(dataset.storage_path)
         
         # 4. Cleanup in-memory cache
         ds_id_str = str(dataset_id)
@@ -4935,26 +4917,23 @@ async def save_dataset_version(
             # If at limit, delete the oldest version(s) to make room
             while len(existing_versions) >= MAX_VERSIONS:
                 oldest = existing_versions.pop(0)
-                if oldest.storage_path and os.path.exists(oldest.storage_path):
-                    try:
-                        os.remove(oldest.storage_path)
-                    except Exception as e:
-                        print(f"⚠️  Error removing oldest version file: {e}")
+                if oldest.storage_path:
+                    file_service.delete_file(oldest.storage_path)
                 db.delete(oldest)
                 db.flush()
                 print(f"🗑️  Removed oldest version '{oldest.name}' to enforce {MAX_VERSIONS}-version cap")
                 
-        # 3. Save to disk
+        # 3. Save to Supabase Storage
         file_path = file_service.save_dataframe(df, user_id, version_name, is_processed=True)
         
         # 4. Create DB Record
         new_dataset = DatasetModel(
             user_id=user_id,
             name=version_name,
-            storage_path=file_path,
+            storage_path=file_path,      # Supabase bucket key
             row_count=len(df),
             column_count=len(df.columns),
-            size_bytes=os.path.getsize(file_path),
+            size_bytes=int(df.memory_usage(deep=True).sum()),  # cast numpy.int64 → int
             is_processed=True,
             parent_dataset_id=parent_id
         )

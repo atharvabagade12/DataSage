@@ -1,92 +1,6 @@
-import os
-import shutil
-from fastapi import UploadFile
 from datetime import datetime, timedelta
-import pandas as pd
-import io
-import sys
 from typing import Any, Dict, Iterator
-from missing_value_markers import MISSING_VALUE_MARKERS
-
-STORAGE_ROOT = "storage"
-
-
-class FileService:
-    def __init__(self):
-        # Ensure storage directories exist
-        os.makedirs(os.path.join(STORAGE_ROOT, "datasets"), exist_ok=True)
-        os.makedirs(os.path.join(STORAGE_ROOT, "models"), exist_ok=True)
-
-    async def save_dataset(self, file: UploadFile, user_id: int) -> str:
-        """Save uploaded dataset to disk"""
-        user_dir = os.path.join(STORAGE_ROOT, "datasets", str(user_id), "raw")
-        os.makedirs(user_dir, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = "".join([c for c in file.filename if c.isalnum() or c in ("._- ")])
-        filename = f"{timestamp}_{safe_filename}"
-        file_path = os.path.join(user_dir, filename)
-
-        await file.seek(0)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        return file_path
-
-    def save_dataframe(self, df: pd.DataFrame, user_id: int, filename: str, is_processed: bool = True) -> str:
-        """Save pandas dataframe to disk (parquet)"""
-        subdir = "processed" if is_processed else "raw"
-        user_dir = os.path.join(STORAGE_ROOT, "datasets", str(user_id), subdir)
-        os.makedirs(user_dir, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_path = os.path.join(user_dir, f"{timestamp}_{filename}.parquet")
-        df.to_parquet(file_path, index=False)
-        return file_path
-
-    def load_dataframe(self, file_path: str) -> pd.DataFrame:
-        """Load dataframe from disk based on extension"""
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        ext = file_path.lower()
-        if ext.endswith(".csv"):
-            return pd.read_csv(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
-        elif ext.endswith(".parquet"):
-            return pd.read_parquet(file_path)
-        elif ext.endswith(".json"):
-            return pd.read_json(file_path)
-        elif ext.endswith(".xlsx") or ext.endswith(".xls"):
-            return pd.read_excel(file_path, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
-        else:
-            raise ValueError(f"Unsupported file format: {os.path.basename(file_path)}")
-
-    def get_storage_stats(self) -> dict:
-        """Calculate disk usage of the storage directory"""
-        total_bytes = 0
-        raw_files = 0
-        saved_versions = 0
-
-        datasets_root = os.path.join(STORAGE_ROOT, "datasets")
-        if os.path.exists(datasets_root):
-            for root, _, files in os.walk(datasets_root):
-                for f in files:
-                    fpath = os.path.join(root, f)
-                    try:
-                        size = os.path.getsize(fpath)
-                        total_bytes += size
-                        if "processed" in root:
-                            saved_versions += 1
-                        elif "raw" in root:
-                            raw_files += 1
-                    except OSError:
-                        pass
-
-        return {
-            "storage_root_mb": round(total_bytes / (1024 * 1024), 2),
-            "total_raw_files": raw_files,
-            "total_saved_versions": saved_versions,
-        }
+import pandas as pd
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -94,11 +8,7 @@ class FileService:
 #
 # A drop-in replacement for the bare `datasets: Dict` global in main.py.
 # Tracks last-accessed time per entry and automatically evicts stale datasets
-# after `ttl_minutes` of inactivity.
-#
-# Exposes a FULL dict-compatible interface via dunder methods, so every existing
-# `datasets[id]`, `if id in datasets`, `del datasets[id]`, `datasets.keys()`
-# call in main.py continues to work with ZERO changes to those call sites.
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 class DatasetMemoryManager:
@@ -109,7 +19,7 @@ class DatasetMemoryManager:
 
         from services.file_service import DatasetMemoryManager
         TTL = int(os.getenv("DATASET_TTL_MINUTES", "30"))
-        datasets = DatasetMemoryManager(ttl_minutes=TTL)
+        datasets = DatasetMemoryManager(ttl_minutes=TTL) 
 
     Then use *exactly* like the old dict — no other code needs to change.
     """
