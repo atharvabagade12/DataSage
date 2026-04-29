@@ -55,6 +55,7 @@ datasage_users.db
 # =========================
 .env
 .env.local
+.envs 
 
 # =========================
 # IDE / OS
