@@ -4,8 +4,10 @@ set -e
 echo "🚀 DataSage Backend Entrypoint"
 
 # Extract database connection details from DATABASE_URL
-DB_HOST="${DATABASE_URL#*@}"
-DB_HOST="${DB_HOST%%:*}"
+# Handles both formats: host:port/db AND host/db (no port)
+DB_HOST="${DATABASE_URL#*@}"      # strips everything up to @  -> host:port/db OR host/db
+DB_HOST="${DB_HOST%%/*}"          # strips /db and beyond       -> host:port OR host
+DB_HOST="${DB_HOST%%:*}"          # strips :port                -> host
 DB_USER="${DATABASE_URL#*://}"
 DB_USER="${DB_USER%%:*}"
 DB_NAME="${DATABASE_URL##*/}"
