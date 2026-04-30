@@ -34,6 +34,9 @@ RUN pip install imbalanced-learn shap
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Copy all application source code
+COPY . .
+
 # Create non-root user for security (optional for dev, good practice)
 RUN useradd -m -u 1000 datasage && \
     chown -R datasage:datasage /app
