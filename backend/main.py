@@ -101,6 +101,11 @@ app = FastAPI(
 from fastapi import Response
 import os
 
+# ===== HEALTH CHECK ENDPOINT (required for Render deployment) =====
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "DataSage ML Backend"}
+
 # 1. Define allowed origins clearly
 env_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
 ALLOWED_ORIGINS = [
