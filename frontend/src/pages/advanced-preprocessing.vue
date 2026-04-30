@@ -15,7 +15,7 @@
 
 
 
-    <div v-if="showBackendWarning" class="backend-warning">
+    <div v-if="showBackendWarning && !pageLoading" class="backend-warning">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
     <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
   </svg>
@@ -1418,6 +1418,13 @@
         </div>
       </template>
     </Modal>
+
+    <!-- Full Page Loading Spinner -->
+    <PremiumLoadingOverlay 
+      :show="pageLoading" 
+      message="Synchronizing DataSage intelligence..."
+      solid-bg
+    />
   </div>
 </template>
 
@@ -1428,6 +1435,7 @@
 import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
+import PremiumLoadingOverlay from "../components/PremiumLoadingOverlay.vue";
 import { useExperimentStore } from "~/stores/experiment";
 import { useDataStore } from "~/stores/data";
 import { useUIStore } from "~/stores/ui";
@@ -1627,6 +1635,9 @@ const pageSize = ref(25);
 const sortColumn = ref("");
 const sortDirection = ref("asc");
 
+// Page loading state
+const pageLoading = ref(true);
+
 // Computed Helpers for Store
 const trainRows = computed(() => mlStore.isSplit ? mlStore.splitInfo.trainRows : 0);
 const testRows = computed(() => mlStore.isSplit ? mlStore.splitInfo.testRows : 0);
@@ -1691,6 +1702,7 @@ const checkBackendConnection = async () => {
 };
 
 const showBackendWarning = computed(() => {
+  if (pageLoading.value) return false;
   return !mlStore.backendConnected || !totalRowsInBackend.value;
 });
 
@@ -3496,7 +3508,15 @@ const proceedToAlgorithmSelection = () => {
 // ==================== LIFECYCLE ====================
 
 onMounted(async () => {
-  await loadInitialData();
+  pageLoading.value = true;
+  try {
+    await loadInitialData();
+  } finally {
+    // Add a slight delay for a premium feel and to avoid flashing
+    setTimeout(() => {
+      pageLoading.value = false;
+    }, 800);
+  }
 
   console.log('✅ Advanced Preprocessing page initialized');
   console.log({
@@ -8401,4 +8421,7 @@ watch(semanticTypes, () => {
   border-radius: 20px;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>

@@ -148,13 +148,7 @@
           </div>
 
           <div class="data-table-wrapper">
-            <div v-if="isLoading" class="table-loading-state">
-              <div class="loading-animation">
-                <div class="pulse-bar" v-for="i in 5" :key="i"></div>
-              </div>
-              <p>Analyzing intelligence stream...</p>
-            </div>
-            <table v-else class="data-table">
+            <table v-if="!isLoading" class="data-table">
               <thead>
                 <tr>
                   <th
@@ -1439,6 +1433,10 @@
         </div>
       </template>
     </Modal>
+    <PremiumLoadingOverlay 
+      :show="isLoading" 
+      message="Analyzing intelligence stream..."
+    />
   </div>
 </template>
 
@@ -1471,6 +1469,7 @@ const { authenticatedPost, authenticatedGet } = useAuthenticatedFetch();
 const { backendConnected } = storeToRefs(mlStore);
 const { rawPreview: dataset, statistics: dataStats, semanticTypes } = storeToRefs(dataStore);
 const { datasetId } = storeToRefs(experimentStore);
+import PremiumLoadingOverlay from "../components/PremiumLoadingOverlay.vue";
 
 // State
 const isLoading = ref(true);

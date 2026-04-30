@@ -310,7 +310,7 @@
             <h4 class="footer-heading">Academic</h4>
             <div class="footer-links">
               <a @click="scrollTo('about')">About Project</a>
-              <a href="https://github.com/atharvabagade12/DataSage" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+              <a>GitHub Repository</a> 
               <a href="https://www.irjet.net/archives/V12/i11/IRJET-V12I1139.pdf" target="_blank" rel="noopener noreferrer">Research Paper</a>
             </div>
           </div>
@@ -318,9 +318,9 @@
           <div class="footer-section">
             <h4 class="footer-heading">Connect</h4>
             <div class="footer-links">
-              <a href="mailto:contact@datasage.com">Contact</a>
-              <a href="https://www.linkedin.com/in/atharva-bagade-85813528b/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-              <a href="https://github.com/atharvabagade12/DataSage" target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a href="mailto:[EMAIL_ADDRESS]">Contact</a>
+              <a href="https://www.linkedin.com/in/atharva-bagade-85813528b/" target="_blank" rel="noopener noreferrer">LinkedIn</a> 
+              <a>GitHub</a>
             </div>
           </div>
         </div>

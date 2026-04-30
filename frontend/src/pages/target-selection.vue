@@ -64,12 +64,10 @@
     </footer>
 
     <!-- Loading Overlay -->
-    <div v-if="isLoading" class="global-loading">
-      <div class="loading-content">
-        <div class="spinner"></div>
-        <p>Analyzing dataset structure...</p>
-      </div>
-    </div>
+    <PremiumLoadingOverlay 
+      :show="isLoading" 
+      message="Analyzing dataset structure..."
+    />
   </div>
 </template>
 
@@ -79,6 +77,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, onBeforeRouteLeave } from 'vue-router';
 import { storeToRefs } from 'pinia';
+import PremiumLoadingOverlay from '../components/PremiumLoadingOverlay.vue';
 import { useMLDataFlowStore } from '../stores/mlDataFlow';
 import { useDataStore } from '../stores/data';
 import { useExperimentStore } from '../stores/experiment';

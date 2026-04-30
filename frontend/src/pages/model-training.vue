@@ -913,6 +913,14 @@
         </div>
       </section>
     </div>
+    <!-- Page Loading Overlay -->
+    <PremiumLoadingOverlay 
+      :show="isInitializing" 
+      title="Initializing Neural Core"
+      :message="initializationMessage"
+      show-progress
+      :progress="initializationProgress"
+    />
   </div>
 </template>
 
@@ -921,6 +929,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useRouter, useRoute, onBeforeRouteLeave } from "vue-router";
 import { Chart, registerables } from "chart.js";
 import { storeToRefs } from "pinia";
+import PremiumLoadingOverlay from "../components/PremiumLoadingOverlay.vue";
 import { useExperimentStore } from "@/stores/experiment";
 import { useAuthenticatedFetch } from '~/composables/useAuthenticatedFetch';
 Chart.register(...registerables);
@@ -5437,6 +5446,9 @@ onUnmounted(() => {
   text-align: center;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>
 
 

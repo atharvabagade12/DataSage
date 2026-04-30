@@ -16,13 +16,13 @@
 
 
     <!-- Loading State -->
-    <div v-if="isLoading" class="loading-container">
-      <div class="loading-spinner"></div>
-      <p>Analyzing your data and generating algorithm recommendations...</p>
-    </div>
+    <PremiumLoadingOverlay 
+      :show="isLoading" 
+      message="Analyzing your data and generating algorithm recommendations..."
+    />
 
     <!-- Main Content -->
-    <div v-else class="main-container">
+    <div v-if="!isLoading" class="main-container">
       <!-- Understanding Your Machine Learning Task Section -->
       <section class="analysis-section">
         <div class="section-header">
@@ -797,6 +797,7 @@
 import { ref, reactive, computed, onMounted } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
+import PremiumLoadingOverlay from "../components/PremiumLoadingOverlay.vue";
 import { useExperimentStore } from "@/stores/experiment";
 import { useDataStore } from "@/stores/data";
 import { useMLDataFlowStore } from "@/stores/mlDataFlow";
@@ -5639,6 +5640,7 @@ onMounted(async () => {
   font-style: normal;
   background: linear-gradient(135deg, #a78bfa, #60a5fa);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .why-subtitle {
@@ -5726,7 +5728,7 @@ onMounted(async () => {
 
 /* Pillar bars */
 .why-pillars { display: flex; flex-direction: column; gap: 0.85rem; }
-.why-pillar {}
+
 .pillar-header {
   display: flex;
   align-items: center;
