@@ -44,7 +44,7 @@ export const useAPI = () => {
         const response = await $fetch(`${apiBase}/api/auth/login`, {
           method: 'POST',
           body: credentials,
-          timeout: 10000 // 10 second timeout
+          timeout: 60000 // 60 second timeout for cold starts
         })
         return { data: response, status: 200 }
       } catch (error: any) {
@@ -60,7 +60,7 @@ export const useAPI = () => {
         const response = await $fetch(`${apiBase}/api/auth/register`, {
           method: 'POST',
           body: userData,
-          timeout: 10000
+          timeout: 60000
         })
         return { data: response, status: 201 }
       } catch (error: any) {
@@ -77,7 +77,7 @@ export const useAPI = () => {
           headers: {
             'Authorization': `Bearer ${token}`
           },
-          timeout: 10000
+          timeout: 60000
         })
         return { data: response, status: 200 }
       } catch (error: any) {

@@ -60,9 +60,9 @@ export const useAuthenticatedFetch = () => {
     if (token) headers['Authorization'] = `Bearer ${token}`
     headers['ngrok-skip-browser-warning'] = 'true'
 
-    // Use caller's signal if provided (e.g. verifyToken), else apply 15s default timeout
+    // Use caller's signal if provided (e.g. verifyToken), else apply 60s default timeout
     const controller = options.signal ? null : new AbortController();
-    const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 60000) : null;
 
     try {
       const response = await fetch(finalUrl, {

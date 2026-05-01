@@ -52,7 +52,6 @@ export const useAuthStore = defineStore('auth', {
         
         const response = await authenticatedPost(`/api/auth/login`, payload)
         
-        // Handle both fetch Response and direct JSON if it was already parsed (though authenticatedPost returns Response)
         const data = response instanceof Response ? await response.json() : response
 
         if (data && (data.success || data.access_token)) {
