@@ -4649,9 +4649,30 @@ async def train_model_websocket(websocket: WebSocket):
                             
                             # Store in DB for persistence
                             try:
+                                user_id = dataset_info.get('user_id') if isinstance(dataset_info, dict) else (dataset_info.user_id if hasattr(dataset_info, 'user_id') else 1)
+                                
+                                # Upload model to Supabase
+                                local_model_path = model_info.get('model_path')
+                                if local_model_path and os.path.exists(local_model_path):
+                                    try:
+                                        with open(local_model_path, "rb") as f:
+                                            model_bytes = f.read()
+                                        safe_algo_name = algorithm_name.replace(" ", "_")
+                                        supabase_key = file_service.upload_model(model_bytes, user_id, f"{safe_algo_name}")
+                                        model_info['model_path'] = supabase_key
+                                        trained_models[model_id]['model_path'] = supabase_key
+                                        
+                                        # Optional: remove local file after upload to save space
+                                        try:
+                                            os.remove(local_model_path)
+                                        except Exception:
+                                            pass
+                                    except Exception as upload_err:
+                                        print(f"⚠️ Failed to upload model to Supabase: {upload_err}")
+                                        
                                 from models import Model as ModelModel
                                 new_model_record = ModelModel(
-                                    user_id=dataset_info.get('user_id') if isinstance(dataset_info, dict) else (dataset_info.user_id if hasattr(dataset_info, 'user_id') else 1),
+                                    user_id=user_id,
                                     dataset_id=int(dataset_id),
                                     name=f"{algorithm_name} Model",
                                     algorithm=algorithm_name,
@@ -4784,15 +4805,27 @@ async def download_model(
             model_path = model_db.storage_path
             model_name = model_db.name.replace(" ", "_")
         
-    if not model_path or not os.path.exists(model_path):
-        raise HTTPException(status_code=404, detail="Model file not found on server")
-    
-    filename = f"{model_name}.joblib"
-    return FileResponse(
-        path=model_path,
-        filename=filename,
-        media_type='application/octet-stream'
-    )
+    if model_path:
+        # Check if it's a local file (legacy)
+        if os.path.exists(model_path):
+            return FileResponse(
+                path=model_path,
+                filename=f"{model_name}.joblib",
+                media_type='application/octet-stream'
+            )
+            
+        # Try fetching from Supabase
+        try:
+            model_bytes = file_service.download_model_bytes(model_path)
+            return Response(
+                content=model_bytes,
+                media_type='application/octet-stream',
+                headers={"Content-Disposition": f'attachment; filename="{model_name}.joblib"'}
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to download model from Supabase: {e}")
+            
+    raise HTTPException(status_code=404, detail="Model file not found on server or cloud storage")
 
 @app.get("/api/debug")
 async def debug_info():

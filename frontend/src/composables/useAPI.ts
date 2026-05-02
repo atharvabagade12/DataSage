@@ -90,13 +90,13 @@ export const useAPI = () => {
 
     async verifyToken(token: string): Promise<boolean> {
       try {
-        const response = await $fetch(`${apiBase}/api/auth/verify-token`, {
+        const response = await $fetch<{ valid: boolean }>(`${apiBase}/api/auth/verify-token`, {
           headers: {
             'Authorization': `Bearer ${token}`
           },
           timeout: 5000
         })
-        return response.valid === true
+        return response?.valid === true
       } catch (error) {
         console.error('Token verification failed:', error)
         return false

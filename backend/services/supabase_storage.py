@@ -30,6 +30,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".envs"))
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUCKET = "datasets"
+MODELS_BUCKET = "models"
 
 
 def _get_supabase_client():
@@ -150,6 +151,33 @@ class SupabaseStorageService:
         print(f"☁️  [Supabase] Saved DataFrame → {bucket_key} ({len(parquet_bytes):,} bytes)")
         return bucket_key
 
+    def upload_model(self, model_bytes: bytes, user_id: int, filename: str) -> str:
+        """
+        Upload a serialized model (e.g. joblib) to the models bucket in Supabase.
+        Returns the bucket key (stored in DB as storage_path).
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bucket_key = f"user_{user_id}/{timestamp}_{filename}.joblib"
+        
+        self.client.storage.from_(MODELS_BUCKET).upload(
+            path=bucket_key,
+            file=model_bytes,
+            file_options={"content-type": "application/octet-stream", "upsert": "true"},
+        )
+        print(f"☁️  [Supabase] Saved Model → {bucket_key} ({len(model_bytes):,} bytes)")
+        return bucket_key
+
+    def download_model_bytes(self, bucket_key: str) -> bytes:
+        """
+        Download a model file from the models bucket in Supabase.
+        """
+        try:
+            return self.client.storage.from_(MODELS_BUCKET).download(bucket_key)
+        except Exception as exc:
+            raise FileNotFoundError(
+                f"Model not found in Supabase Storage (key={bucket_key}): {exc}"
+            ) from exc
+
     # ── Delete ────────────────────────────────────────────────────────────────
 
     def delete_file(self, bucket_key: str):
@@ -157,7 +185,11 @@ class SupabaseStorageService:
         if not bucket_key:
             return
         try:
-            self.client.storage.from_(BUCKET).remove([bucket_key])
+            # Try datasets bucket first, if it fails, try models bucket
+            try:
+                self.client.storage.from_(BUCKET).remove([bucket_key])
+            except Exception:
+                self.client.storage.from_(MODELS_BUCKET).remove([bucket_key])
             print(f"🗑️  [Supabase] Deleted → {bucket_key}")
         except Exception as exc:
             print(f"⚠️  [Supabase] Could not delete '{bucket_key}': {exc}")

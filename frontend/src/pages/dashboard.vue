@@ -874,7 +874,7 @@ const downloadModel = async (model) => {
     if (!response.ok) {
       const err = await response.json()
       throw new Error(err.detail || 'Download failed')
-    }
+    } 
     
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
