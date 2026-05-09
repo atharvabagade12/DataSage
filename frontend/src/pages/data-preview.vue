@@ -1892,7 +1892,7 @@ const analyzeDataQuality = () => {
 
 // --- Actions ---
 
-const goBack = () => router.push("dashboard"); // Dashboard
+
 const proceedToTargetSelection = () => {
     // 1. Enforce Type Detection
     if (!dataStore.isTypesVerified) {

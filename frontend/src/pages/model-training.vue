@@ -2458,20 +2458,7 @@ const destroyChart = () => {
   }
 };
 
-const goBack = () => {
-  // Clean up before leaving
-  if (websocket) {
-    websocket.close();
-    websocket = null;
-  }
-  
-  if (timeInterval) {
-    clearInterval(timeInterval);
-    timeInterval = null;
-  }
-  
-  router.push('/algorithm-select');
-};
+
 
 
 

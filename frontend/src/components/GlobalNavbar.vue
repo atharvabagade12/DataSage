@@ -14,7 +14,7 @@
         <NuxtLink to="/dashboard" class="nav-link" :class="{ active: $route.path === '/dashboard' && (!$route.query.tab || $route.query.tab === 'dashboard') }">Dashboard</NuxtLink>
         <NuxtLink to="/dashboard?tab=projects" class="nav-link" :class="{ active: $route.query.tab === 'projects' }">Projects</NuxtLink>
         <NuxtLink to="/dashboard?tab=analytics" class="nav-link" :class="{ active: $route.query.tab === 'analytics' }">Analytics</NuxtLink>
-        <NuxtLink to="/dashboard?tab=models" class="nav-link" :class="{ active: $route.query.tab === 'models' }">Models</NuxtLink>
+        <NuxtLink to="/dashboard?tab=experiments" class="nav-link" :class="{ active: $route.query.tab === 'experiments' || $route.query.tab === 'models' }">Experiments</NuxtLink>
       </div>
     </div>
     

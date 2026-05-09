@@ -2894,9 +2894,7 @@ const exportConfiguration = () => {
   URL.revokeObjectURL(url);
 };
 
-const goBack = () => {
-  router.push("/advanced-preprocessing");
-};
+
 
 // Utility functions
 const formatNumber = (num) => {

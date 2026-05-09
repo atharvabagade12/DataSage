@@ -116,7 +116,17 @@ export const useAuthenticatedFetch = () => {
     // Convert http(s) to ws(s)
     const wsBase = base.replace(/^http/, 'ws')
     
-    const finalUrl = `${wsBase}${normalizedUrl}`
+    const token = sessionStorage.getItem('token') ||
+                  sessionStorage.getItem('authToken') ||
+                  localStorage.getItem('token') ||
+                  localStorage.getItem('authToken')
+
+    const separator = normalizedUrl.includes('?') ? '&' : '?'
+    const authenticatedPath = token
+      ? `${normalizedUrl}${separator}token=${encodeURIComponent(token)}`
+      : normalizedUrl
+
+    const finalUrl = `${wsBase}${authenticatedPath}`
     
     console.log(`🔌 [AuthenticatedFetch] WebSocket: ${finalUrl}`)
     return finalUrl

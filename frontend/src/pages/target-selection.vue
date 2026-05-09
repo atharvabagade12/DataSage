@@ -115,7 +115,7 @@ const handleColumnSelect = (column) => {
   selectedColumn.value = column;
 };
 
-const goBack = () => router.push("/data-preview");
+
 
 const loadData = async () => {
   isLoading.value = true;

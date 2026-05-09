@@ -16,7 +16,7 @@
         </svg>
         <span class="file-name">{{ originalFileName }}</span>
       </div>
-      
+       
       <div class="separator"></div>
       
       <div class="active-item metadata">
@@ -145,6 +145,7 @@ const onSaveVersion = () => {
 const goBack = () => {
   router.back()
 }
+
 </script>
 
 <style scoped>

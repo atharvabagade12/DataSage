@@ -63,16 +63,16 @@
               </div>
             </div>
 
-            <div class="kpi-card premium training" @click="activeDashboardTab = 'models'">
+            <div class="kpi-card premium training" @click="activeDashboardTab = 'experiments'">
               <div class="kpi-icon-circle indigo">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                 </svg>
               </div>
               <div class="kpi-info">
-                <div class="kpi-label">Models Trained</div>
+                <div class="kpi-label">Experiments</div>
                 <div class="kpi-value">{{ dashboardStats.models }}</div>
-                <div class="kpi-sub">Total Experiments</div>
+                <div class="kpi-sub">Tracked Runs</div>
               </div>
             </div>
           </div>
@@ -304,30 +304,86 @@
         </div>
       </transition>
 
-      <!-- ===== MODELS TAB ===== -->
+      <!-- ===== EXPERIMENTS TAB ===== -->
       <transition name="fade-slide">
-        <div v-if="activeDashboardTab === 'models'" class="tab-view models-view">
+        <div v-if="activeDashboardTab === 'experiments' || activeDashboardTab === 'models'" class="tab-view models-view">
           <div class="view-header">
             <div class="header-main">
-              <h2>Model Leaderboard</h2>
-              <p>Performance comparison of all trained intelligence units</p>
+              <h2>Experiments</h2>
+              <p>Run history, model performance, and side-by-side comparison</p>
+            </div>
+            <div class="experiment-toolbar" v-if="sortedExperiments.length">
+              <button class="btn-table-action secondary" @click="clearExperimentSelection" :disabled="!selectedExperimentIds.length">
+                Clear
+              </button>
+              <div class="compare-count" :class="{ active: selectedExperimentIds.length >= 2 }">
+                {{ selectedExperimentIds.length }}/4 selected
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedExperiments.length >= 2" class="compare-panel glass">
+            <div class="container-header compact">
+              <h3>Compare Runs</h3>
+              <span class="count-badge">{{ selectedExperiments.length }} selected</span>
+            </div>
+            <div class="compare-grid">
+              <div v-for="run in selectedExperiments" :key="run.id" class="compare-run">
+                <div class="compare-run-header">
+                  <span class="algo-badge">{{ run.algorithm }}</span>
+                  <span class="model-date-mini">{{ getRelativeTime(run.createdAt) }}</span>
+                </div>
+                <h4>{{ run.name }}</h4>
+                <div class="compare-score" :class="{ best: isBestExperiment(run) }">
+                  <span>{{ getPrimaryMetric(run).label }}</span>
+                  <strong>{{ getPrimaryMetric(run).display }}</strong>
+                </div>
+                <div class="compare-details">
+                  <div>
+                    <span>Dataset</span>
+                    <strong>{{ getDatasetName(run.dataset_id) }}</strong>
+                  </div>
+                  <div>
+                    <span>Validation</span>
+                    <strong>{{ run.metrics?.validation_method || 'simple' }}</strong>
+                  </div>
+                  <div>
+                    <span>Config</span>
+                    <strong>{{ Object.keys(run.hyperparameters || {}).length }} params</strong>
+                  </div>
+                </div>
+                <button @click="downloadModel(run)" class="btn-table-action compare-download">Download</button>
+              </div>
             </div>
           </div>
 
           <div class="inventory-section glass">
             <div class="table-container">
-              <table v-if="allModels.length">
+              <table v-if="sortedExperiments.length">
                 <thead>
                   <tr>
-                    <th>Model Strategy</th>
+                    <th>Compare</th>
+                    <th>Run</th>
+                    <th>Dataset</th>
                     <th>Algorithm</th>
-                    <th>Performance Indicators</th>
+                    <th>Primary Score</th>
                     <th>Configuration</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="model in allModels" :key="model.id" class="table-row-hover">
+                  <tr v-for="model in sortedExperiments" :key="model.id" class="table-row-hover" :class="{ selected: isExperimentSelected(model) }">
+                    <td>
+                      <label class="compare-checkbox" :title="isExperimentSelected(model) ? 'Remove from comparison' : 'Add to comparison'">
+                        <input
+                          type="checkbox"
+                          :checked="isExperimentSelected(model)"
+                          :disabled="!isExperimentSelected(model) && selectedExperimentIds.length >= 4"
+                          @change="toggleExperimentSelection(model)"
+                        >
+                        <span></span>
+                      </label>
+                    </td>
                     <td class="model-name-cell">
                       <div class="model-icon-mini">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -339,13 +395,12 @@
                         <span class="model-date-mini">{{ getRelativeTime(model.createdAt) }}</span>
                       </div>
                     </td>
+                    <td>{{ getDatasetName(model.dataset_id) }}</td>
                     <td><span class="algo-badge">{{ model.algorithm }}</span></td>
                     <td>
-                      <div class="metrics-pill-group">
-                        <div v-for="(val, key) in getBriefMetrics(model)" :key="key" class="metric-pill" :class="getMetricClass(key)">
-                          <span class="metric-label">{{ formatMetricKey(key) }}</span>
-                          <span class="metric-value">{{ formatMetricValue(val) }}</span>
-                        </div>
+                      <div class="primary-metric">
+                        <span>{{ getPrimaryMetric(model).label }}</span>
+                        <strong>{{ getPrimaryMetric(model).display }}</strong>
                       </div>
                     </td>
                     <td>
@@ -366,6 +421,9 @@
                     </td>
                     <td>
                       <div class="action-group-mini">
+                        <button @click="toggleExperimentSelection(model)" class="btn-table-action" :disabled="!isExperimentSelected(model) && selectedExperimentIds.length >= 4">
+                          {{ isExperimentSelected(model) ? 'Selected' : 'Compare' }}
+                        </button>
                         <button @click="downloadModel(model)" class="btn-table-action secondary" title="Download Model (.joblib)">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -380,8 +438,8 @@
               </table>
               <div v-else class="empty-state-view">
                 <div class="empty-illustration">🧠</div>
-                <h3>Brain empty</h3>
-                <p>Train your first model in the Laboratory to see results here.</p>
+                <h3>No experiments yet</h3>
+                <p>Train your first model to create a tracked run.</p>
               </div>
             </div>
           </div>
@@ -525,12 +583,41 @@ const dashboardStats = computed(() => mlStore.dashboardStats)
 const recentActivity = computed(() => mlStore.recentActivity)
 const allDatasets = computed(() => mlStore.allUserDatasets)
 const allModels = computed(() => mlStore.allUserModels)
+const selectedExperimentIds = ref([])
 
 const sortedDatasets = computed(() => {
   if (!allDatasets.value) return []
   return [...allDatasets.value].sort((a, b) => {
     return new Date(b.upload_time) - new Date(a.upload_time)
   })
+})
+
+const datasetNameById = computed(() => {
+  const map = {}
+  allDatasets.value.forEach(ds => {
+    map[String(ds.id)] = ds.name || ds.filename || `Dataset #${ds.id}`
+  })
+  return map
+})
+
+const sortedExperiments = computed(() => {
+  if (!allModels.value) return []
+  return [...allModels.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+})
+
+const selectedExperiments = computed(() => {
+  const selected = new Set(selectedExperimentIds.value.map(String))
+  return sortedExperiments.value.filter(model => selected.has(String(model.id)))
+})
+
+const bestSelectedExperimentId = computed(() => {
+  let best = null
+  selectedExperiments.value.forEach(run => {
+    const score = getPrimaryMetric(run).score
+    if (score === null) return
+    if (!best || score > best.score) best = { id: String(run.id), score }
+  })
+  return best?.id || null
 })
 
 // Data Fetching
@@ -769,6 +856,68 @@ const resolveModelAccuracy = (metrics) => {
 const formatAccuracy = (m) => {
   const acc = resolveModelAccuracy(m.metrics)
   return (acc <= 1 ? acc * 100 : acc).toFixed(1)
+}
+
+const getDatasetName = (datasetId) => {
+  if (!datasetId) return 'Unknown dataset'
+  return datasetNameById.value[String(datasetId)] || `Dataset #${datasetId}`
+}
+
+const getPrimaryMetric = (model) => {
+  const metrics = model?.metrics || {}
+  const candidates = [
+    ['best_score', 'Best Score'],
+    ['cv_mean', 'CV Mean'],
+    ['test_accuracy', 'Accuracy'],
+    ['accuracy', 'Accuracy'],
+    ['test_f1', 'F1'],
+    ['f1', 'F1'],
+    ['test_r2', 'R2'],
+    ['r2', 'R2'],
+    ['rmse', 'RMSE'],
+    ['test_rmse', 'RMSE'],
+    ['mae', 'MAE'],
+    ['test_mae', 'MAE']
+  ]
+
+  for (const [key, label] of candidates) {
+    if (metrics[key] !== undefined && metrics[key] !== null) {
+      const raw = Number(metrics[key])
+      const lowerIsBetter = ['rmse', 'test_rmse', 'mae', 'test_mae'].includes(key)
+      return {
+        key,
+        label,
+        raw,
+        score: Number.isFinite(raw) ? (lowerIsBetter ? -raw : raw) : null,
+        display: formatMetricValue(metrics[key])
+      }
+    }
+  }
+
+  return { key: null, label: 'Score', raw: null, score: null, display: '-' }
+}
+
+const isExperimentSelected = (model) => selectedExperimentIds.value.map(String).includes(String(model.id))
+
+const toggleExperimentSelection = (model) => {
+  const id = String(model.id)
+  if (selectedExperimentIds.value.map(String).includes(id)) {
+    selectedExperimentIds.value = selectedExperimentIds.value.filter(existing => String(existing) !== id)
+    return
+  }
+  if (selectedExperimentIds.value.length >= 4) {
+    showError('Compare Limit', 'You can compare up to 4 runs at once.')
+    return
+  }
+  selectedExperimentIds.value = [...selectedExperimentIds.value, id]
+}
+
+const clearExperimentSelection = () => {
+  selectedExperimentIds.value = []
+}
+
+const isBestExperiment = (model) => {
+  return selectedExperiments.value.length >= 2 && String(model.id) === bestSelectedExperimentId.value
 }
 
 const getRelativeTime = (dateStr) => {
@@ -1120,6 +1269,7 @@ table { width: 100%; border-collapse: collapse; }
 th { text-align: left; padding: 1.25rem 1rem; color: #4a4a6a; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.03); }
 td { padding: 1.5rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.02); color: #b3b3d1; font-size: 0.95rem; }
 .table-row-hover:hover { background: rgba(255, 255, 255, 0.01); }
+.table-row-hover.selected { background: rgba(102, 126, 234, 0.05); }
 
 .file-name-cell, .model-name-cell { display: flex; align-items: center; gap: 12px; font-weight: 600; color: #ffffff; }
 .file-icon-mini, .model-icon-mini { width: 28px; height: 28px; background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #667eea; }
@@ -1166,6 +1316,158 @@ td { padding: 1.5rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.02); c
 
 .algo-badge { background: rgba(168, 139, 235, 0.1); color: #a88beb; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
 .accuracy-cell-premium { font-weight: 800; color: #10b981; font-size: 1.1rem; }
+
+.experiment-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.compare-count {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #6a6a8a;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.compare-count.active {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.compare-panel {
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.container-header.compact {
+  padding-bottom: 1rem;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 0 1.5rem 1.5rem;
+}
+
+.compare-run {
+  padding: 1.25rem;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.compare-run-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.compare-run h4 {
+  margin: 1rem 0;
+  font-size: 1rem;
+  color: #ffffff;
+}
+
+.compare-score {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: 1rem;
+}
+
+.compare-score span,
+.primary-metric span,
+.compare-details span {
+  color: #6a6a8a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.compare-score strong,
+.primary-metric strong {
+  color: #ffffff;
+  font-size: 1.1rem;
+}
+
+.compare-score.best {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.compare-score.best strong { color: #10b981; }
+
+.compare-details {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.compare-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.compare-details strong {
+  color: #b3b3d1;
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.compare-download {
+  width: 100%;
+}
+
+.compare-checkbox {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.compare-checkbox input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.compare-checkbox span {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(102, 126, 234, 0.35);
+  background: rgba(255,255,255,0.03);
+  transition: all 0.2s ease;
+}
+
+.compare-checkbox input:checked + span {
+  background: #667eea;
+  border-color: #667eea;
+  box-shadow: inset 0 0 0 4px #0b0b1a;
+}
+
+.compare-checkbox input:disabled + span {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.primary-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
 
 .btn-table-action { background: none; border: 1px solid rgba(102, 126, 234, 0.3); color: #667eea; padding: 8px 16px; border-radius: 80px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
 .btn-table-action:hover { background: #667eea; color: white; transform: scale(1.05); }

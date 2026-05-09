@@ -1199,7 +1199,11 @@ def generate_classification_insights(viz_data):
 # ===== VISUALIZATION DATA ENDPOINT =====
 
 @app.get("/api/get-visualization-data/{model_id}")
-async def get_visualization_data(model_id: str):
+async def get_visualization_data(
+    model_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """
     Retrieve all data needed for model performance visualization
     """
@@ -1207,6 +1211,7 @@ async def get_visualization_data(model_id: str):
         raise HTTPException(status_code=404, detail="Model not found")
         
     m_info = trained_models[model_id]
+    assert_model_owner(m_info, db, current_user)
     v_data = visualization_data.get(model_id, {})
     
     if not v_data:
@@ -1640,12 +1645,10 @@ async def export_train_dataset(
         print(f"📥 EXPORT TRAIN DATASET: {dataset_id}")
         print(f"{'='*80}")
         
-        # Check if dataset exists
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
         # Check if dataset is split
-        if not datasets[dataset_id].get('is_split', False):
+        if not dataset_info.get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
         
         # Check if split data exists
@@ -1662,7 +1665,7 @@ async def export_train_dataset(
         print(f"✅ Exporting training dataset: {len(train_df)} rows, {len(train_df.columns)} columns")
         
         # Generate filename
-        original_filename = datasets[dataset_id].get("filename", "dataset.csv")
+        original_filename = dataset_info.get("filename", "dataset.csv")
         filename = original_filename.replace(".csv", "") + "_train.csv"
         
         print(f"📄 Filename: {filename}")
@@ -1707,12 +1710,10 @@ async def export_test_dataset(
         print(f"📥 EXPORT TEST DATASET: {dataset_id}")
         print(f"{'='*80}")
         
-        # Check if dataset exists
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
         # Check if dataset is split
-        if not datasets[dataset_id].get('is_split', False):
+        if not dataset_info.get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset not split yet. Please split first.")
         
         # Check if split data exists
@@ -1729,7 +1730,7 @@ async def export_test_dataset(
         print(f"✅ Exporting test dataset: {len(test_df)} rows, {len(test_df.columns)} columns")
         
         # Generate filename
-        original_filename = datasets[dataset_id].get("filename", "dataset.csv")
+        original_filename = dataset_info.get("filename", "dataset.csv")
         filename = original_filename.replace(".csv", "") + "_test.csv"
         
         print(f"📄 Filename: {filename}")
@@ -1801,6 +1802,72 @@ async def ensure_dataset_in_memory(dataset_id: str, db: Session):
     except Exception as e:
         print(f"❌ Re-hydration error for {dataset_id}: {str(e)}")
         return None
+
+
+def get_user_dataset_record(dataset_id: str, db: Session, current_user: dict):
+    """Return a dataset only when it belongs to the current user."""
+    try:
+        db_id = int(dataset_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid dataset ID")
+
+    dataset = db.query(DatasetModel).filter(DatasetModel.id == db_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return dataset
+
+
+async def ensure_user_dataset_in_memory(dataset_id: str, db: Session, current_user: dict):
+    """Verify ownership and return the in-memory dataset entry."""
+    dataset = get_user_dataset_record(dataset_id, db, current_user)
+    dataset_key = str(dataset_id)
+
+    if dataset_key not in datasets:
+        df = file_service.load_dataframe(dataset.storage_path)
+        datasets[dataset_key] = {
+            "dataframe": df,
+            "filename": dataset.name,
+            "upload_time": dataset.upload_date,
+            "is_processed": dataset.is_processed,
+            "user_id": dataset.user_id,
+        }
+        print(f"✅ Re-hydrated authorized dataset {dataset_key} ({len(df)} rows)")
+    else:
+        cached_user_id = datasets[dataset_key].get("user_id")
+        if cached_user_id is not None and cached_user_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        datasets[dataset_key]["user_id"] = dataset.user_id
+
+    return datasets[dataset_key], dataset
+
+
+async def get_websocket_user(websocket: WebSocket):
+    """Authenticate browser WebSocket clients via ?token=..."""
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008, reason="Missing authentication token")
+        return None
+    try:
+        return await auth.get_current_user(token)
+    except HTTPException:
+        await websocket.close(code=1008, reason="Invalid authentication token")
+        return None
+
+
+def assert_model_owner(model_info: dict, db: Session, current_user: dict):
+    """Authorize in-memory model metadata using stored user_id or dataset owner."""
+    model_user_id = model_info.get("user_id")
+    if model_user_id is not None:
+        if model_user_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
+
+    dataset_id = model_info.get("dataset_id")
+    if dataset_id is None:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    get_user_dataset_record(str(dataset_id), db, current_user)
 
 
 @app.get("/api/datasets/{dataset_id}")
@@ -2831,23 +2898,25 @@ async def preprocess(
 
 
 @app.get("/api/export-cleaned/{dataset_id}")
-async def export_cleaned_dataset(dataset_id: str):
+async def export_cleaned_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Export cleaned/preprocessed dataset as CSV"""
     try:
         print("\n" + "=" * 80)
         print(f"📥 EXPORT CLEANED: {dataset_id}")
         print("=" * 80)
         
-        if dataset_id not in datasets:
-            print(f"❌ Dataset {dataset_id} not found!")
-            raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
-        df = datasets[dataset_id]["dataframe"].copy()
+        df = dataset_info["dataframe"].copy()
         
         print(f"✅ Exporting cleaned dataset: {len(df)} rows, {len(df.columns)} columns")
         
         # ✅ Generate filename
-        filename = datasets[dataset_id].get("filename", "dataset.csv")
+        filename = dataset_info.get("filename", "dataset.csv")
         filename = filename.replace(".csv", "") + "_cleaned_exported.csv"
         
         print(f"📄 Filename: {filename}")
@@ -2891,14 +2960,17 @@ async def export_cleaned_dataset(dataset_id: str):
 
 
 @app.get("/api/get-engineering-preview/{dataset_id}")
-async def get_engineering_preview(dataset_id: str):
+async def get_engineering_preview(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Get preview of scaled/engineered data"""
     try:
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404)
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
-        df = datasets[dataset_id]["dataframe"]
-        split_info = datasets[dataset_id].get("split_info", {})
+        df = dataset_info["dataframe"]
+        split_info = dataset_info.get("split_info", {})
         
         # Show first 5 rows of each
         train_sample = df.iloc[:5].to_dict('records')
@@ -2910,8 +2982,8 @@ async def get_engineering_preview(dataset_id: str):
             "train_rows": len(split_info.get("train_indices", [])),
             "test_rows": len(split_info.get("test_indices", [])),
             "sample_data": train_sample,
-            "scaling_method": datasets[dataset_id].get("scaling_method", "None"),
-            "pca_applied": "pca" in datasets[dataset_id]
+            "scaling_method": dataset_info.get("scaling_method", "None"),
+            "pca_applied": "pca" in dataset_info
         }
     
     except Exception as e:
@@ -2939,21 +3011,14 @@ async def check_imbalance(
         print(f"🔍 CHECKING CLASS IMBALANCE: Dataset {dataset_id}, Target: {target_column}")
         print(f"{'='*80}")
         
-        # 1. Fetch Dataset and Overrides from DB
-        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-        if not dataset_record:
-            raise HTTPException(status_code=404, detail="Dataset not found in database")
-            
+        dataset_info, dataset_record = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         column_metadata = dataset_record.column_metadata or {}
         
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found in memory")
-        
-        if not datasets[dataset_id].get('is_split', False):
+        if not dataset_info.get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split first")
         
         # Determine problem type from effective semantic types
-        df_full = datasets[dataset_id]['dataframe']
+        df_full = dataset_info['dataframe']
         # Use simple check for target column
         target_meta = column_metadata.get(target_column, {})
         if target_meta.get("is_override"):
@@ -3065,11 +3130,7 @@ async def apply_smote(
         print(f"⚖️ APPLYING SMOTE: Dataset {dataset_id}")
         print(f"{'='*80}")
         
-        # 1. Fetch Dataset and Overrides from DB
-        dataset_record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-        if not dataset_record:
-            raise HTTPException(status_code=404, detail="Dataset not found in database")
-            
+        dataset_info, dataset_record = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         column_metadata = dataset_record.column_metadata or {}
         
         # Check if SMOTE is available
@@ -3079,18 +3140,14 @@ async def apply_smote(
                 detail="SMOTE not available. Please install imbalanced-learn: pip install imbalanced-learn"
             )
         
-        # Validate dataset exists and is split
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        if not datasets[dataset_id].get('is_split', False):
+        if not dataset_info.get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split first")
         
         if dataset_id not in X_train_storage or dataset_id not in y_train_storage:
             raise HTTPException(status_code=400, detail="Training data not found")
         
         # Check problem type (SMOTE is for classification only)
-        if datasets[dataset_id].get('problem_type') != 'classification':
+        if dataset_info.get('problem_type') != 'classification':
             raise HTTPException(
                 status_code=400,
                 detail="SMOTE can only be applied to classification problems with categorical or discrete targets. Regression tasks are not supported."
@@ -3263,10 +3320,9 @@ async def reset_smote(
         print(f"🔄 RESETTING SMOTE: Dataset {dataset_id}")
         print(f"{'='*80}")
         
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
-        if not datasets[dataset_id].get('smote_applied', False):
+        if not dataset_info.get('smote_applied', False):
             return {
                 "success": True,
                 "message": "SMOTE was not applied, nothing to reset"
@@ -3311,40 +3367,9 @@ async def set_target(
         
         print(f"🎯 Setting target for dataset {dataset_id}: {target_column}")
         
-        # Check if dataset exists in memory
-        if dataset_id not in datasets:
-            print(f"⚠️ Dataset {dataset_id} not in memory, attempting restoration...")
-            
-            # Try to restore from DB
-            dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-            
-            if not dataset:
-                print(f"❌ Dataset {dataset_id} not found in DB")
-                raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
-                
-            # Check ownership
-            if dataset.user_id != current_user['id']:
-                raise HTTPException(status_code=403, detail="Not authorized")
-                
-            # Restore to memory
-            try:
-                df = file_service.load_dataframe(dataset.storage_path)
-                datasets[dataset_id] = {
-                    'dataframe': df,
-                    'filename': dataset.name,
-                    'upload_time': dataset.upload_date,
-                    'is_processed': dataset.is_processed
-                }
-                print(f"✅ Dataset {dataset_id} restored to memory")
-            except Exception as e:
-                print(f"❌ Failed to restore dataset: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to restore dataset: {str(e)}")
-
-        # Proceed with target setting
-        if dataset_id not in datasets:
-             raise HTTPException(status_code=404, detail="Dataset not found even after restoration attempt")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
              
-        df = datasets[dataset_id]['dataframe']
+        df = dataset_info['dataframe']
         
         if target_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Column '{target_column}' not found in dataset")
@@ -3365,8 +3390,8 @@ async def set_target(
                     problem_type = "regression"
         
         # Store target info in dataset
-        datasets[dataset_id]['target_column'] = target_column
-        datasets[dataset_id]['problem_type'] = problem_type
+        dataset_info['target_column'] = target_column
+        dataset_info['problem_type'] = problem_type
         
         # Get feature information
         feature_columns = [col for col in df.columns if col != target_column]
@@ -3413,11 +3438,7 @@ async def split_dataset(
         
         print(f"Split request for dataset: {dataset_id}")
         
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        # Get the target column from dataset metadata OR request
-        dataset_info = datasets[dataset_id]
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
         # Allow passing target_column in request if not set in metadata
         if 'target_column' in request:
@@ -3635,10 +3656,9 @@ async def apply_target_encoding(
         print(f"   Columns: {[c.name for c in columns_to_encode]}")
         print("=" * 80)
         
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
-        if not datasets[dataset_id].get('is_split', False):
+        if not dataset_info.get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split before target encoding")
         
         X_train = X_train_storage[dataset_id].copy()
@@ -3646,7 +3666,7 @@ async def apply_target_encoding(
         y_train = y_train_storage[dataset_id]
         
         # Detect problem type if not already known
-        problem_type = datasets[dataset_id].get('problem_type', 'regression')
+        problem_type = dataset_info.get('problem_type', 'regression')
         
         encoders_used = {}
         new_encoded_cols = []
@@ -3784,11 +3804,9 @@ async def apply_categorical_encoding(
         print(f"   Columns to encode: {len(columns_to_encode)}")
         print("=" * 80)
         
-        # Validate dataset exists and is split
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
-        if not datasets[dataset_id].get('is_split', False):
+        if not dataset_info.get('is_split', False):
             raise HTTPException(status_code=400, detail="Dataset must be split before encoding")
         
         if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
@@ -3990,14 +4008,18 @@ class DateTimeRequest(BaseModel):
     target_column: Union[str, Dict, None] = None
 
 @app.post("/api/datasets/apply-scaling")
-@app.post("/api/datasets/apply-scaling")
-async def apply_scaling(request: ScalingRequest):
+async def apply_scaling(
+    request: ScalingRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Apply feature scaling to specified numerical columns"""
     global X_train_storage, X_test_storage, split_scalers
     
     try:
         dataset_id = request.dataset_id
         columns_to_scale = request.columns
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
         print(f"Scaling request for dataset: {dataset_id}")
         print(f"Columns to scale: {len(columns_to_scale)}")
@@ -4065,16 +4087,16 @@ async def apply_scaling(request: ScalingRequest):
             else:
                 full_df = full_X
                 
-            datasets[dataset_id]['dataframe'] = full_df
+            dataset_info['dataframe'] = full_df
             print(f"✅ Base dataframe synced after scaling. Shape: {full_df.shape}")
         except Exception as sync_err:
             print(f"⚠️  Could not sync base dataframe after scaling: {sync_err}")
         # ─────────────────────────────────────────────────────────────────────
         
         # Update dataset metadata
-        datasets[dataset_id]['is_scaled'] = True
-        datasets[dataset_id]['scaled_columns'] = scaled_columns
-        datasets[dataset_id]['scalers'] = list(scalers_used.keys())
+        dataset_info['is_scaled'] = True
+        dataset_info['scaled_columns'] = scaled_columns
+        dataset_info['scalers'] = list(scalers_used.keys())
         
         # Create preview data for frontend
         y_train = y_train_storage.get(dataset_id)
@@ -4120,7 +4142,11 @@ async def apply_scaling(request: ScalingRequest):
 
 
 @app.post("/api/detect-problem-type")
-async def detect_problem_type_endpoint(request: Dict[str, Any]):
+async def detect_problem_type_endpoint(
+    request: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Detect if the target is classification or regression for a given dataset_id and target_column"""
     try:
         dataset_id = request.get('dataset_id')
@@ -4129,10 +4155,9 @@ async def detect_problem_type_endpoint(request: Dict[str, Any]):
         if not dataset_id or not target_column:
             raise HTTPException(status_code=400, detail="dataset_id and target_column are required")
 
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
 
-        df = datasets[dataset_id]['dataframe']
+        df = dataset_info['dataframe']
         if target_column not in df.columns:
             raise HTTPException(status_code=400, detail="Target column not found")
 
@@ -4256,7 +4281,11 @@ async def delete_dataset(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/missing-values/{dataset_id}")
-async def get_missing_values(dataset_id: str):
+async def get_missing_values(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Get missing values information for a dataset"""
     try:
         print(f"\n📊 Fetching missing values for dataset: {dataset_id}")
@@ -4268,10 +4297,9 @@ async def get_missing_values(dataset_id: str):
         print(f"   Available dataset IDs: {list(datasets.keys())}")
         print(f"   Total datasets in memory: {len(datasets)}")
         
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
-        df = datasets[dataset_id]['dataframe']
+        df = dataset_info['dataframe']
         
         print(f"   Dataset shape: {df.shape}")
         print(f"   Total missing values: {df.isnull().sum().sum()}")
@@ -4317,6 +4345,9 @@ async def get_missing_values(dataset_id: str):
 @app.websocket("/ws/train-model")
 async def train_model_websocket(websocket: WebSocket):
     """Advanced ML training with feature scaling and engineering - REFACTORED"""
+    current_user = await get_websocket_user(websocket)
+    if not current_user:
+        return
     await websocket.accept()
     
     try:
@@ -4351,7 +4382,7 @@ async def train_model_websocket(websocket: WebSocket):
         # ===== VALIDATE DATASET =====
         # Try to re-hydrate if missing
         db = next(get_db())
-        dataset_info = await ensure_dataset_in_memory(dataset_id, db)
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         
         if not dataset_info:
             print(f"❌ [Training] Dataset {dataset_id} not found even after re-hydration attempt")
@@ -4372,15 +4403,8 @@ async def train_model_websocket(websocket: WebSocket):
             
             print(f"🔄 [Training] Preprocessed data not found for {dataset_id}. Attempting auto-split...")
             try:
-                # We need the dataframe to split
-                if dataset_id not in datasets:
-                    # Should have been re-hydrated above, but double check
-                    await ensure_dataset_in_memory(dataset_id, db)
-                
-                if dataset_id not in datasets:
-                    raise Exception("Dataset not found in memory or DB")
-                
-                df = datasets[dataset_id]['dataframe']
+                dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+                df = dataset_info['dataframe']
                 if target_column not in df.columns:
                     raise Exception(f"Target column '{target_column}' not found")
                 
@@ -4649,7 +4673,9 @@ async def train_model_websocket(websocket: WebSocket):
                             
                             # Store in DB for persistence
                             try:
-                                user_id = dataset_info.get('user_id') if isinstance(dataset_info, dict) else (dataset_info.user_id if hasattr(dataset_info, 'user_id') else 1)
+                                user_id = current_user['id']
+                                model_info['user_id'] = user_id
+                                trained_models[model_id]['user_id'] = user_id
                                 
                                 # Upload model to Supabase
                                 local_model_path = model_info.get('model_path')
@@ -4765,12 +4791,17 @@ async def train_model_websocket(websocket: WebSocket):
 
 
 @app.get("/api/models/{model_id}")
-async def get_model_info(model_id: str):
+async def get_model_info(
+    model_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
     """Get detailed model information"""
     if model_id not in trained_models:
         raise HTTPException(status_code=404, detail="Model not found")
-    
-    return trained_models[model_id]
+    model_info = trained_models[model_id]
+    assert_model_owner(model_info, db, current_user)
+    return model_info
 
 @app.get("/api/models/{model_id}/download")
 async def download_model(
@@ -4785,6 +4816,7 @@ async def download_model(
     # 1. Check in-memory storage (most recent)
     if model_id in trained_models:
         model_info = trained_models[model_id]
+        assert_model_owner(model_info, db, current_user)
         model_path = model_info.get('model_path')
     
     # 2. Check Database if not in memory
@@ -4828,11 +4860,17 @@ async def download_model(
     raise HTTPException(status_code=404, detail="Model file not found on server or cloud storage")
 
 @app.get("/api/debug")
-async def debug_info():
+async def debug_info(current_user: dict = Depends(auth.get_current_user)):
     """Debug information"""
+    if os.getenv("ENABLE_DEBUG_ENDPOINT", "").lower() not in {"1", "true", "yes"}:
+        raise HTTPException(status_code=404, detail="Not found")
+    user_dataset_ids = {
+        ds_id for ds_id, data in datasets.items()
+        if data.get("user_id") == current_user["id"]
+    }
     return {
-        "datasets_in_memory": len(datasets),
-        "dataset_ids": list(datasets.keys()),
+        "datasets_in_memory": len(user_dataset_ids),
+        "dataset_ids": list(user_dataset_ids),
         "dataset_details": {
             ds_id: {
                 "shape": list(data['dataframe'].shape),
@@ -4840,6 +4878,7 @@ async def debug_info():
                 "uploaded_at": data.get('uploaded_at')
             }
             for ds_id, data in datasets.items()
+            if ds_id in user_dataset_ids
         },
         "trained_models": len(trained_models),
         "active_scalers": len(scalers)
@@ -4898,13 +4937,8 @@ async def save_dataset_version(
     current_user: dict = Depends(auth.get_current_user)
 ):
     """Persist the current in-memory state of a dataset as a new version"""
-    if dataset_id not in datasets:
-        # Try to re-hydrate if missing
-        await ensure_dataset_in_memory(dataset_id, db)
-        if dataset_id not in datasets:
-            raise HTTPException(status_code=404, detail="Dataset not found in memory or DB")
-        
     try:
+        await ensure_user_dataset_in_memory(dataset_id, db, current_user)
         # Reconstruct transformed dataframe if split exists (capture preprocessed state)
         if (str(dataset_id) in X_train_storage and str(dataset_id) in X_test_storage and 
             str(dataset_id) in y_train_storage and str(dataset_id) in y_test_storage):
@@ -5035,13 +5069,11 @@ async def save_dataset_version(
 @app.post("/api/datasets/{dataset_id}/preprocessing/drop-columns")
 async def drop_columns(dataset_id: str, request: DropColumnsRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Drop specified columns"""
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
     try:
-        df = datasets[dataset_id]['dataframe']
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
         # Load semantic types if available
-        metadata = datasets[dataset_id].get('column_metadata', {})
+        metadata = dataset_info.get('column_metadata', {})
         processor = DataPreprocessor(df, column_metadata=metadata)
         
         df_new = processor.remove_columns(request.columns)
@@ -5070,12 +5102,10 @@ async def drop_columns(dataset_id: str, request: DropColumnsRequest, db: Session
 @app.post("/api/datasets/{dataset_id}/preprocessing/missing-values")
 async def handle_missing_values_route(dataset_id: str, request: MissingValueRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Handle missing values"""
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
     try:
-        df = datasets[dataset_id]['dataframe']
-        metadata = datasets[dataset_id].get('column_metadata', {})
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
+        metadata = dataset_info.get('column_metadata', {})
         processor = DataPreprocessor(df, column_metadata=metadata)
         
         # Convert request to expected format {col: strategy}
@@ -5083,8 +5113,8 @@ async def handle_missing_values_route(dataset_id: str, request: MissingValueRequ
         
         # ✅ Identify and exclude target column
         target_column = request.target_column
-        if not target_column and dataset_id in datasets:
-             target_column = datasets[dataset_id].get('target_column')
+        if not target_column:
+             target_column = dataset_info.get('target_column')
              
         if isinstance(target_column, str) and target_column.startswith('{'):
              try:
@@ -5127,12 +5157,10 @@ async def handle_missing_values_route(dataset_id: str, request: MissingValueRequ
 @app.post("/api/datasets/{dataset_id}/preprocessing/outliers")
 async def handle_outliers_route(dataset_id: str, request: OutlierRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Handle outliers"""
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
     try:
-        df = datasets[dataset_id]['dataframe']
-        metadata = datasets[dataset_id].get('column_metadata', {})
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
+        metadata = dataset_info.get('column_metadata', {})
         processor = DataPreprocessor(df, column_metadata=metadata)
         
         # Detect numeric columns for outlier handling
@@ -5146,8 +5174,8 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, db: Se
             
         # ✅ Identify and exclude target column
         target_column = request.target_column
-        if not target_column and dataset_id in datasets:
-             target_column = datasets[dataset_id].get('target_column')
+        if not target_column:
+             target_column = dataset_info.get('target_column')
              
         if isinstance(target_column, str) and target_column.startswith('{'):
              try:
@@ -5201,11 +5229,9 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, db: Se
 @app.post("/api/datasets/{dataset_id}/preprocessing/remove-duplicates")
 async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Remove duplicates"""
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
     try:
-        df = datasets[dataset_id]['dataframe']
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
         processor = DataPreprocessor(df)
         
         df_new = processor.remove_duplicates(strategy=request.keep)
@@ -5235,12 +5261,10 @@ async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, db
 @app.post("/api/datasets/{dataset_id}/preprocessing/datetime")
 async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, db: Session = Depends(get_db), current_user: dict = Depends(auth.get_current_user)):
     """Handle datetime feature extraction"""
-    if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    
     try:
-        df = datasets[dataset_id]['dataframe']
-        metadata = datasets[dataset_id].get('column_metadata', {})
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
+        metadata = dataset_info.get('column_metadata', {})
         processor = DataPreprocessor(df, column_metadata=metadata)
         
         print(f"Extracting features from {len(request.columns)} datetime columns")
@@ -5248,8 +5272,8 @@ async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, db: S
         # ✅ Identify and exclude target column
         process_columns = list(request.columns)
         target_column = request.target_column
-        if not target_column and dataset_id in datasets:
-             target_column = datasets[dataset_id].get('target_column')
+        if not target_column:
+             target_column = dataset_info.get('target_column')
              
         if isinstance(target_column, str) and target_column.startswith('{'):
              try:

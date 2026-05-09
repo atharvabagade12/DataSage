@@ -1547,9 +1547,8 @@ onBeforeRouteLeave((to, _from, next) => {
     dataStore.clearData();
     next();
   } else {
-    // Within-pipeline navigation: invalidate rawPreview cache so the next page
-    // always sees fresh data re-fetched from the backend.
-    dataStore.clearCache();
+    // Within-pipeline navigation — allow freely, no cache clearing.
+    // Each destination page re-fetches data via its own onMounted lifecycle.
     next();
   }
 });
@@ -3478,9 +3477,7 @@ async function applyTargetEncoding() {
 
 // ==================== NAVIGATION ====================
 
-const goBack = () => {
-  router.push("/target-selection");
-};
+
 
 const proceedToAlgorithmSelection = () => {
   console.log('🔵 proceedToAlgorithmSelection called!', { splitApplied: preprocessing.value.isSplitApplied });

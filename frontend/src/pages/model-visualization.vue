@@ -1170,13 +1170,7 @@ const cmInsights = computed(() => {
   };
 });
 
-const goBack = () => {
-  const query = {};
-  if (modelSummary.value.dataset_id) {
-    query.datasetId = modelSummary.value.dataset_id;
-  }
-  router.push({ path: '/model-training', query });
-};
+
 
 // ── NAVIGATION GUARD: clear session on pipeline exit ───────────────────────
 const PIPELINE_ROUTES = [
