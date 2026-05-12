@@ -1526,15 +1526,31 @@ const PIPELINE_ROUTES = [
   'algorithm-select', 'model-training', 'model-visualization'
 ];
 
+// Ordered pipeline step index — used to detect backward navigation.
+const PIPELINE_STEP_ORDER = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
+
 // Stores the destination route when the guard blocks navigation to show the modal.
 const pendingRoute = ref(null);
+// Tracks whether the blocked navigation was a backward navigation (browser Back).
+// If true, we should use router.back() instead of router.push() to avoid
+// polluting the history stack with a duplicate entry.
+const pendingNavigationIsBack = ref(false);
 
-onBeforeRouteLeave((to, _from, next) => {
+onBeforeRouteLeave((to, from, next) => {
   const leavingPipeline = !PIPELINE_ROUTES.includes(to.name);
 
   if (mlStore.isDirty) {
     // Dirty state — prompt to save before leaving
     pendingRoute.value = to.fullPath;
+    
+    // Detect backward navigation: destination is earlier in the pipeline than source
+    const fromStep = PIPELINE_STEP_ORDER.indexOf(from.name);
+    const toStep = PIPELINE_STEP_ORDER.indexOf(to.name);
+    pendingNavigationIsBack.value = toStep !== -1 && fromStep !== -1 && toStep < fromStep;
+    
     const _now = new Date();
     const _ts = `${_now.getHours()}${String(_now.getMinutes()).padStart(2, '0')}`;
     const _base = (mlStore.fileName || fileName.value || 'dataset').split('.')[0];
@@ -1567,16 +1583,24 @@ const handleSaveVersion = async () => {
         // Resume blocked navigation if triggered by the route guard
         if (pendingRoute.value) {
           const target = pendingRoute.value;
+          const isBack = pendingNavigationIsBack.value;
           pendingRoute.value = null;
+          pendingNavigationIsBack.value = false;
           
           // Clear session state before leaving the pipeline
           const leavingPipeline = !PIPELINE_ROUTES.includes(router.resolve(target)?.name);
           if (leavingPipeline) {
             experimentStore.clearAll();
             dataStore.clearData();
+            router.push(target);
+          } else if (isBack) {
+            // Use router.back() so we don't add a duplicate entry to the history
+            // stack. router.push() would cause a loop: pressing Back from
+            // target-selection would return to advanced-preprocessing.
+            router.back();
+          } else {
+            router.push(target);
           }
-          
-          router.push(target);
         }
     } catch (err) {
         console.error("Save version error:", err);
@@ -1593,16 +1617,25 @@ const leaveWithoutSaving = () => {
   mlStore.isDirty = false; // MUST set this before pushing, to break the loop!
   
   const target = pendingRoute.value;
+  const isBack = pendingNavigationIsBack.value;
   pendingRoute.value = null;
+  pendingNavigationIsBack.value = false;
   
   // Clear session state if leaving pipeline
   const leavingPipeline = !PIPELINE_ROUTES.includes(router.resolve(target)?.name);
   if (leavingPipeline) {
     experimentStore.clearAll();
     dataStore.clearData();
+    if (target) router.push(target);
+  } else if (isBack) {
+    // Use router.back() to complete the original browser-back navigation cleanly.
+    // Using router.push() here would add a duplicate history entry, causing the
+    // Back button from target-selection to go back to advanced-preprocessing
+    // instead of data-preview.
+    router.back();
+  } else {
+    if (target) router.push(target);
   }
-  
-  if (target) router.push(target);
 };
 const targetEncodingApplied = ref(false);
 
@@ -2424,21 +2457,21 @@ const loadInitialData = async () => {
     }
     
     await Promise.all([
-      dataStore.loadData(datasetId.value, true),
+      dataStore.loadData(datasetId.value, false),
       fetchSemanticTypes()
     ]);
 
     
     if (preprocessing.value.isSplitApplied && dataStore.trainPreview.length === 0) {
       console.warn('⚠️ Split applied in store but trainPreview is empty after load — forcing re-fetch...');
-      await dataStore.loadData(datasetId.value, true); // force=true
+      await dataStore.loadData(datasetId.value, true); // force=true only for split data
     }
     // ────────────────────────────────────────────────────────────────────────
     
-    // Step 4: Sync UI Columns with Metadata (Initially)
+    
     analyzeColumns();
 
-    // Step 5: Fetch extra stats and imbalance info AFTER columns are initialized
+    // Fetch extra stats and imbalance info AFTER columns are initialized
     await Promise.all([
       fetchCompleteStatistics(),
       checkClassImbalance()

@@ -22,9 +22,12 @@ export const useDataStore = defineStore('data', {
     // Sync with backend using ID from Experiment Store
     async loadData(datasetId, force = false) {
       if (!datasetId) return;
-      // Re-fetch if both train and test previews are empty (defensive fallback)
-      const previewsMissing = this.trainPreview.length === 0 && this.testPreview.length === 0;
-      if (!force && !previewsMissing && this.isLoaded && this.lastFetchedId === datasetId) return;
+      // Skip the network round-trip when rawPreview is already populated for this
+      // dataset ID.  Using rawPreview.length as the freshness signal (instead of
+      // the old previewsMissing heuristic based on trainPreview/testPreview) means
+      // that in-session preprocessing changes made in data-preview.vue are NOT
+      // overwritten by a backend fetch that might return the original/stale data.
+      if (!force && this.rawPreview.length > 0 && this.isLoaded && this.lastFetchedId === datasetId) return;
       
       const { authenticatedGet } = useAuthenticatedFetch();
       

@@ -148,7 +148,7 @@ const goBack = () => {
 
 </script>
 
-<style scoped>
+<style scoped> 
 .dataset-context-bar {
   display: flex;
   align-items: center;

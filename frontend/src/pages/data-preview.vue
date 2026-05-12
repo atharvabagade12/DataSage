@@ -1519,14 +1519,28 @@ const PIPELINE_ROUTES = [
   'algorithm-select', 'model-training', 'model-visualization'
 ];
 
-const pendingRoute = ref(null);
+// Ordered pipeline step index — used to detect backward navigation.
+const PIPELINE_STEP_ORDER = [
+  'data-preview', 'target-selection', 'advanced-preprocessing',
+  'algorithm-select', 'model-training', 'model-visualization'
+];
 
-onBeforeRouteLeave((to, _from, next) => {
+const pendingRoute = ref(null);
+// Tracks whether the blocked navigation was a backward navigation (browser Back).
+const pendingNavigationIsBack = ref(false);
+
+onBeforeRouteLeave((to, from, next) => {
   const leavingPipeline = !PIPELINE_ROUTES.includes(to.name);
   
   if (mlStore.isDirty) {
     // Unsaved changes detected — prompt to save before navigating anywhere
     pendingRoute.value = to.fullPath;
+    
+    // Detect backward navigation: destination is earlier in the pipeline than source
+    const fromStep = PIPELINE_STEP_ORDER.indexOf(from.name);
+    const toStep = PIPELINE_STEP_ORDER.indexOf(to.name);
+    pendingNavigationIsBack.value = toStep !== -1 && fromStep !== -1 && toStep < fromStep;
+    
     const now = new Date();
     const ts = `${now.getHours()}${String(now.getMinutes()).padStart(2, '0')}`;
     newVersionName.value = `${(mlStore.fileName || fileName.value || 'dataset').split('.')[0]}_v${ts}`;
@@ -1560,15 +1574,20 @@ const handleSaveVersion = async () => {
         
         if (pendingRoute.value) {
           const target = pendingRoute.value;
+          const isBack = pendingNavigationIsBack.value;
           pendingRoute.value = null;
+          pendingNavigationIsBack.value = false;
           
           const leavingPipeline = !PIPELINE_ROUTES.includes(router.resolve(target)?.name);
           if (leavingPipeline) {
             experimentStore.clearAll();
             dataStore.clearData();
+            router.push(target);
+          } else if (isBack) {
+            router.back();
+          } else {
+            router.push(target);
           }
-          
-          router.push(target);
         }
     } catch (err) {
         console.error("Save version error:", err);
@@ -1584,15 +1603,21 @@ const leaveWithoutSaving = () => {
   mlStore.isDirty = false; // MUST set this before pushing, to break the loop!
   
   const target = pendingRoute.value;
+  const isBack = pendingNavigationIsBack.value;
   pendingRoute.value = null;
+  pendingNavigationIsBack.value = false;
   
   const leavingPipeline = !PIPELINE_ROUTES.includes(router.resolve(target)?.name);
   if (leavingPipeline) {
     experimentStore.clearAll();
     dataStore.clearData();
+    if (target) router.push(target);
+  } else if (isBack) {
+    // Use router.back() to complete the original browser-back navigation cleanly.
+    router.back();
+  } else {
+    if (target) router.push(target);
   }
-  
-  if (target) router.push(target);
 };
 const isDetectingTypes = ref(false); 
 const semanticOverrides = ref({});
@@ -1914,7 +1939,7 @@ const proceedToTargetSelection = () => {
         return;
     }
 
-    router.push("target-selection");
+    router.push("/target-selection");
 };
 
 const exportData = async () => {
