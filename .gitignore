@@ -89,3 +89,4 @@ enterprise_datasets/
 # Uploads
 # =========================
 uploads/
+render.yaml
