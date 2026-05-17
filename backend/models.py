@@ -30,6 +30,7 @@ class Dataset(Base):
     column_count = Column(Integer)
     size_bytes = Column(Integer)
     is_processed = Column(Boolean, default=False)
+    data_version = Column(Integer, default=0, nullable=False, server_default="0")
     parent_dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
     column_metadata = Column(JSON, nullable=True) # stores semantic types and overrides
     

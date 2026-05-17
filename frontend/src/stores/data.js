@@ -15,21 +15,35 @@ export const useDataStore = defineStore('data', {
     isLoaded: false,
     isTypesVerified: false,
     isAutoVerified: false,
-    lastFetchedId: null
+    lastFetchedId: null,
+    dataVersion: 0
   }),
   
   actions: {
     // Sync with backend using ID from Experiment Store
     async loadData(datasetId, force = false) {
       if (!datasetId) return;
-      // Skip the network round-trip when rawPreview is already populated for this
-      // dataset ID.  Using rawPreview.length as the freshness signal (instead of
-      // the old previewsMissing heuristic based on trainPreview/testPreview) means
-      // that in-session preprocessing changes made in data-preview.vue are NOT
-      // overwritten by a backend fetch that might return the original/stale data.
-      if (!force && this.rawPreview.length > 0 && this.isLoaded && this.lastFetchedId === datasetId) return;
       
       const { authenticatedGet } = useAuthenticatedFetch();
+
+      // STEP 1: Quick version check (lightweight, ~5ms network call)
+      if (!force && this.rawPreview.length > 0 && this.isLoaded && this.lastFetchedId === datasetId) {
+        try {
+          const vRes = await authenticatedGet(`/api/datasets/${datasetId}/version`);
+          if (vRes.ok) {
+            const { data_version } = await vRes.json();
+            if (data_version === this.dataVersion) {
+              console.log(`✅ DataStore: Version match (v${this.dataVersion}) — using cache for ${datasetId}`);
+              return; // Cache is fresh, skip full fetch
+            }
+            console.log(`🔄 DataStore: Version mismatch (local=v${this.dataVersion}, remote=v${data_version}) — refetching`);
+          }
+        } catch (e) {
+          console.warn('⚠️ DataStore: Version check failed — falling back to full fetch', e);
+        }
+      }
+      
+
       
       try {
         console.log('🔄 DataStore: Fetching data for', datasetId);
@@ -55,15 +69,27 @@ export const useDataStore = defineStore('data', {
                    this.rawPreview = data.data;
                }
 
-               // Load split previews if they exist
-               if (Array.isArray(data.train_preview)) {
-                   this.trainPreview = data.train_preview;
-                   console.log(`✅ DataStore: Loaded train_preview (${data.train_preview.length} rows)`);
+               // Load or clear split previews based on backend state
+               if (data.is_split === false) {
+                   this.trainPreview = [];
+                   this.testPreview = [];
+                   // Dynamically import stores to avoid circular dependencies
+                   import('./experiment').then(m => m.useExperimentStore().setSplitApplied(false));
+                   import('./mlDataFlow').then(m => m.useMLDataFlowStore().setSplitState(false, null));
+                   console.log(`🔄 DataStore: Cleared split state (Dataset was mutated)`);
+               } else {
+                   if (Array.isArray(data.train_preview)) {
+                       this.trainPreview = data.train_preview;
+                       console.log(`✅ DataStore: Loaded train_preview (${data.train_preview.length} rows)`);
+                   }
+                   if (Array.isArray(data.test_preview)) {
+                       this.testPreview = data.test_preview;
+                       console.log(`✅ DataStore: Loaded test_preview (${data.test_preview.length} rows)`);
+                   }
                }
-               if (Array.isArray(data.test_preview)) {
-                   this.testPreview = data.test_preview;
-                   console.log(`✅ DataStore: Loaded test_preview (${data.test_preview.length} rows)`);
-               }
+               
+               // Capture version from backend response
+               this.dataVersion = data.data_version ?? 0;
           }
           console.log("STATS: Loaded manual raw rows:", this.rawPreview.length);
         } else {
@@ -140,16 +166,15 @@ export const useDataStore = defineStore('data', {
     clearCache() {
       this.lastFetchedId = null;
       this.isLoaded = false;
+      this.dataVersion = 0;
     }
   },
 
   // Preview data (rawPreview, trainPreview, testPreview) is intentionally NOT
-  // persisted to sessionStorage. Pages always re-fetch fresh data from the
-  // backend on mount, guaranteeing a consistent "always latest" view.
-  // Only lastFetchedId is persisted to avoid duplicate inflight requests within
-  // the same page session.
+  // persisted to sessionStorage to avoid bloat, but lastFetchedId and dataVersion
+  // are tracked to ensure we only refetch when the backend version changes.
   persist: {
     storage: sessionStorage,
-    pick: ['lastFetchedId'],
+    pick: ['lastFetchedId', 'dataVersion'],
   }
 });

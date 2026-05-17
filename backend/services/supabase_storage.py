@@ -158,6 +158,14 @@ class SupabaseStorageService:
             buffer.seek(0)
             return pd.read_csv(buffer, na_values=MISSING_VALUE_MARKERS, keep_default_na=True)
 
+    def load_latest_snapshot(self, user_id: int, dataset_id: str) -> pd.DataFrame:
+        """
+        Attempt to load the latest processed snapshot for a dataset.
+        Raises FileNotFoundError if no snapshot exists.
+        """
+        bucket_key = f"user_{user_id}/processed/dataset_{dataset_id}_latest.parquet"
+        return self.load_dataframe(bucket_key)
+
     # ── Save DataFrame (versions / processed files) ───────────────────────────
 
     def save_dataframe(
@@ -192,6 +200,29 @@ class SupabaseStorageService:
             file_options={"content-type": "application/octet-stream", "upsert": "true"},
         )
         print(f"☁️  [Supabase] Saved DataFrame → {bucket_key} ({len(parquet_bytes):,} bytes)")
+        return bucket_key
+
+    def save_latest_snapshot(self, df: pd.DataFrame, user_id: int, dataset_id: str) -> str:
+        """
+        Overwrite the single 'latest' snapshot for a dataset after a preprocessing step.
+        """
+        bucket_key = f"user_{user_id}/processed/dataset_{dataset_id}_latest.parquet"
+        buf = io.BytesIO()
+        df.to_parquet(buf, index=False)
+        buf.seek(0)
+        parquet_bytes = buf.read()
+
+        if self.use_local:
+            path = self._write_local_bytes(bucket_key, parquet_bytes)
+            print(f"💾 [LocalStorage] Saved Latest Snapshot → {path} ({len(parquet_bytes):,} bytes)")
+            return bucket_key
+
+        self.client.storage.from_(BUCKET).upload(
+            path=bucket_key,
+            file=parquet_bytes,
+            file_options={"content-type": "application/octet-stream", "upsert": "true"},
+        )
+        print(f"☁️  [Supabase] Saved Latest Snapshot → {bucket_key} ({len(parquet_bytes):,} bytes)")
         return bucket_key
 
     def upload_model(self, model_bytes: bytes, user_id: int, filename: str) -> str:

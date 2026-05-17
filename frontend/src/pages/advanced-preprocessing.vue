@@ -2457,15 +2457,9 @@ const loadInitialData = async () => {
     }
     
     await Promise.all([
-      dataStore.loadData(datasetId.value, false),
+      dataStore.loadData(datasetId.value),
       fetchSemanticTypes()
     ]);
-
-    
-    if (preprocessing.value.isSplitApplied && dataStore.trainPreview.length === 0) {
-      console.warn('⚠️ Split applied in store but trainPreview is empty after load — forcing re-fetch...');
-      await dataStore.loadData(datasetId.value, true); // force=true only for split data
-    }
     // ────────────────────────────────────────────────────────────────────────
     
     

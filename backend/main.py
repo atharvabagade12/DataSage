@@ -1591,20 +1591,8 @@ async def export_dataset(
 ):
     """Export full dataset as CSV"""
     try:
-        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-            
-        if dataset.user_id != current_user['id']:
-            raise HTTPException(status_code=403, detail="Not authorized")
-            
-        # PRIORITIZE IN-MEMORY DATA (This includes unsaved preprocessing steps)
-        if str(dataset_id) in datasets:
-            print(f"Using in-memory dataframe for export (Dataset {dataset_id})")
-            df = datasets[str(dataset_id)]['dataframe']
-        else:
-            print(f"Loading dataframe from disk for export (Dataset {dataset_id})")
-            df = file_service.load_dataframe(dataset.storage_path)
+        dataset_info, dataset = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
         
         filename = dataset.name.replace(".csv", "") + "_exported.csv"
         
@@ -1786,7 +1774,12 @@ async def ensure_dataset_in_memory(dataset_id: str, db: Session):
             return None
             
         # Load from disk
-        df = file_service.load_dataframe(dataset.storage_path)
+        try:
+            df = file_service.load_latest_snapshot(dataset.user_id, dataset_id)
+            print(f"✅ Re-hydrated from latest snapshot")
+        except FileNotFoundError:
+            df = file_service.load_dataframe(dataset.storage_path)
+            print(f"⚠️ Re-hydrated from original file (no snapshot found)")
         
         datasets[dataset_id] = {
             'dataframe': df,
@@ -1825,7 +1818,10 @@ async def ensure_user_dataset_in_memory(dataset_id: str, db: Session, current_us
     dataset_key = str(dataset_id)
 
     if dataset_key not in datasets:
-        df = file_service.load_dataframe(dataset.storage_path)
+        try:
+            df = file_service.load_latest_snapshot(dataset.user_id, dataset_id)
+        except FileNotFoundError:
+            df = file_service.load_dataframe(dataset.storage_path)
         datasets[dataset_key] = {
             "dataframe": df,
             "filename": dataset.name,
@@ -1870,6 +1866,22 @@ def assert_model_owner(model_info: dict, db: Session, current_user: dict):
     get_user_dataset_record(str(dataset_id), db, current_user)
 
 
+@app.get("/api/datasets/{dataset_id}/version")
+async def get_dataset_version(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Lightweight endpoint to fetch the dataset version for cache validation."""
+    dataset = get_user_dataset_record(dataset_id, db, current_user)
+    
+    # Try RAM cache first
+    if dataset_id in datasets and 'data_version' in datasets[dataset_id]:
+        return {"data_version": datasets[dataset_id]['data_version']}
+    
+    # Fallback to DB
+    return {"data_version": getattr(dataset, 'data_version', 0)}
+
 @app.get("/api/datasets/{dataset_id}")
 async def get_dataset_info(
     dataset_id: str,
@@ -1878,35 +1890,8 @@ async def get_dataset_info(
 ):
     """Get specific dataset information with sample data - Persisted"""
     try:
-        # 1. Fetch from DB
-        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-        
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-            
-        # Check ownership
-        if dataset.user_id != current_user['id']:
-             raise HTTPException(status_code=403, detail="Not authorized to access this dataset")
-
-        # 2. Load Dataframe (Memory First)
-        if dataset_id in datasets:
-            df = datasets[dataset_id]['dataframe']
-            print(f"✅ Using in-memory dataset {dataset_id}")
-        else:
-            try:
-                df = file_service.load_dataframe(dataset.storage_path)
-                
-                # 2.5 Populate Global Storage if missing
-                print(f"🔄 Restoring dataset {dataset_id} to memory")
-                datasets[dataset_id] = {
-                    'dataframe': df,
-                    'filename': dataset.name,
-                    'upload_time': dataset.upload_date,
-                    'is_processed': dataset.is_processed,
-                }
-                    
-            except FileNotFoundError:
-                raise HTTPException(status_code=404, detail="Dataset file not found in storage")
+        dataset_info, dataset = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
 
         # 3. Prepare Sample
         sample_size = min(200, len(df))
@@ -1993,7 +1978,8 @@ async def get_dataset_info(
             'is_scaled': is_scaled,
             'split_info': split_info,
             'train_preview': train_preview,
-            'test_preview': test_preview
+            'test_preview': test_preview,
+            'data_version': datasets.get(dataset_id, {}).get('data_version', getattr(dataset, 'data_version', 0))
         } 
         
     except HTTPException:
@@ -2012,27 +1998,11 @@ async def get_dataset_statistics(
 ):
     """Get complete dataset statistics calculated on ALL rows (not just preview)"""
     try:
-        # 1. Fetch from DB
-        dataset = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
-        
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-            
-        # Check ownership
-        if dataset.user_id != current_user['id']:
-            raise HTTPException(status_code=403, detail="Not authorized to access this dataset")
+        dataset_info, dataset = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        df = dataset_info['dataframe']
 
         # Load semantic metadata if available
         column_metadata = dataset.column_metadata or {}
-
-        # 2. Load COMPLETE Dataframe (Memory First)
-        if dataset_id in datasets:
-            df = datasets[dataset_id]['dataframe']
-        else:
-            try:
-                df = file_service.load_dataframe(dataset.storage_path)
-            except FileNotFoundError:
-                raise HTTPException(status_code=404, detail="Dataset file not found in storage")
 
         print(f"\n📊 DEBUG: get_dataset_statistics called")
         print(f"   Dataset ID: {dataset_id}")
@@ -4564,7 +4534,7 @@ async def train_model_websocket(websocket: WebSocket):
                 'message': f'✅ {model_class_name} initialized for {problem_type}',
                 'timestamp': datetime.now().timestamp()
             }))
-            
+
             # ===== VALIDATE DATA FOR MULTINOMIALNB =====
             if algorithm_name == 'MultinomialNB' or model_class_name == 'MultinomialNB':
                 # Check for negative values
@@ -4911,7 +4881,7 @@ class SaveVersionRequest(BaseModel):
     version_name: str
 
 # Helper to save dataset state
-def save_dataset_state(dataset_id: str, df: pd.DataFrame, log_entry: dict = None):
+def save_dataset_state(dataset_id: str, df: pd.DataFrame, db: Session, user_id: int, log_entry: dict = None):
     datasets[dataset_id]['dataframe'] = df
     datasets[dataset_id]['preprocessed'] = True
     
@@ -4928,6 +4898,44 @@ def save_dataset_state(dataset_id: str, df: pd.DataFrame, log_entry: dict = None
     
     if log_entry:
         datasets[dataset_id]['processing_log'].append(log_entry)
+
+    # Bump the monotonic version counter and clear split cache in the database
+    record = db.query(DatasetModel).filter(DatasetModel.id == int(dataset_id)).first()
+    if record:
+        record.data_version += 1
+        
+        # Clear persisted split previews from JSON column
+        if record.column_metadata:
+            meta = dict(record.column_metadata)
+            if "_split_previews" in meta:
+                del meta["_split_previews"]
+                record.column_metadata = meta
+                
+        db.commit()
+        db.refresh(record)
+        datasets[dataset_id]['data_version'] = record.data_version
+    else:
+        # Fallback if somehow not in DB
+        datasets[dataset_id]['data_version'] = datasets[dataset_id].get('data_version', 0) + 1
+
+    # ── MEMORY INVALIDATION FIX ──
+    # Mutating the raw dataset MUST invalidate any downstream ML splits
+    datasets[dataset_id]['is_split'] = False
+    datasets[dataset_id]['is_scaled'] = False
+    if 'split_info' in datasets[dataset_id]:
+        del datasets[dataset_id]['split_info']
+        
+    X_train_storage.pop(dataset_id, None)
+    X_test_storage.pop(dataset_id, None)
+    y_train_storage.pop(dataset_id, None)
+    y_test_storage.pop(dataset_id, None)
+    # ─────────────────────────────
+
+    # Persist the dataframe to the "latest.parquet" snapshot in Supabase
+    try:
+        file_service.save_latest_snapshot(df, user_id, dataset_id)
+    except Exception as e:
+        print(f"⚠️ Failed to save latest snapshot to storage: {e}")
 
 @app.post("/api/datasets/{dataset_id}/save-version")
 async def save_dataset_version(
@@ -5078,7 +5086,7 @@ async def drop_columns(dataset_id: str, request: DropColumnsRequest, db: Session
         
         df_new = processor.remove_columns(request.columns)
         
-        save_dataset_state(dataset_id, df_new, {
+        save_dataset_state(dataset_id, df_new, db, current_user['id'], {
             'action': 'drop_columns',
             'columns': request.columns,
             'timestamp': datetime.now().isoformat()
@@ -5131,7 +5139,7 @@ async def handle_missing_values_route(dataset_id: str, request: MissingValueRequ
         
         df_new = processor.handle_missing_values(strategies)
         
-        save_dataset_state(dataset_id, df_new, {
+        save_dataset_state(dataset_id, df_new, db, current_user['id'], {
             'action': 'missing_values',
             'strategy': request.strategy,
             'columns': request.columns,
@@ -5203,7 +5211,7 @@ async def handle_outliers_route(dataset_id: str, request: OutlierRequest, db: Se
         
         df_new = processor.handle_outliers(numeric_cols, method=detection_method, strategy=strategy)
         
-        save_dataset_state(dataset_id, df_new, {
+        save_dataset_state(dataset_id, df_new, db, current_user['id'], {
             'action': 'outliers',
             'strategy': strategy,
             'method': detection_method,
@@ -5236,7 +5244,7 @@ async def handle_duplicates_route(dataset_id: str, request: DuplicateRequest, db
         
         df_new = processor.remove_duplicates(strategy=request.keep)
         
-        save_dataset_state(dataset_id, df_new, {
+        save_dataset_state(dataset_id, df_new, db, current_user['id'], {
             'action': 'remove_duplicates',
             'strategy': request.keep,
             'timestamp': datetime.now().isoformat()
@@ -5296,7 +5304,7 @@ async def handle_datetime_route(dataset_id: str, request: DateTimeRequest, db: S
             drop_original=request.drop_original
         )
         
-        save_dataset_state(dataset_id, df_new, {
+        save_dataset_state(dataset_id, df_new, db, current_user['id'], {
             'action': 'datetime_preprocessing',
             'columns': request.columns,
             'features': request.features,

@@ -278,43 +278,7 @@
             </p>
           </div>
 
-          <!-- Help Section: Why Order Matters -->
-          <Card variant="info" class="preprocessing-help-section">
-            <details class="help-details">
-              <summary class="help-summary">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="help-icon">
-                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
-                </svg>
-                <strong>Why does preprocessing order matter?</strong>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="chevron-icon">
-                  <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/>
-                </svg>
-              </summary>
-              <div class="help-content">
-                <p>Preprocessing steps can affect each other in unexpected ways:</p>
-                <ul class="help-list">
-                  <li>
-                    <strong>Capping outliers</strong> may create new duplicates by setting multiple extreme values to the same threshold
-                  </li>
-                  <li>
-                    <strong>Removing duplicates</strong> may change the data distribution, causing new values to become outliers
-                  </li>
-                </ul>
-                <div class="recommended-order-box">
-                  <p class="order-title"><strong>📋 Recommended Order:</strong></p>
-                  <ol class="order-list">
-                    <li><span class="order-number">1</span> Handle Missing Values</li>
-                    <li><span class="order-number">2</span> Handle Outliers</li>
-                    <li><span class="order-number">3</span> Remove Duplicates</li>
-            
-                  </ol>
-                  <p class="order-note">
-                    💡 Following this order ensures optimal results and prevents unexpected behavior.
-                  </p>
-                </div>
-              </div>
-            </details>
-          </Card>
+          
 
           <div class="preprocessing-grid">
             <!-- ========== CARD 0: DATA TYPE DETECTION & CONVERSION ========== -->
@@ -490,7 +454,7 @@
                   <p>Choose strategy for columns with missing data</p>
                 </div>
                 <div class="tool-badges-container">
-                  <span class="order-badge order-1">1️⃣ First</span>
+                  
                   <div class="tool-badge" :class="missingStats.totalMissing === 0 ? 'success-badge' : 'warning-badge'">
                     {{ missingStats.totalMissing === 0 ? '✓ No missing values' : `${missingStats.totalMissing} issues to handle` }}
                   </div>
@@ -637,7 +601,7 @@
                   <p>Detect and handle extreme values in numerical columns</p>
                 </div>
                 <div class="tool-badges-container">
-                  <span class="order-badge order-2">2️⃣ Second</span>
+                  
                   <div class="tool-badge" v-if="outlierStats.count > 0">
                     {{ outlierStats.count }} outliers detected
                   </div>
@@ -768,7 +732,7 @@
                   <p>Remove duplicate rows from your dataset</p>
                 </div>
                 <div class="tool-badges-container">
-                  <span class="order-badge order-3">3️⃣ Third</span>
+                  
                   <div class="tool-badge" v-if="duplicateStats.count > 0">
                     {{ duplicateStats.count }} duplicates found
                   </div>
