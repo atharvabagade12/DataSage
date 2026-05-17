@@ -1,313 +1,86 @@
-# DataSage
+<div align="center">
 
-Comprehensive One-Stop Machine Learning Platform
+# 🧠 DataSage
 
----
+**The Comprehensive One-Stop Machine Learning Platform**
 
-## 🚀 Quick Start with Docker
+[![Live Demo](https://img.shields.io/badge/Live_Demo-datasage--ml.vercel.app-blue?style=for-the-badge&logo=vercel)](https://datasage-ml.vercel.app)
+[![Tech Stack: FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Tech Stack: Nuxt](https://img.shields.io/badge/Frontend-Nuxt_3-00DC82?style=for-the-badge&logo=nuxt.js)](https://nuxt.com/)
+[![Tech Stack: Postgres](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
 
-Get the entire application running with **zero manual setup** in just 2 commands:
+*DataSage empowers general users, ML learners, and data enthusiasts to explore, preprocess, and train machine learning models effortlessly—without writing a single line of code!*
 
-```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd DataSage
+<!-- [Optional: Insert a high-quality banner image or screenshot here] -->
+<!-- ![DataSage Banner](link-to-your-banner.png) -->
 
-# 2. Start everything with Docker
-docker compose up --build
-```
-
-That's it! The application will be available at:
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-- **Frontend**: Run separately (see Frontend Setup below)
+</div>
 
 ---
 
-## 📋 Prerequisites
+## ✨ Features
 
-- [Docker](https://docs.docker.com/get-docker/) (20.10+)
-- [Docker Compose](https://docs.docker.com/compose/install/) (2.0+)
-- **No Python or PostgreSQL installation required!**
+DataSage brings the power of data science to your browser. Whether you are learning machine learning concepts or just want to quickly analyze a dataset, DataSage has you covered.
 
----
+### ⚡ One-Click Preprocessing
+Clean and prepare your data instantly. DataSage handles the heavy lifting of missing values, categorical encoding, and feature scaling with smart defaults and easy-to-use toggles.
 
-## 🛠️ Setup Instructions
+### 🧪 Experiment with Datasets
+Upload your datasets (CSV, Excel) and explore them interactively. View descriptive statistics, detect outliers, and understand the shape of your data before you start modeling.
 
-### 1. Environment Configuration
+### 📊 Rich Visualizations
+Visualize your dataset and model results through interactive charts and graphs. Understand correlations, distributions, and feature importance at a glance.
 
-Copy the example environment file and customize if needed:
-
-```bash
-# Windows PowerShell
-copy .env.example .env
-
-
-```
-
-**Default values work out of the box for development.** Edit `.env` only if you need to:
-- Change database credentials
-- Use a different port
-- Customize JWT secret key
-
-### 2. Start the Application
-
-```bash
-# Start all services (backend + PostgreSQL)
-docker compose up --build
-
-# Or run in detached mode (background)
-docker compose up -d --build
-```
-
-**What happens automatically:**
-1. ✅ PostgreSQL 17 database is created
-2. ✅ Database tables are initialized
-3. ✅ Backend dependencies are installed
-4. ✅ FastAPI server starts with hot reload enabled
-
-### 3. Verify Everything Works
-
-```bash
-# Check service status
-docker compose ps
-
-# View logs
-docker compose logs -f backend
-
-# Test API
-curl http://localhost:8000/docs
-```
+### 🤖 Model Training Made Easy
+Train standard machine learning models without needing a complex environment. Just pick your target variable, select a model, and watch DataSage evaluate its performance.
 
 ---
 
-## 🖥️ Frontend Setup
+## 🎯 Who is DataSage for?
 
-The frontend runs outside Docker for now:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend will be available at http://localhost:3000
+- **Machine Learning Learners:** Understand the end-to-end ML pipeline visually without getting bogged down in syntax errors.
+- **Data Enthusiasts:** Quickly explore and visualize new datasets.
+- **General End-Users:** Make predictions and train models using simple point-and-click interfaces.
 
 ---
 
-## 🔧 Development Workflow
+## 💻 Tech Stack
 
-### Hot Reload
+DataSage is built using a modern, robust web stack:
 
-Code changes are automatically detected:
-- **Backend**: Edit any `.py` file → Uvicorn reloads automatically
-- **Frontend**: Edit any `.vue` file → Nuxt reloads automatically
-
-### Viewing Logs
-
-```bash
-# All services
-docker compose logs -f
-
-# Backend only
-docker compose logs -f backend
-
-# PostgreSQL only
-docker compose logs -f postgres
-```
-
-### Stopping Services
-
-```bash
-# Stop all services
-docker compose down
-
-# Stop and remove volumes (⚠️ deletes database data)
-docker compose down -v
-```
-
-### Rebuilding After Dependency Changes
-
-```bash
-# Rebuild backend after updating requirements.txt
-docker compose up --build backend
-```
-
-### Accessing the Database
-
-```bash
-# Connect to PostgreSQL container
-docker compose exec postgres psql -U datasage -d datasage_db
-
-# Run SQL queries
-\dt  # List tables
-SELECT * FROM users;
-```
-
-### Running Backend Commands
-
-```bash
-# Execute Python scripts inside the container
-docker compose exec backend python init_db.py
-
-# Access Python shell
-docker compose exec backend python
-
-# Access container shell
-docker compose exec backend bash
-```
+- **Frontend:** Vue.js 3, Nuxt.js, Pinia, Chart.js
+- **Backend:** Python, FastAPI, SQLAlchemy
+- **Machine Learning:** Scikit-Learn, Pandas, NumPy, XGBoost
+- **Database:** PostgreSQL
 
 ---
 
-## 📁 Project Structure
+## 🚀 Live Demo
 
-```
-DataSage/
-├── backend/
-│   ├── Dockerfile              # Backend container definition
-│   ├── entrypoint.sh           # Startup script (auto-migrations)
-│   ├── requirements.txt        # Python dependencies
-│   ├── main.py                 # FastAPI application
-│   ├── database.py             # Database connection
-│   ├── models.py               # SQLAlchemy models
-│   ├── init_db.py              # Database initialization
-│   └── ...
-├── frontend/
-│   ├── package.json            # Node.js dependencies
-│   └── ...
-├── docker-compose.yml          # Multi-service orchestration
-├── .env.example                # Environment template
-└── README.md                   # This file
-```
+You can try out DataSage live right now! No installation or setup required.
 
----
-
-## 🐛 Troubleshooting
-
-### Port Already in Use
-
-**Error**: `Bind for 0.0.0.0:8000 failed: port is already allocated`
-
-**Solution**:
-```bash
-# Find and stop the process using port 8000
-# Windows
-netstat -ano | findstr :8000
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -ti:8000 | xargs kill -9
-
-# Or change the port in docker-compose.yml
-ports:
-  - "8001:8000"  # Use port 8001 instead
-```
-
-### Database Connection Failed
-
-**Error**: `could not connect to server: Connection refused`
-
-**Solution**:
-```bash
-# Check if PostgreSQL is healthy
-docker compose ps
-
-# Restart services
-docker compose restart
-
-# Check PostgreSQL logs
-docker compose logs postgres
-```
-
-### Permission Denied on entrypoint.sh
-
-**Error**: `permission denied: /entrypoint.sh`
-
-**Solution**:
-```bash
-# Make script executable (Linux/Mac)
-chmod +x backend/entrypoint.sh
-
-# Rebuild the container
-docker compose up --build
-```
-
-### Database Tables Not Created
-
-**Error**: `relation "users" does not exist`
-
-**Solution**:
-```bash
-# Manually run database initialization
-docker compose exec backend python init_db.py
-
-# Or restart services to trigger entrypoint
-docker compose restart backend
-```
-
-### Hot Reload Not Working
-
-**Solution**:
-```bash
-# Ensure source code is mounted correctly
-docker compose down
-docker compose up --build
-
-# Check docker-compose.yml has:
-# volumes:
-#   - ./backend:/app
-```
-
-### Clean Slate Reset
-
-To completely reset the environment:
-
-```bash
-# Stop all services and remove volumes
-docker compose down -v
-
-# Remove all containers and images
-docker compose down --rmi all
-
-# Start fresh
-docker compose up --build
-```
-
----
-
-## 🚢 Production Deployment
-
-**Note**: This Docker setup is optimized for **development**. For production:
-
-1. Use multi-stage builds to reduce image size
-2. Don't mount source code as volumes
-3. Use production-grade WSGI server (e.g., Gunicorn)
-4. Set strong `SECRET_KEY` in `.env`
-5. Use managed PostgreSQL (AWS RDS, Google Cloud SQL)
-6. Enable HTTPS with reverse proxy (Nginx, Traefik)
-7. Set `DEBUG=False` and remove `--reload` flag
-
----
-
-## 📚 Additional Resources
-
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Docker Documentation](https://docs.docker.com/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Nuxt.js Documentation](https://nuxt.com/)
+👉 **[datasage-ml.vercel.app](https://datasage-ml.vercel.app)**
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test with Docker: `docker compose up --build`
-5. Submit a pull request
+Contributions, issues, and feature requests are welcome!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
-## 📄 License
+## 📝 License
 
+Distributed under the MIT License. See `LICENSE` for more information.
 
+---
+
+<div align="center">
+  <i>Built with ❤️ for the data community.</i>
+</div>
