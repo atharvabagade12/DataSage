@@ -1,29 +1,43 @@
 <template>
   <div class="login-container">
-    <!-- Animated Background -->
-    <div class="animated-bg">
-      <div class="gradient-sphere sphere-1"></div>
-      <div class="gradient-sphere sphere-2"></div>
-      <div class="gradient-sphere sphere-3"></div>
-      <div class="data-particles">
-        <span v-for="i in 20" :key="i" class="particle"></span>
-      </div>
+    <!-- Ambient Glow System (Identical to landing page theme) -->
+    <div class="ambient-glow">
+      <div class="glow-orb orb-1"></div>
+      <div class="glow-orb orb-2"></div>
+      <div class="glow-orb orb-3"></div>
+    </div>
+    
+    <!-- Cyber Dotted Blueprint Overlay & Texturing -->
+    <div class="hero-grid-overlay"></div>
+    <div class="noise-overlay"></div>
+
+    <!-- Drifting Atmospheric Stars -->
+    <div class="data-particles">
+      <span v-for="i in 20" :key="i" class="particle"></span>
     </div>
 
-    <!-- Main Content - Centered Layout -->
+    <!-- Centered Content Grid Wrapper -->
     <div class="login-wrapper">
       <div class="auth-panel">
-        <!-- DataSage Brand Header -->
-        <div class="brand-header">
-          <div class="brand-title-section">
+        
+        <!-- Premium logo header section -->
+        <div class="brand-header" @click="router.push('/')" title="Return to Landing Page">
+          <div class="branding-logo-box">
+            <div class="logo-image-wrapper">
+              <img src="@/assets/logo.jpeg" alt="DataSage Logo" class="logo-img" />
+            </div>
+          </div>
+          <div class="branding-text">
             <h1 class="brand-title">DataSage</h1>
-            <p class="brand-tagline">Intelligent ML Pipeline Platform</p>
+            <p class="brand-tagline"></p>
           </div>
         </div>
 
-        <!-- Auth Container -->
-        <div class="auth-container">
-          <!-- Tab Navigation -->
+        <!-- Glassmorphism Auth Card -->
+        <div class="auth-card glass-panel">
+          <div class="auth-glow"></div>
+
+          <!-- Sliding Glass Tab Selectors -->
           <div class="auth-tabs" role="tablist">
             <button
               role="tab"
@@ -44,240 +58,265 @@
             <div class="tab-indicator" :class="{ 'right': activeTab === 'register' }"></div>
           </div>
 
-          <!-- Login Form -->
-          <transition name="fade-slide" mode="out-in">
-            <form v-if="activeTab === 'login'" key="login" @submit.prevent="handleLogin" class="auth-form" novalidate>
-              <div class="form-header">
-                <h2>Welcome Back</h2>
-                <p>Enter your credentials to access your dashboard</p>
-              </div>
+          <!-- Form transition block -->
+          <div class="form-container-relative">
+            <transition name="fade-slide" mode="out-in">
+              
+              <!-- SIGN IN FORM -->
+              <form v-if="activeTab === 'login'" key="login" @submit.prevent="handleLogin" class="auth-form" novalidate>
+                <div class="form-header">
+                  <h2 class="form-title">Welcome Back</h2>
+                  <p class="form-subtitle">Access your cognitive machine learning workspace</p>
+                </div>
 
-              <!-- Username -->
-              <div class="form-group" :class="{ 'has-error': loginErrors.username }">
-                <div class="input-wrapper">
-                  <span class="input-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
+                <!-- Username Input (Floating Label) -->
+                <div class="form-group" :class="{ 'has-error': loginErrors.username, 'has-content': loginForm.username || focus.loginUsername }">
+                  <div class="input-wrapper">
+                    <span class="input-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                    </span>
+                    <input
+                      v-model="loginForm.username"
+                      id="login-username"
+                      type="text"
+                      :disabled="loading"
+                      class="form-input"
+                      autocomplete="username"
+                      @focus="focus.loginUsername = true"
+                      @blur="focus.loginUsername = false; validateLoginField('username')"
+                    />
+                    <label for="login-username" class="floating-label">Username</label>
+                  </div>
+                  <span v-if="loginErrors.username" class="field-error">{{ loginErrors.username }}</span>
+                </div>
+
+                <!-- Password Input (Floating Label) -->
+                <div class="form-group" :class="{ 'has-error': loginErrors.password, 'has-content': loginForm.password || focus.loginPassword }">
+                  <div class="input-wrapper">
+                    <span class="input-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    </span>
+                    <input
+                      v-model="loginForm.password"
+                      id="login-password"
+                      :type="showLoginPassword ? 'text' : 'password'"
+                      :disabled="loading"
+                      class="form-input"
+                      autocomplete="current-password"
+                      @focus="focus.loginPassword = true"
+                      @blur="focus.loginPassword = false; validateLoginField('password')"
+                    />
+                    <label for="login-password" class="floating-label">Password</label>
+                    
+                    <button type="button" class="eye-btn" @click="showLoginPassword = !showLoginPassword" :aria-label="showLoginPassword ? 'Hide password' : 'Show password'">
+                      <svg v-if="showLoginPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                      </svg>
+                      <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                  <span v-if="loginErrors.password" class="field-error">{{ loginErrors.password }}</span>
+                </div>
+
+                <!-- Upgraded button with shiny swiping glow -->
+                <button type="submit" class="submit-btn" :disabled="loading">
+                  <span v-if="loading" class="loading-spinner"></span>
+                  <span v-else class="btn-content">
+                    <span>Sign In to Workspace</span>
+                    <span class="btn-arrow">→</span>
                   </span>
-                  <input
-                    v-model="loginForm.username"
-                    id="login-username"
-                    type="text"
-                    placeholder="Username"
-                    :disabled="loading"
-                    class="form-input"
-                    autocomplete="username"
-                    @blur="validateLoginField('username')"
-                  />
-                </div>
-                <span v-if="loginErrors.username" class="field-error">{{ loginErrors.username }}</span>
-              </div>
+                  <span class="btn-shine"></span>
+                </button>
 
-              <!-- Password -->
-              <div class="form-group" :class="{ 'has-error': loginErrors.password }">
-                <div class="input-wrapper">
-                  <span class="input-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
+                <!-- Failure Alerts -->
+                <transition name="fade">
+                  <div v-if="loginError" class="error-message" role="alert">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    {{ loginError }}
+                  </div>
+                </transition>
+              </form>
+
+              <!-- SIGN UP FORM -->
+              <form v-else key="register" @submit.prevent="handleRegister" class="auth-form" novalidate>
+                <div class="form-header">
+                  <h2 class="form-title">Create Account</h2>
+                  <p class="form-subtitle">Join DataSage and compile raw data pipelines instantly</p>
+                </div>
+
+                <!-- Username Input (Floating Label) -->
+                <div class="form-group" :class="{ 'has-error': registerErrors.username, 'has-content': registerForm.username || focus.registerUsername }">
+                  <div class="input-wrapper">
+                    <span class="input-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                    </span>
+                    <input
+                      v-model="registerForm.username"
+                      id="register-username"
+                      type="text"
+                      :disabled="loading"
+                      class="form-input"
+                      autocomplete="username"
+                      @focus="focus.registerUsername = true"
+                      @blur="focus.registerUsername = false; validateRegisterField('username')"
+                    />
+                    <label for="register-username" class="floating-label">Username</label>
+                  </div>
+                  <span v-if="registerErrors.username" class="field-error">{{ registerErrors.username }}</span>
+                </div>
+
+                <!-- Email Input (Floating Label) -->
+                <div class="form-group" :class="{ 'has-error': registerErrors.email, 'has-content': registerForm.email || focus.registerEmail }">
+                  <div class="input-wrapper">
+                    <span class="input-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                      </svg>
+                    </span>
+                    <input
+                      v-model="registerForm.email"
+                      id="register-email"
+                      type="email"
+                      :disabled="loading"
+                      class="form-input"
+                      autocomplete="email"
+                      @focus="focus.registerEmail = true"
+                      @blur="focus.registerEmail = false; validateRegisterField('email')"
+                    />
+                    <label for="register-email" class="floating-label">Email address</label>
+                  </div>
+                  <span v-if="registerErrors.email" class="field-error">{{ registerErrors.email }}</span>
+                </div>
+
+                <!-- Password Input (Floating Label) -->
+                <div class="form-group" :class="{ 'has-error': registerErrors.password, 'has-content': registerForm.password || focus.registerPassword }">
+                  <div class="input-wrapper">
+                    <span class="input-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    </span>
+                    <input
+                      v-model="registerForm.password"
+                      id="register-password"
+                      :type="showRegisterPassword ? 'text' : 'password'"
+                      :disabled="loading"
+                      class="form-input"
+                      autocomplete="new-password"
+                      @focus="focus.registerPassword = true"
+                      @blur="focus.registerPassword = false; validateRegisterField('password')"
+                    />
+                    <label for="register-password" class="floating-label">Password</label>
+                    
+                    <button type="button" class="eye-btn" @click="showRegisterPassword = !showRegisterPassword" :aria-label="showRegisterPassword ? 'Hide password' : 'Show password'">
+                      <svg v-if="showRegisterPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                      </svg>
+                      <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                  <span v-if="registerErrors.password" class="field-error">{{ registerErrors.password }}</span>
+                </div>
+
+                <!-- Password Strength Meter -->
+                <div class="password-strength" v-if="registerForm.password">
+                  <div class="strength-bars">
+                    <div
+                      v-for="n in 4"
+                      :key="n"
+                      class="bar"
+                      :class="{ active: passwordStrength >= n }"
+                      :style="passwordStrength >= n ? { background: passwordStrengthColor } : {}"
+                    ></div>
+                  </div>
+                  <span class="strength-text" :style="{ color: passwordStrengthColor }">
+                    {{ passwordStrengthText }}
                   </span>
-                  <input
-                    v-model="loginForm.password"
-                    id="login-password"
-                    :type="showLoginPassword ? 'text' : 'password'"
-                    placeholder="Password"
-                    :disabled="loading"
-                    class="form-input"
-                    autocomplete="current-password"
-                    @blur="validateLoginField('password')"
-                  />
-                  <button type="button" class="eye-btn" @click="showLoginPassword = !showLoginPassword" :aria-label="showLoginPassword ? 'Hide password' : 'Show password'">
-                    <svg v-if="showLoginPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                      <line x1="1" y1="1" x2="23" y2="23"></line>
-                    </svg>
-                    <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
                 </div>
-                <span v-if="loginErrors.password" class="field-error">{{ loginErrors.password }}</span>
-              </div>
 
-              <button type="submit" class="submit-btn" :disabled="loading">
-                <span v-if="loading" class="loading-spinner"></span>
-                <span v-else>Sign In</span>
-              </button>
-
-              <transition name="fade">
-                <div v-if="loginError" class="error-message" role="alert">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                  {{ loginError }}
+                <!-- Confirm Password Input (Floating Label) -->
+                <div class="form-group" :class="{ 'has-error': registerErrors.confirmPassword, 'has-content': registerForm.confirmPassword || focus.registerConfirmPassword }">
+                  <div class="input-wrapper">
+                    <span class="input-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                      </svg>
+                    </span>
+                    <input
+                      v-model="registerForm.confirmPassword"
+                      id="register-confirm-password"
+                      :type="showConfirmPassword ? 'text' : 'password'"
+                      :disabled="loading"
+                      class="form-input"
+                      autocomplete="new-password"
+                      @focus="focus.registerConfirmPassword = true"
+                      @blur="focus.registerConfirmPassword = false; validateRegisterField('confirmPassword')"
+                    />
+                    <label for="register-confirm-password" class="floating-label">Confirm password</label>
+                    
+                    <button type="button" class="eye-btn" @click="showConfirmPassword = !showConfirmPassword" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'">
+                      <svg v-if="showConfirmPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                      </svg>
+                      <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                  <span v-if="registerErrors.confirmPassword" class="field-error">{{ registerErrors.confirmPassword }}</span>
                 </div>
-              </transition>
-            </form>
-          </transition>
 
-          <!-- Register Form -->
-          <transition name="fade-slide" mode="out-in">
-            <form v-if="activeTab === 'register'" key="register" @submit.prevent="handleRegister" class="auth-form" novalidate>
-              <div class="form-header">
-                <h2>Create Account</h2>
-                <p>Join DataSage and unlock powerful ML pipelines</p>
-              </div>
-
-              <!-- Username -->
-              <div class="form-group" :class="{ 'has-error': registerErrors.username }">
-                <div class="input-wrapper">
-                  <span class="input-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
+                <!-- Submit Button -->
+                <button type="submit" class="submit-btn" :disabled="loading">
+                  <span v-if="loading" class="loading-spinner"></span>
+                  <span v-else class="btn-content">
+                    <span>Compile Platform Account</span>
+                    <span class="btn-arrow">→</span>
                   </span>
-                  <input
-                    v-model="registerForm.username"
-                    id="register-username"
-                    type="text"
-                    placeholder="Username (3–30 characters)"
-                    :disabled="loading"
-                    class="form-input"
-                    autocomplete="username"
-                    @blur="validateRegisterField('username')"
-                  />
-                </div>
-                <span v-if="registerErrors.username" class="field-error">{{ registerErrors.username }}</span>
-              </div>
+                  <span class="btn-shine"></span>
+                </button>
 
-              <!-- Email -->
-              <div class="form-group" :class="{ 'has-error': registerErrors.email }">
-                <div class="input-wrapper">
-                  <span class="input-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                      <polyline points="22,6 12,13 2,6"></polyline>
-                    </svg>
-                  </span>
-                  <input
-                    v-model="registerForm.email"
-                    id="register-email"
-                    type="email"
-                    placeholder="Email address"
-                    :disabled="loading"
-                    class="form-input"
-                    autocomplete="email"
-                    @blur="validateRegisterField('email')"
-                  />
-                </div>
-                <span v-if="registerErrors.email" class="field-error">{{ registerErrors.email }}</span>
-              </div>
+                <!-- Feedback Notifications -->
+                <transition name="fade">
+                  <div v-if="registerSuccess" class="success-message" role="status">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Account created! Signing you in...
+                  </div>
+                </transition>
 
-              <!-- Password -->
-              <div class="form-group" :class="{ 'has-error': registerErrors.password }">
-                <div class="input-wrapper">
-                  <span class="input-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                  </span>
-                  <input
-                    v-model="registerForm.password"
-                    id="register-password"
-                    :type="showRegisterPassword ? 'text' : 'password'"
-                    placeholder="Password"
-                    :disabled="loading"
-                    class="form-input"
-                    autocomplete="new-password"
-                    @blur="validateRegisterField('password')"
-                  />
-                  <button type="button" class="eye-btn" @click="showRegisterPassword = !showRegisterPassword" :aria-label="showRegisterPassword ? 'Hide password' : 'Show password'">
-                    <svg v-if="showRegisterPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                      <line x1="1" y1="1" x2="23" y2="23"></line>
-                    </svg>
-                    <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                </div>
-                <span v-if="registerErrors.password" class="field-error">{{ registerErrors.password }}</span>
-              </div>
+                <transition name="fade">
+                  <div v-if="registerError" class="error-message" role="alert">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    {{ registerError }}
+                  </div>
+                </transition>
+              </form>
 
-              <!-- Password Strength Meter -->
-              <div class="password-strength" v-if="registerForm.password">
-                <div class="strength-bars">
-                  <div
-                    v-for="n in 4"
-                    :key="n"
-                    class="bar"
-                    :class="{ active: passwordStrength >= n }"
-                    :style="passwordStrength >= n ? { background: passwordStrengthColor } : {}"
-                  ></div>
-                </div>
-                <span class="strength-text" :style="{ color: passwordStrengthColor }">
-                  {{ passwordStrengthText }}
-                </span>
-              </div>
-
-              <!-- Confirm Password -->
-              <div class="form-group" :class="{ 'has-error': registerErrors.confirmPassword }">
-                <div class="input-wrapper">
-                  <span class="input-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                    </svg>
-                  </span>
-                  <input
-                    v-model="registerForm.confirmPassword"
-                    id="register-confirm-password"
-                    :type="showConfirmPassword ? 'text' : 'password'"
-                    placeholder="Confirm password"
-                    :disabled="loading"
-                    class="form-input"
-                    autocomplete="new-password"
-                    @blur="validateRegisterField('confirmPassword')"
-                  />
-                  <button type="button" class="eye-btn" @click="showConfirmPassword = !showConfirmPassword" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'">
-                    <svg v-if="showConfirmPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                      <line x1="1" y1="1" x2="23" y2="23"></line>
-                    </svg>
-                    <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                </div>
-                <span v-if="registerErrors.confirmPassword" class="field-error">{{ registerErrors.confirmPassword }}</span>
-              </div>
-
-              <button type="submit" class="submit-btn" :disabled="loading">
-                <span v-if="loading" class="loading-spinner"></span>
-                <span v-else>Create Account</span>
-              </button>
-
-              <transition name="fade">
-                <div v-if="registerSuccess" class="success-message" role="status">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  Account created! Signing you in...
-                </div>
-              </transition>
-
-              <transition name="fade">
-                <div v-if="registerError" class="error-message" role="alert">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                  {{ registerError }}
-                </div>
-              </transition>
-            </form>
-          </transition>
+            </transition>
+          </div>
         </div>
+
       </div>
     </div>
   </div>
@@ -306,6 +345,16 @@ function switchTab(tab) {
 
 // ─── Shared state ─────────────────────────────────────────────────────────────
 const loading = ref(false)
+
+// Focus tracking for input floating labels
+const focus = reactive({
+  loginUsername: false,
+  loginPassword: false,
+  registerUsername: false,
+  registerEmail: false,
+  registerPassword: false,
+  registerConfirmPassword: false
+})
 
 // ─── Login form state ──────────────────────────────────────────────────────────
 const loginForm = reactive({ username: '', password: '' })
@@ -403,7 +452,6 @@ function validateRegister() {
   return !registerErrors.username && !registerErrors.email && !registerErrors.password && !registerErrors.confirmPassword
 }
 
-
 const handleLogin = async () => {
   if (!validateLogin()) return
 
@@ -458,6 +506,7 @@ const handleRegister = async () => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 
 * {
   margin: 0;
@@ -467,66 +516,97 @@ const handleRegister = async () => {
 
 .login-container {
   min-height: 100vh;
-  background: #0a0a0a;
-  overflow: hidden;
+  width: 100vw;
+  background: #030307;
+  color: #fff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ====== ANIMATED BACKGROUND ====== */
-.animated-bg {
+/* ====== CINEMATIC BACKGROUNDS ====== */
+.ambient-glow {
   position: absolute;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.gradient-sphere {
+.glow-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.4;
-  animation: float 20s infinite ease-in-out;
+  filter: blur(140px);
+  opacity: 0.15;
+  mix-blend-mode: screen;
+  animation: float-orb 25s ease-in-out infinite alternate;
 }
 
-.sphere-1 {
-  width: 600px;
-  height: 600px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  top: -200px;
-  left: -200px;
-  animation-delay: 0s;
+.orb-1 {
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, #00f0ff 0%, rgba(0, 240, 255, 0) 70%);
+  top: -15%;
+  left: -10%;
 }
 
-.sphere-2 {
-  width: 500px;
-  height: 500px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  bottom: -200px;
-  right: -200px;
-  animation-delay: 5s;
+.orb-2 {
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, #9d4edd 0%, rgba(157, 78, 221, 0) 75%);
+  bottom: -15%;
+  right: -15%;
+  animation-delay: -5s;
 }
 
-.sphere-3 {
-  width: 400px;
-  height: 400px;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation-delay: 10s;
+.orb-3 {
+  width: 45vw;
+  height: 45vw;
+  background: radial-gradient(circle, #3b82f6 0%, rgba(59, 130, 246, 0) 80%);
+  top: 25%;
+  left: 20%;
+  animation-delay: -10s;
 }
 
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25%       { transform: translate(50px, -50px) scale(1.1); }
-  50%       { transform: translate(-50px, 50px) scale(0.9); }
-  75%       { transform: translate(30px, 30px) scale(1.05); }
+@keyframes float-orb {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(4%, -4%) scale(1.04); }
+  100% { transform: translate(-4%, 4%) scale(0.96); }
 }
 
+.hero-grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.012;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ====== BACKGROUND PARTICLES ====== */
 .data-particles {
   position: absolute;
-  width: 100%;
-  height: 100%;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
 }
 
 .particle {
@@ -535,109 +615,178 @@ const handleRegister = async () => {
   height: 2px;
   background: #fff;
   border-radius: 50%;
-  opacity: 0.3;
+  opacity: 0.15;
   animation: drift 15s infinite linear;
 }
 
 @keyframes drift {
-  from { transform: translateY(100vh) translateX(0); }
-  to   { transform: translateY(-100px) translateX(100px); }
+  from { transform: translateY(105vh) translateX(0); }
+  to   { transform: translateY(-10vh) translateX(80px); }
 }
 
-/* ====== PARTICLE POSITIONS (all 20) ====== */
-.particle:nth-child(1)  { left: 5%;  top: 15%; animation-delay: 0s;    animation-duration: 14s; }
-.particle:nth-child(2)  { left: 15%; top: 70%; animation-delay: 1s;    animation-duration: 17s; }
-.particle:nth-child(3)  { left: 25%; top: 40%; animation-delay: 2s;    animation-duration: 12s; }
-.particle:nth-child(4)  { left: 35%; top: 85%; animation-delay: 3s;    animation-duration: 19s; }
-.particle:nth-child(5)  { left: 45%; top: 10%; animation-delay: 4s;    animation-duration: 16s; }
-.particle:nth-child(6)  { left: 55%; top: 55%; animation-delay: 5s;    animation-duration: 13s; }
-.particle:nth-child(7)  { left: 65%; top: 25%; animation-delay: 6s;    animation-duration: 18s; }
-.particle:nth-child(8)  { left: 75%; top: 75%; animation-delay: 7s;    animation-duration: 11s; }
-.particle:nth-child(9)  { left: 85%; top: 45%; animation-delay: 8s;    animation-duration: 15s; }
-.particle:nth-child(10) { left: 92%; top: 5%;  animation-delay: 9s;    animation-duration: 20s; }
-.particle:nth-child(11) { left: 10%; top: 90%; animation-delay: 0.5s;  animation-duration: 16s; }
-.particle:nth-child(12) { left: 20%; top: 30%; animation-delay: 1.5s;  animation-duration: 14s; }
-.particle:nth-child(13) { left: 30%; top: 60%; animation-delay: 2.5s;  animation-duration: 18s; }
-.particle:nth-child(14) { left: 40%; top: 20%; animation-delay: 3.5s;  animation-duration: 12s; }
-.particle:nth-child(15) { left: 50%; top: 80%; animation-delay: 4.5s;  animation-duration: 17s; }
-.particle:nth-child(16) { left: 60%; top: 35%; animation-delay: 5.5s;  animation-duration: 13s; }
-.particle:nth-child(17) { left: 70%; top: 65%; animation-delay: 6.5s;  animation-duration: 19s; }
-.particle:nth-child(18) { left: 80%; top: 15%; animation-delay: 7.5s;  animation-duration: 15s; }
-.particle:nth-child(19) { left: 88%; top: 50%; animation-delay: 8.5s;  animation-duration: 11s; }
-.particle:nth-child(20) { left: 3%;  top: 50%; animation-delay: 9.5s;  animation-duration: 20s; }
+.particle:nth-child(1)  { left: 5%;  top: 15%; animation-delay: 0s;    animation-duration: 18s; }
+.particle:nth-child(2)  { left: 15%; top: 70%; animation-delay: 1.5s;  animation-duration: 21s; }
+.particle:nth-child(3)  { left: 25%; top: 40%; animation-delay: 3s;    animation-duration: 15s; }
+.particle:nth-child(4)  { left: 35%; top: 85%; animation-delay: 0.5s;  animation-duration: 23s; }
+.particle:nth-child(5)  { left: 45%; top: 10%; animation-delay: 4s;    animation-duration: 19s; }
+.particle:nth-child(6)  { left: 55%; top: 55%; animation-delay: 2s;    animation-duration: 16s; }
+.particle:nth-child(7)  { left: 65%; top: 25%; animation-delay: 5s;    animation-duration: 22s; }
+.particle:nth-child(8)  { left: 75%; top: 75%; animation-delay: 1s;    animation-duration: 14s; }
+.particle:nth-child(9)  { left: 85%; top: 45%; animation-delay: 6s;    animation-duration: 17s; }
+.particle:nth-child(10) { left: 93%; top: 5%;  animation-delay: 2.5s;  animation-duration: 24s; }
+.particle:nth-child(11) { left: 8%;  top: 90%; animation-delay: 3.5s;  animation-duration: 20s; }
+.particle:nth-child(12) { left: 18%; top: 32%; animation-delay: 0.8s;  animation-duration: 16s; }
+.particle:nth-child(13) { left: 28%; top: 62%; animation-delay: 4.5s;  animation-duration: 22s; }
+.particle:nth-child(14) { left: 38%; top: 22%; animation-delay: 1.2s;  animation-duration: 15s; }
+.particle:nth-child(15) { left: 48%; top: 82%; animation-delay: 5.5s;  animation-duration: 21s; }
+.particle:nth-child(16) { left: 58%; top: 37%; animation-delay: 2.2s;  animation-duration: 17s; }
+.particle:nth-child(17) { left: 68%; top: 67%; animation-delay: 6.5s;  animation-duration: 23s; }
+.particle:nth-child(18) { left: 78%; top: 17%; animation-delay: 0.3s;  animation-duration: 19s; }
+.particle:nth-child(19) { left: 88%; top: 52%; animation-delay: 3.8s;  animation-duration: 14s; }
+.particle:nth-child(20) { left: 96%; top: 78%; animation-delay: 4.8s;  animation-duration: 25s; }
 
-/* ====== MAIN LAYOUT - CENTERED ====== */
+/* ====== CENTERED STRUCTURE ====== */
 .login-wrapper {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  width: 100%;
+  max-width: 480px;
+  padding: 3rem 1.5rem;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  padding: 2rem;
 }
 
-/* ====== CENTERED AUTH PANEL ====== */
 .auth-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2.2rem;
   width: 100%;
-  max-width: 500px;
+}
+
+/* ====== BRAND HEADER (ABOVE CARD) ====== */
+.brand-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
+  gap: 0.8rem;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.25s ease;
 }
 
-/* ====== BRAND HEADER ====== */
-.brand-header {
-  text-align: center;
-  color: white;
+.brand-header:hover {
+  opacity: 0.9;
 }
 
-.brand-title-section {
-  text-align: center;
+.branding-logo-box {
+  width: 52px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(0, 240, 255, 0.06);
+  padding: 3px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.brand-header:hover .branding-logo-box {
+  transform: translateY(-2px);
+  border-color: rgba(0, 240, 255, 0.25);
+  box-shadow: 
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 25px rgba(0, 240, 255, 0.15);
+}
+
+.logo-image-wrapper {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+
+.branding-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .brand-title {
-  font-size: 3rem;
-  font-weight: 800;
-  margin: 0 0 0.25rem 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 2.2rem;
+  font-weight: 900;
+  font-family: 'Outfit', sans-serif;
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.1;
 }
 
 .brand-tagline {
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0;
-  font-weight: 400;
-  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-/* ====== AUTH CONTAINER ====== */
-.auth-container {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
+/* ====== MODERN GLASSMORPHISM CARD ====== */
+.auth-card {
+  background: rgba(10, 10, 18, 0.45);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 24px;
-  padding: 2.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+  padding: 2.5rem 2.2rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    0 24px 60px rgba(0, 0, 0, 0.6),
+    0 0 100px rgba(157, 78, 221, 0.03);
 }
 
-/* ====== TAB NAVIGATION ====== */
+.auth-glow {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  height: 80px;
+  background: radial-gradient(ellipse, rgba(0, 240, 255, 0.08) 0%, rgba(0, 240, 255, 0) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ====== SLIDING GLASS TABS ====== */
 .auth-tabs {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   padding: 0.25rem;
   border-radius: 12px;
+  margin-bottom: 2.2rem;
+  z-index: 2;
 }
 
 .tab-btn {
@@ -645,8 +794,8 @@ const handleRegister = async () => {
   padding: 0.75rem;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   border-radius: 10px;
@@ -657,7 +806,7 @@ const handleRegister = async () => {
 }
 
 .tab-btn.active {
-  color: white;
+  color: #fff;
 }
 
 .tab-indicator {
@@ -666,9 +815,11 @@ const handleRegister = async () => {
   left: 0.25rem;
   width: calc(50% - 0.25rem);
   height: calc(100% - 0.5rem);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10px;
-  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 1;
 }
 
@@ -676,136 +827,231 @@ const handleRegister = async () => {
   left: 50%;
 }
 
-/* ====== FORM STYLES ====== */
+/* ====== FORM HEADERS ====== */
+.form-container-relative {
+  position: relative;
+  width: 100%;
+}
+
 .auth-form {
-  color: white;
+  position: relative;
+  z-index: 1;
 }
 
 .form-header {
   text-align: center;
-  margin-bottom: 1.75rem;
+  margin-bottom: 2rem;
 }
 
-.form-header h2 {
-  font-size: 1.7rem;
-  font-weight: 700;
+.form-title {
+  font-size: 1.6rem;
+  font-weight: 750;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.01em;
+  color: #fff;
   margin-bottom: 0.4rem;
 }
 
-.form-header p {
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.9rem;
+.form-subtitle {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
+/* ====== FUTURISTIC INPUTS & FLOATING LABELS ====== */
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .input-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .input-icon {
   position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.4);
+  left: 1.1rem;
+  color: rgba(255, 255, 255, 0.3);
   pointer-events: none;
   display: flex;
+  align-items: center;
+  transition: color 0.25s ease;
 }
 
 .form-input {
   width: 100%;
-  padding: 0.875rem 3rem 0.875rem 3rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.1rem 3.2rem 1.1rem 2.8rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
-  color: white;
+  color: #fff;
   font-size: 0.95rem;
   font-family: inherit;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
-}
-
-.form-input::placeholder {
-  color: rgba(255, 255, 255, 0.35);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .form-input:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 
+    0 0 0 3px rgba(0, 240, 255, 0.08),
+    0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
-.form-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Icon focus styling */
+.form-input:focus ~ .input-icon,
+.form-input:focus ~ label ~ .input-icon,
+.input-wrapper:focus-within .input-icon {
+  color: #00f0ff;
 }
 
-/* Error border on invalid fields */
+/* Floating Label Animation */
+.floating-label {
+  position: absolute;
+  left: 2.8rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.95rem;
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: 0 0;
+  user-select: none;
+}
+
+/* Shift label upwards when focused or containing content */
+.form-group.has-content .floating-label,
+.form-input:focus ~ .floating-label {
+  transform: translateY(-24px) scale(0.8);
+  color: #00f0ff;
+  left: 1.1rem;
+}
+
+/* Push input text slightly down when label is active */
+.form-group.has-content .form-input,
+.form-input:focus {
+  padding-top: 1.4rem;
+  padding-bottom: 0.8rem;
+}
+
+/* Error States */
 .has-error .form-input {
-  border-color: rgba(239, 68, 68, 0.6);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.02);
 }
 
 .has-error .form-input:focus {
   border-color: #ef4444;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.has-error .floating-label {
+  color: #f87171 !important;
 }
 
 .field-error {
   display: block;
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
   font-size: 0.78rem;
   color: #f87171;
-  padding-left: 0.25rem;
+  padding-left: 0.4rem;
+  animation: slide-up 0.25s ease;
 }
 
-/* ====== EYE BUTTON (password visibility) ====== */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== EYE BUTTON FOR PASSWORD ====== */
 .eye-btn {
   position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 1.1rem;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.3);
   cursor: pointer;
   padding: 0;
   display: flex;
   align-items: center;
   transition: color 0.2s ease;
-  line-height: 1;
+  z-index: 2;
 }
 
 .eye-btn:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: #00f0ff;
 }
 
-/* ====== SUBMIT BUTTON ====== */
+/* ====== PASSWORD STRENGTH METER ====== */
+.password-strength {
+  margin-top: -0.9rem;
+  margin-bottom: 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0 0.2rem;
+}
+
+.strength-bars {
+  display: flex;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.bar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  transition: background 0.35s ease;
+}
+
+.strength-text {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transition: color 0.35s ease;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* ====== SHINY SUBMIT BUTTON ====== */
 .submit-btn {
   width: 100%;
-  margin-top: 0.5rem;
-  padding: 0.9rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  margin-top: 0.6rem;
+  padding: 1.05rem;
+  background: linear-gradient(135deg, #00f0ff 0%, #4f46e5 50%, #9d4edd 100%);
+  background-size: 200% 200%;
   border: none;
   border-radius: 12px;
-  color: white;
-  font-size: 1rem;
+  color: #fff;
+  font-size: 0.98rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  letter-spacing: 0.02em;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.25);
+  animation: gradient-shift 6s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  box-shadow: 
+    0 12px 30px rgba(79, 70, 229, 0.4),
+    0 0 15px rgba(0, 240, 255, 0.2);
 }
 
 .submit-btn:active:not(:disabled) {
@@ -813,106 +1059,127 @@ const handleRegister = async () => {
 }
 
 .submit-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
-/* ====== LOADING SPINNER ====== */
+.btn-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  position: relative;
+  z-index: 2;
+}
+
+.btn-arrow {
+  font-size: 1.15rem;
+  transition: transform 0.25s ease;
+}
+
+.submit-btn:hover:not(:disabled) .btn-arrow {
+  transform: translateX(4px);
+}
+
+/* Button Swipe Shine Overlay */
+.btn-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 30%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.15) 70%,
+    transparent 100%
+  );
+  transition: none;
+  z-index: 1;
+}
+
+.submit-btn:hover:not(:disabled) .btn-shine {
+  animation: shine-swipe 1.4s infinite ease-in-out;
+}
+
+@keyframes shine-swipe {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Loading Spinner inside Button */
 .loading-spinner {
   width: 20px;
   height: 20px;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   display: inline-block;
+  position: relative;
+  z-index: 2;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* ====== PASSWORD STRENGTH ====== */
-.password-strength {
-  margin-top: -0.75rem;
-  margin-bottom: 1.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.strength-bars {
-  display: flex;
-  gap: 0.3rem;
-  flex: 1;
-}
-
-.bar {
-  flex: 1;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-  transition: background 0.35s ease;
-}
-
-.strength-text {
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: color 0.35s ease;
-  min-width: 44px;
-}
-
-/* ====== ALERTS ====== */
+/* ====== ERROR & SUCCESS MESSAGES ====== */
 .error-message,
 .success-message {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1rem;
+  gap: 0.6rem;
+  padding: 0.9rem 1.1rem;
   border-radius: 12px;
-  margin-top: 1.25rem;
-  font-size: 0.9rem;
-  animation: slideInUp 0.3s ease;
+  margin-top: 1.4rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  animation: alert-slide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-weight: 550;
 }
 
 .error-message {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   color: #f87171;
 }
 
 .success-message {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
   color: #34d399;
 }
 
-@keyframes slideInUp {
+@keyframes alert-slide {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ====== TRANSITIONS ====== */
+/* ====== BUTTER SMOOTH TRANSITIONS ====== */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .fade-slide-enter-from {
   opacity: 0;
-  transform: translateX(16px);
+  transform: translateX(20px) scale(0.98);
 }
 
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateX(-16px);
+  transform: translateX(-20px) scale(0.98);
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .fade-enter-from,
@@ -920,41 +1187,13 @@ const handleRegister = async () => {
   opacity: 0;
 }
 
-/* ====== RESPONSIVE DESIGN ====== */
-@media (max-width: 768px) {
-  .login-wrapper {
-    padding: 1rem;
-    align-items: flex-start;
-    padding-top: 3rem;
-  }
-
-  .auth-container {
-    padding: 2rem 1.75rem;
-  }
-
-  .brand-title {
-    font-size: 2.5rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .auth-container {
-    padding: 1.5rem;
-  }
-
-  .brand-title {
-    font-size: 2rem;
-  }
-
-  .form-header h2 {
-    font-size: 1.4rem;
-  }
-}
-
-/* ====== ACCESSIBILITY ====== */
+/* ====== ACCESSIBILITY & REDUCED MOTION ====== */
 @media (prefers-reduced-motion: reduce) {
-  .gradient-sphere,
-  .particle {
+  .glow-orb,
+  .particle,
+  .submit-btn,
+  .logo-pulse-core,
+  .logo-radar-ring {
     animation: none !important;
   }
 
@@ -962,7 +1201,10 @@ const handleRegister = async () => {
   .tab-indicator,
   .form-input,
   .bar,
-  .strength-text {
+  .strength-text,
+  .floating-label,
+  .input-icon,
+  .brand-header {
     transition: none !important;
   }
 
@@ -971,12 +1213,12 @@ const handleRegister = async () => {
   }
 }
 
-/* ====== FOCUS STYLES (keyboard navigation) ====== */
+/* ====== ACCESSIBILITY KEYBOARD OUTLINES ====== */
 .form-input:focus-visible,
 .submit-btn:focus-visible,
 .tab-btn:focus-visible,
 .eye-btn:focus-visible {
-  outline: 2px solid rgba(102, 126, 234, 0.9);
-  outline-offset: 2px;
+  outline: 2px solid #00f0ff;
+  outline-offset: 3px;
 }
 </style>
