@@ -4893,8 +4893,9 @@ def save_dataset_state(dataset_id: str, df: pd.DataFrame, db: Session, user_id: 
     datasets[dataset_id]['metadata']['columns'] = df.shape[1]
     
     # Add to log
-    if 'processing_log' not in datasets[dataset_id]:
+    if 'processing_log' not in datasets[dataset_id]: 
         datasets[dataset_id]['processing_log'] = []
+    
     
     if log_entry:
         datasets[dataset_id]['processing_log'].append(log_entry)

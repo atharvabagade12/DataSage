@@ -109,7 +109,7 @@ const showContextBar = computed(() => PIPELINE_ROUTES.includes(route.name))
 
 // Hide global navbar on landing and login pages
 const showGlobalNavbar = computed(() => {
-  return !['index', 'login'].includes(route.name)
+  return !['index', 'index-new', 'login'].includes(route.name)
 })
 
 // Context-bar "Save Dataset Version" button handler
