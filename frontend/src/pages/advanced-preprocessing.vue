@@ -2447,6 +2447,21 @@ const loadInitialData = async () => {
     // Step 3: Fetch Full Context (Backend info, types, etc.)
     const backendInfo = await fetchBackendDatasetInfo(datasetId.value);
     if (backendInfo) {
+      // Sync the clean/original shape from backendInfo to the stores
+      if (backendInfo.shape && Array.isArray(backendInfo.shape)) {
+        experimentStore.updateDatasetMetadata({
+          size: {
+            rows: backendInfo.shape[0],
+            columns: backendInfo.shape[1]
+          }
+        });
+        
+        if (mlStore.registeredDatasets && mlStore.registeredDatasets[datasetId.value]) {
+          mlStore.registeredDatasets[datasetId.value].shape = backendInfo.shape;
+          mlStore.registeredDatasets[datasetId.value].row_count = backendInfo.shape[0];
+        }
+      }
+
       // Sync split state to mlStore if persisted in experimentStore
       if (preprocessing.value.isSplitApplied && !mlStore.isSplit) {
         mlStore.setSplitState(true, {
@@ -2639,42 +2654,49 @@ const resetSplit = () => {
 };
 
 const confirmResetSplit = async () => {
-  // 1. Notify backend to clear cached split previews from DB
   try {
-    await authenticatedDelete(`/api/datasets/${datasetId.value}/split`);
-    console.log('✅ Backend split state cleared');
-  } catch (err) {
-    console.warn('⚠️ Could not clear backend split state:', err);
-    // Non-fatal — continue with local reset
+    uiStore.startProcessing("Resetting split...");
+    showResetSplitModal.value = false;
+
+    // 1. Notify backend to clear cached split previews from DB
+    try {
+      await authenticatedDelete(`/api/datasets/${datasetId.value}/split`);
+      console.log('✅ Backend split state cleared');
+    } catch (err) {
+      console.warn('⚠️ Could not clear backend split state:', err);
+      // Non-fatal — continue with local reset
+    }
+
+    // 2. Reset store first so analyzeColumns sees clean state
+    experimentStore.resetPreprocessing();
+    
+    // 3. Clear local UI refs
+    targetEncodedColumns.value = new Set();
+    categoricallyEncodedColumns.value = new Set();
+    trainData.value = [];
+    testData.value = [];
+    currentSplitView.value = "full";
+
+    mlStore.isSplit = false;
+    mlStore.isScaled = false;
+    mlStore.isEncoded = false;
+
+    // Clear Target Encoding State
+    targetEncodingApplied.value = false;
+
+    // 4. Force reload the original clean dataset
+    dataStore.clearCache();
+    await loadInitialData();
+    
+    console.log("🔄 Split reset");
+    showSuccess('Split Reset', 'All transformations have been cleared');
+    mlStore.isDirty = false;
+  } catch (error) {
+    console.error('❌ Reset split error:', error);
+    showError('Reset Split Failed', error.message);
+  } finally {
+    uiStore.stopProcessing();
   }
-
-  // 2. Reset store first so analyzeColumns sees clean state
-  experimentStore.resetPreprocessing();
-  
-  // 3. Clear local UI refs
-  targetEncodedColumns.value = new Set();
-  categoricallyEncodedColumns.value = new Set();
-  trainData.value = [];
-  testData.value = [];
-  currentSplitView.value = "full";
-
-  mlStore.isSplit = false;
-  mlStore.isScaled = false;
-  mlStore.isEncoded = false;
-
-  // Clear Target Encoding State
-  targetEncodingApplied.value = false;
-
-  // 4. Re-sync columns with store (which is now clean)
-  analyzeColumns();
-  
-  // 5. Re-fetch fresh statistics for recommendations
-  fetchCompleteStatistics();
-
-  showResetSplitModal.value = false;
-  console.log("🔄 Split reset");
-  showSuccess('Split Reset', 'All transformations have been cleared');
-  mlStore.isDirty = false;
 };
 
 // Reset all transformations
@@ -2684,7 +2706,7 @@ const resetAllTransformations = () => {
 
 const confirmResetAll = async () => {
   try {
-    isProcessing.value = true;
+    uiStore.startProcessing("Resetting all transformations...");
     showResetConfirmModal.value = false;
 
     // 0. Notify backend to clear cached split previews from DB
@@ -2713,6 +2735,7 @@ const confirmResetAll = async () => {
     targetEncodingApplied.value = false;
 
     // 3. Reload the original dataset from backend (this re-calls analyzeColumns)
+    dataStore.clearCache();
     await loadInitialData();
     
     console.log("🔄 All transformations reset");
@@ -2722,7 +2745,7 @@ const confirmResetAll = async () => {
     console.error('❌ Reset error:', error);
     showError('Reset Failed', error.message);
   } finally {
-    isProcessing.value = false;
+    uiStore.stopProcessing();
   }
 };
 
@@ -2875,6 +2898,7 @@ const resetSmote = async () => {
   }
 
   try {
+    uiStore.startProcessing("Resetting SMOTE...");
     const response = await authenticatedPost(
       `/api/datasets/${datasetId.value}/reset-smote`,
       {}
@@ -2887,27 +2911,42 @@ const resetSmote = async () => {
     const data = await response.json();
 
     if (data.success) {
-      smoteApplied.value = false;
+      // 1. Update dataStore previews and class distribution
+      dataStore.trainPreview = data.train_preview || [];
+      classDistribution.value = data.class_distribution_restored;
       
-      showInfo(
+      // 2. Update Experiment Store (Persisted)
+      experimentStore.setSmoteApplied(false);
+      
+      const newTotalRows = data.original_samples + testRows.value;
+      experimentStore.updateDatasetMetadata({
+        size: {
+          rows: newTotalRows,
+          columns: columns.value.length
+        }
+      });
+
+      // 3. Update mlStore for correct row count display
+      if (mlStore.isSplit) {
+        mlStore.splitInfo.trainRows = data.original_samples;
+        mlStore.splitInfo.testRows = testData.value.length;
+      }
+
+      showSuccess(
         'SMOTE Reset',
-        data.message || 'SMOTE has been reset. Please re-split the dataset to restore original training data.'
+        'SMOTE has been undone and the dataset training data is restored.'
       );
 
       // Close modal
       showSmoteModal.value = false;
-
-      // If requires resplit, suggest it
-      if (data.requires_resplit) {
-        showWarning(
-          'Re-split Required',
-          'Please reset and re-apply the dataset split to restore original training data and row counts'
-        );
-      }
+      mlStore.isDirty = true;
+      await checkClassImbalance();
     }
   } catch (error) {
     console.error('❌ Error resetting SMOTE:', error);
     showError('Reset Failed', error.message);
+  } finally {
+    uiStore.stopProcessing();
   }
 };
 

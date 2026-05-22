@@ -183,6 +183,8 @@ X_train_storage: Dict[str, Any] = {}
 X_test_storage: Dict[str, Any] = {}
 y_train_storage: Dict[str, Any] = {}
 y_test_storage: Dict[str, Any] = {}
+X_train_before_smote: Dict[str, Any] = {}
+y_train_before_smote: Dict[str, Any] = {}
 split_scalers: Dict[str, Any] = {}
 
 
@@ -3093,7 +3095,7 @@ async def apply_smote(
     Apply SMOTE to balance class distribution in training data.
     Respects manual semantic type overrides.
     """
-    global X_train_storage, y_train_storage, datasets
+    global X_train_storage, y_train_storage, datasets, X_train_before_smote, y_train_before_smote
     
     try:
         print(f"\n{'='*80}")
@@ -3199,6 +3201,14 @@ async def apply_smote(
         print(f"\n✅ Samples Added: {samples_added}")
         print(f"✅ New Total: {new_total}")
         
+        # Backup pre-smote data so we can restore it on reset.
+        # Only backup if not already SMOTE-applied, to preserve the true original pre-SMOTE state
+        if dataset_id not in X_train_before_smote or not dataset_info.get('smote_applied', False):
+            X_train_before_smote[dataset_id] = X_train.copy()
+            y_train_before_smote[dataset_id] = y_train.copy()
+            datasets[dataset_id]['dataframe_before_smote'] = datasets[dataset_id]['dataframe'].copy()
+            print(f"💾 Cached pre-SMOTE backup for dataset {dataset_id}")
+
         # Update storage with resampled data
         X_train_storage[dataset_id] = X_train_resampled
         y_train_storage[dataset_id] = y_train_resampled
@@ -3283,7 +3293,7 @@ async def reset_smote(
     """
     Reset SMOTE transformation and restore original training data
     """
-    global datasets
+    global datasets, X_train_storage, y_train_storage, X_train_before_smote, y_train_before_smote
     
     try:
         print(f"\n{'='*80}")
@@ -3298,18 +3308,57 @@ async def reset_smote(
                 "message": "SMOTE was not applied, nothing to reset"
             }
         
-        # Note: To properly reset, we would need to store the original training data
-        # For now, we'll require re-splitting the dataset
+        # Restore pre-SMOTE data
+        restored_total = 0
+        if dataset_id in X_train_before_smote and dataset_id in y_train_before_smote:
+            X_train_storage[dataset_id] = X_train_before_smote.pop(dataset_id)
+            y_train_storage[dataset_id] = y_train_before_smote.pop(dataset_id)
+            restored_total = len(y_train_storage[dataset_id])
+            print(f"✅ Restored train data from pre-SMOTE backup. New length: {restored_total}")
+        else:
+            # Fallback if backup not found
+            restored_total = len(y_train_storage.get(dataset_id, []))
+            print("⚠️ Pre-SMOTE backup not found in-memory")
+            
+        if 'dataframe_before_smote' in datasets[dataset_id]:
+            datasets[dataset_id]['dataframe'] = datasets[dataset_id].pop('dataframe_before_smote')
+            print("✅ Restored base dataframe from pre-SMOTE backup")
+
         datasets[dataset_id]['smote_applied'] = False
         datasets[dataset_id].pop('smote_config', None)
         
-        print(f"✅ SMOTE reset. Please re-split the dataset to restore original data.")
+        # Prepare preview (limit to 100 rows for performance)
+        X_tr = X_train_storage.get(dataset_id)
+        y_tr = y_train_storage.get(dataset_id)
+        
+        if X_tr is not None and y_tr is not None:
+            preview_df = X_tr.copy()
+            preview_df[y_tr.name] = y_tr
+            train_preview = preview_df.head(100).replace({np.nan: None}).to_dict(orient='records')
+            
+            # Calculate restored class distribution
+            restored_distribution = y_tr.value_counts().to_dict()
+            class_distribution_restored = {
+                str(k): {
+                    "count": int(v),
+                    "percentage": round((v / restored_total) * 100, 2)
+                }
+                for k, v in restored_distribution.items()
+            }
+        else:
+            train_preview = []
+            class_distribution_restored = {}
+        
+        print(f"✅ SMOTE reset completed successfully. Restored training rows: {restored_total}")
         print(f"{'='*80}\n")
         
         return {
             "success": True,
-            "message": "SMOTE reset. Please re-split the dataset to restore original training data.",
-            "requires_resplit": True
+            "message": "SMOTE reset successfully.",
+            "original_samples": restored_total,
+            "class_distribution_restored": class_distribution_restored,
+            "train_preview": train_preview,
+            "requires_resplit": False
         }
         
     except HTTPException:
@@ -3535,7 +3584,7 @@ async def reset_split(
     current_user: dict = Depends(auth.get_current_user)
 ):
     """Clear split state and cached previews so the dataset returns to its full/unsplit form."""
-    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, datasets
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, datasets, split_scalers, categorical_encoders, target_encoders, X_train_before_smote, y_train_before_smote
 
     try:
         # 1. Verify dataset ownership
@@ -3547,16 +3596,12 @@ async def reset_split(
         if db_dataset.user_id != current_user['id']:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        # 2. Remove in-memory split globals
-        for store in [X_train_storage, X_test_storage, y_train_storage, y_test_storage]:
+        # 2. Remove in-memory split globals and feature/encoder states
+        for store in [X_train_storage, X_test_storage, y_train_storage, y_test_storage, split_scalers, categorical_encoders, target_encoders, X_train_before_smote, y_train_before_smote]:
             store.pop(dataset_id, None)
 
-        # 3. Clear in-memory split flags
-        if dataset_id in datasets:
-            datasets[dataset_id]['is_split'] = False
-            datasets[dataset_id].pop('split_info', None)
-            datasets[dataset_id].pop('smote_applied', None)
-            datasets[dataset_id].pop('smote_config', None)
+        # 3. Clear in-memory split flags and pop dataset to force reload original from storage
+        datasets.pop(dataset_id, None)
 
         # 4. Clear cached previews from DB
         existing_meta = db_dataset.column_metadata or {}
