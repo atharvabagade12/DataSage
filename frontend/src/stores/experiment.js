@@ -38,11 +38,28 @@ export const useExperimentStore = defineStore('experiment', {
       selectedFeatures: [],
       droppedColumns: [],
       
+      // PCA Configuration
+      pca: {
+        applied: false,
+        mode: 'variance', // 'variance' | 'fixed'
+        varianceRatio: 95,
+        numComponents: 10,
+        applyScope: 'all', // 'all' | 'selective'
+        selectedColumns: [],
+        originalFeatureCount: 0,
+        reducedFeatureCount: 0,
+        varianceRetained: 0,
+        compressionRatio: 0,
+        explainedVarianceRatio: []
+      },
+      
       // Data Cleaning & Feature Engineering (from Preview)
       isMissingValuesApplied: false,
       isOutliersApplied: false, 
       isDuplicatesApplied: false,
-      isDateTimeApplied: false
+      isDateTimeApplied: false,
+      isTransformationApplied: false,
+      transformedColumns: []
     },
     
     // Model Configuration (Flattened for easier reactivity in components)
@@ -134,6 +151,16 @@ export const useExperimentStore = defineStore('experiment', {
       this.preprocessing.isEncodingApplied = status;
     },
 
+    setPcaApplied(status, results = null) {
+      this.preprocessing.pca.applied = status;
+      if (results) {
+        this.preprocessing.pca = {
+          ...this.preprocessing.pca,
+          ...results
+        };
+      }
+    },
+
     setSmoteApplied(status, config) {
       this.preprocessing.smote.applied = status;
       if (config) {
@@ -175,6 +202,11 @@ export const useExperimentStore = defineStore('experiment', {
     setDroppedColumns(columns) {
       this.preprocessing.droppedColumns = columns;
     },
+
+    setTransformationApplied(status, columns = []) {
+      this.preprocessing.isTransformationApplied = status;
+      this.preprocessing.transformedColumns = columns;
+    },
     
     // Model Actions
     setAlgorithm(algo) {
@@ -214,10 +246,25 @@ export const useExperimentStore = defineStore('experiment', {
         },
         selectedFeatures: [],
         droppedColumns: [],
+        pca: {
+          applied: false,
+          mode: 'variance',
+          varianceRatio: 95,
+          numComponents: 10,
+          applyScope: 'all',
+          selectedColumns: [],
+          originalFeatureCount: 0,
+          reducedFeatureCount: 0,
+          varianceRetained: 0,
+          compressionRatio: 0,
+          explainedVarianceRatio: []
+        },
         isMissingValuesApplied: false,
         isOutliersApplied: false,
         isDuplicatesApplied: false,
-        isDateTimeApplied: false
+        isDateTimeApplied: false,
+        isTransformationApplied: false,
+        transformedColumns: []
       };
     },
     

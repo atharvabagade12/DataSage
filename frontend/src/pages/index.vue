@@ -8,11 +8,15 @@
     </div>
 
     <!-- Navigation Header -->
-    <header class="navbar" :class="{ 'scrolled': isScrolled }">
+    <header class="navbar" :class="{ scrolled: isScrolled }">
       <nav class="nav-content">
         <div class="nav-brand" @click="scrollToTop">
           <div class="brand-logo">
-            <img src="@/assets/logo.jpeg" alt="DataSage Logo" class="logo-img">
+            <img
+              src="@/assets/logo.jpeg"
+              alt="DataSage Logo"
+              class="logo-img"
+            />
           </div>
           <h1 class="brand-title">DataSage</h1>
         </div>
@@ -26,10 +30,16 @@
 
         <div class="nav-actions">
           <button @click="goToLogin" class="nav-btn secondary">Sign In</button>
-          <button @click="goToSignup" class="nav-btn primary">Get Started</button>
+          <button @click="goToSignup" class="nav-btn primary">
+            Get Started
+          </button>
         </div>
 
-        <button @click="toggleMobileMenu" class="mobile-menu-btn" :class="{ 'active': showMobileMenu }">
+        <button
+          @click="toggleMobileMenu"
+          class="mobile-menu-btn"
+          :class="{ active: showMobileMenu }"
+        >
           <span></span>
           <span></span>
           <span></span>
@@ -40,13 +50,25 @@
       <transition name="fade">
         <div v-if="showMobileMenu" class="mobile-drawer" id="mobile-menu">
           <div class="drawer-links">
-            <a class="drawer-link" @click="handleMobileMenuClick('features')">Features</a>
-            <a class="drawer-link" @click="handleMobileMenuClick('how-it-works')">How It Works</a>
-            <a class="drawer-link" @click="handleMobileMenuClick('about')">About</a>
+            <a class="drawer-link" @click="handleMobileMenuClick('features')"
+              >Features</a
+            >
+            <a
+              class="drawer-link"
+              @click="handleMobileMenuClick('how-it-works')"
+              >How It Works</a
+            >
+            <a class="drawer-link" @click="handleMobileMenuClick('about')"
+              >About</a
+            >
             <a class="drawer-link" @click="handleMobileMenuClick('faq')">FAQ</a>
             <div class="drawer-actions">
-              <button @click="goToLogin" class="nav-btn secondary full-width">Sign In</button>
-              <button @click="goToSignup" class="nav-btn primary full-width">Get Started Free</button>
+              <button @click="goToLogin" class="nav-btn secondary full-width">
+                Sign In
+              </button>
+              <button @click="goToSignup" class="nav-btn primary full-width">
+                Get Started Free
+              </button>
             </div>
           </div>
         </div>
@@ -56,21 +78,25 @@
     <!-- Hero Section -->
     <section class="hero-section" id="home">
       <div class="hero-grid-overlay"></div>
-      
+
       <div class="hero-content-wrapper">
         <div class="hero-text-block">
           <div class="hero-badge animate-pulse">
             <span class="badge-dot"></span>
-            <span class="badge-text">Academic Research & No-Code ML Platform</span>
+            <span class="badge-text"
+              >Academic Research & No-Code ML Platform</span
+            >
           </div>
 
           <h1 class="hero-title">
-            The Unified <br/>
+            The Unified <br />
             <span class="gradient-text">No-Code ML</span> Platform
           </h1>
 
           <p class="hero-subtitle">
-            Empowering students, researchers, and data enthusiasts to transform raw datasets into high-performing machine learning models with zero coding required.
+            Empowering students, researchers, and data enthusiasts to transform
+            raw datasets into high-performing machine learning models with zero
+            coding required.
           </p>
 
           <div class="hero-actions">
@@ -97,7 +123,7 @@
               <span class="trust-icon">⚡</span>
               <span>Instant Local Training</span>
             </div>
-          </div> 
+          </div>
         </div>
 
         <!-- High-fidelity interactive pipeline preview -->
@@ -114,11 +140,14 @@
                 <span class="tab-title">datasage-pipeline</span>
               </div>
             </div>
-            
+
             <div class="mockup-body">
               <div class="pipeline-horizontal">
                 <!-- Node 1: Upload -->
-                <div class="horizontal-node" :class="{ 'active': activePipelineStep >= 0 }">
+                <div
+                  class="horizontal-node"
+                  :class="{ active: activePipelineStep >= 0 }"
+                >
                   <div class="horizontal-icon-container">
                     <span class="node-emoji">📁</span>
                   </div>
@@ -127,24 +156,36 @@
                 </div>
 
                 <div class="horizontal-connector">
-                  <div class="connector-fill" :style="{ width: getConnectorProgress(0) + '%' }"></div>
+                  <div
+                    class="connector-fill"
+                    :style="{ width: getConnectorProgress(0) + '%' }"
+                  ></div>
                 </div>
 
                 <!-- Node 2: Clean -->
-                <div class="horizontal-node" :class="{ 'active': activePipelineStep >= 1 }">
+                <div
+                  class="horizontal-node"
+                  :class="{ active: activePipelineStep >= 1 }"
+                >
                   <div class="horizontal-icon-container">
                     <span class="node-emoji">⚙️</span>
                   </div>
                   <span class="node-name">Preprocess</span>
-                  <span class="node-meta">SMOTE & Scale</span>
+                  <span class="node-meta">Encode & Scale</span>
                 </div>
 
                 <div class="horizontal-connector">
-                  <div class="connector-fill" :style="{ width: getConnectorProgress(1) + '%' }"></div>
+                  <div
+                    class="connector-fill"
+                    :style="{ width: getConnectorProgress(1) + '%' }"
+                  ></div>
                 </div>
 
                 <!-- Node 3: Train -->
-                <div class="horizontal-node" :class="{ 'active': activePipelineStep >= 2 }">
+                <div
+                  class="horizontal-node"
+                  :class="{ active: activePipelineStep >= 2 }"
+                >
                   <div class="horizontal-icon-container">
                     <span class="node-emoji">🚀</span>
                   </div>
@@ -153,11 +194,17 @@
                 </div>
 
                 <div class="horizontal-connector">
-                  <div class="connector-fill" :style="{ width: getConnectorProgress(2) + '%' }"></div>
+                  <div
+                    class="connector-fill"
+                    :style="{ width: getConnectorProgress(2) + '%' }"
+                  ></div>
                 </div>
 
                 <!-- Node 4: Analyze -->
-                <div class="horizontal-node" :class="{ 'active': activePipelineStep >= 3 }">
+                <div
+                  class="horizontal-node"
+                  :class="{ active: activePipelineStep >= 3 }"
+                >
                   <div class="horizontal-icon-container">
                     <span class="node-emoji">📈</span>
                   </div>
@@ -169,47 +216,104 @@
               <!-- Interactive Demo Animation Area -->
               <div class="live-console">
                 <div class="console-header">
-                  <span class="console-indicator" :class="getConsoleIndicatorClass()"></span>
-                  <span class="console-status-text">{{ getConsoleStatusText() }}</span>
+                  <span
+                    class="console-indicator"
+                    :class="getConsoleIndicatorClass()"
+                  ></span>
+                  <span class="console-status-text">{{
+                    getConsoleStatusText()
+                  }}</span>
                 </div>
                 <div class="console-body">
                   <transition name="fade" mode="out-in">
                     <div :key="activePipelineStep" class="console-content">
-                      <p v-if="activePipelineStep === -1" class="console-line text-muted">Ready to initialize machine learning execution. Click "Build A Pipeline" to begin.</p>
-                      
-                      <div v-else-if="activePipelineStep === 0" class="console-upload-state">
-                        <p class="console-line text-cyan">> Importing dataset: customer_churn.csv</p>
-                        <p class="console-line text-success">> Loaded 1,245 rows successfully</p>
-                        <p class="console-line">> Schema detected: 14 numerical, 4 categorical columns</p>
+                      <p
+                        v-if="activePipelineStep === -1"
+                        class="console-line text-muted"
+                      >
+                        Ready to initialize machine learning execution. Click
+                        "Build A Pipeline" to begin.
+                      </p>
+
+                      <div
+                        v-else-if="activePipelineStep === 0"
+                        class="console-upload-state"
+                      >
+                        <p class="console-line text-cyan">
+                          > Importing dataset: customer_churn.csv
+                        </p>
+                        <p class="console-line text-success">
+                          > Loaded 1,245 rows successfully
+                        </p>
+                        <p class="console-line">
+                          > Schema detected: 14 numerical, 4 categorical columns
+                        </p>
                       </div>
 
-                      <div v-else-if="activePipelineStep === 1" class="console-preprocess-state">
-                        <p class="console-line text-purple">> Starting data transformations...</p>
-                        <p class="console-line">> Handle Missing Values: 122 missing values handled using mean imputation </p>
-                        <p class="console-line text-success">> Label encoded categorical fields & scaled features using StandardScaler</p> 
+                      <div
+                        v-else-if="activePipelineStep === 1"
+                        class="console-preprocess-state"
+                      >
+                        <p class="console-line text-purple">
+                          > Starting data transformations...
+                        </p>
+                        <p class="console-line">
+                          > Handle Missing Values: 122 missing values handled
+                          using mean imputation
+                        </p>
+                        <p class="console-line text-success">
+                          > Label encoded categorical fields & scaled features
+                          using StandardScaler
+                        </p>
                       </div>
 
-                      <div v-else-if="activePipelineStep === 2" class="console-train-state">
-                        <p class="console-line text-cyan">> Initializing concurrent model fitting...</p>
+                      <div
+                        v-else-if="activePipelineStep === 2"
+                        class="console-train-state"
+                      >
+                        <p class="console-line text-cyan">
+                          > Initializing concurrent model fitting...
+                        </p>
                         <div class="training-algorithms-preview">
                           <div class="algo-row">
                             <span>Random Forest:</span>
-                            <div class="algo-bar"><div class="algo-bar-fill" :style="{ width: modelAccuracyRF + '%' }"></div></div>
-                            <span class="algo-acc">{{ modelAccuracyRF.toFixed(1) }}% Acc</span>
+                            <div class="algo-bar">
+                              <div
+                                class="algo-bar-fill"
+                                :style="{ width: modelAccuracyRF + '%' }"
+                              ></div>
+                            </div>
+                            <span class="algo-acc"
+                              >{{ modelAccuracyRF.toFixed(1) }}% Acc</span
+                            >
                           </div>
                           <div class="algo-row">
                             <span>XGBoost Classifier:</span>
-                            <div class="algo-bar"><div class="algo-bar-fill purple" :style="{ width: modelAccuracyXGB + '%' }"></div></div>
-                            <span class="algo-acc">{{ modelAccuracyXGB.toFixed(1) }}% Acc</span>
+                            <div class="algo-bar">
+                              <div
+                                class="algo-bar-fill purple"
+                                :style="{ width: modelAccuracyXGB + '%' }"
+                              ></div>
+                            </div>
+                            <span class="algo-acc"
+                              >{{ modelAccuracyXGB.toFixed(1) }}% Acc</span
+                            >
                           </div>
                         </div>
                       </div>
 
-                      <div v-else-if="activePipelineStep === 3" class="console-analyze-state">
-                        <p class="console-line text-success">> Execution complete! Exported joblib models.</p>
+                      <div
+                        v-else-if="activePipelineStep === 3"
+                        class="console-analyze-state"
+                      >
+                        <p class="console-line text-success">
+                          > Execution complete! Exported joblib models.
+                        </p>
                         <div class="metrics-visual-grid">
                           <div class="metric-mini-card">
-                            <span class="m-val">{{ modelAccuracy.toFixed(1) }}%</span>
+                            <span class="m-val"
+                              >{{ modelAccuracy.toFixed(1) }}%</span
+                            >
                             <span class="m-label">Best Accuracy</span>
                           </div>
                           <div class="metric-mini-card">
@@ -234,7 +338,9 @@
         <div class="section-header">
           <h2 class="section-title">Everything You Need for End-to-End ML</h2>
           <p class="section-subtitle">
-            DataSage packs the full data science lifecycle into a highly visual, fully automated web pipeline. Perfect for classrooms, researchers, and quick exploratory modeling.
+            DataSage packs the full data science lifecycle into a highly visual,
+            fully automated web pipeline. Perfect for classrooms, researchers,
+            and quick exploratory modeling.
           </p>
         </div>
 
@@ -243,17 +349,54 @@
           <div class="bento-card large glass-panel reveal">
             <div class="card-glow"></div>
             <div class="bento-icon-wrapper">
-              <svg class="bento-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 19H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                <path d="M7 15V11" stroke="url(#cyan-gradient)" stroke-width="2.5" stroke-linecap="round" />
-                <path d="M12 15V6" stroke="url(#purple-gradient)" stroke-width="2.5" stroke-linecap="round" />
-                <path d="M17 15V9" stroke="url(#cyan-gradient)" stroke-width="2.5" stroke-linecap="round" />
+              <svg
+                class="bento-svg-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M4 19H20"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M7 15V11"
+                  stroke="url(#cyan-gradient)"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M12 15V6"
+                  stroke="url(#purple-gradient)"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M17 15V9"
+                  stroke="url(#cyan-gradient)"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                />
                 <defs>
-                  <linearGradient id="cyan-gradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient
+                    id="cyan-gradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
                     <stop offset="0%" stop-color="#00F0FF" />
                     <stop offset="100%" stop-color="#3B82F6" />
                   </linearGradient>
-                  <linearGradient id="purple-gradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient
+                    id="purple-gradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
                     <stop offset="0%" stop-color="#9D4EDD" />
                     <stop offset="100%" stop-color="#8A2BE2" />
                   </linearGradient>
@@ -263,7 +406,10 @@
             <div class="bento-content">
               <h3 class="bento-title">Smart Data Processing</h3>
               <p class="bento-desc">
-                Drag and drop your raw files. DataSage instantly performs intelligent data profiling, auto-detects structural schemas, flags null imbalances, and builds a comprehensive data-quality summary in real-time.
+                Drag and drop your raw files. DataSage instantly performs
+                intelligent data profiling, auto-detects structural schemas,
+                flags null imbalances, and builds a comprehensive data-quality
+                summary in real-time.
               </p>
               <div class="bento-preview-box prep-preview">
                 <div class="quality-score-radial">
@@ -271,8 +417,14 @@
                   <span class="radial-lbl">Data Health Score</span>
                 </div>
                 <div class="issues-list">
-                  <div class="issue-item"><span class="bullet red"></span><span>24 missing age values auto-imputed</span></div>
-                  <div class="issue-item"><span class="bullet green"></span><span>4 categorical fields standard encoded</span></div>
+                  <div class="issue-item">
+                    <span class="bullet red"></span
+                    ><span>24 missing age values auto-imputed</span>
+                  </div>
+                  <div class="issue-item">
+                    <span class="bullet green"></span
+                    ><span>4 categorical fields standard encoded</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -282,21 +434,66 @@
           <div class="bento-card medium glass-panel reveal">
             <div class="card-glow"></div>
             <div class="bento-icon-wrapper">
-              <svg class="bento-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="3" y="11" width="18" height="10" rx="3" stroke="url(#purple-gradient)" stroke-width="2" />
-                <path d="M12 2V5" stroke="#00F0FF" stroke-width="2" stroke-linecap="round" />
+              <svg
+                class="bento-svg-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  x="3"
+                  y="11"
+                  width="18"
+                  height="10"
+                  rx="3"
+                  stroke="url(#purple-gradient)"
+                  stroke-width="2"
+                />
+                <path
+                  d="M12 2V5"
+                  stroke="#00F0FF"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
                 <circle cx="12" cy="2" r="1.5" fill="#00F0FF" />
-                <path d="M8 15H8.01" stroke="#00F0FF" stroke-width="3" stroke-linecap="round" />
-                <path d="M16 15H16.01" stroke="#00F0FF" stroke-width="3" stroke-linecap="round" />
-                <path d="M9 18H15" stroke="url(#purple-gradient)" stroke-width="2" stroke-linecap="round" />
-                <path d="M3 15H2" stroke="url(#purple-gradient)" stroke-width="2" stroke-linecap="round" />
-                <path d="M22 15H21" stroke="url(#purple-gradient)" stroke-width="2" stroke-linecap="round" />
+                <path
+                  d="M8 15H8.01"
+                  stroke="#00F0FF"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M16 15H16.01"
+                  stroke="#00F0FF"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M9 18H15"
+                  stroke="url(#purple-gradient)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M3 15H2"
+                  stroke="url(#purple-gradient)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M22 15H21"
+                  stroke="url(#purple-gradient)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
               </svg>
             </div>
             <div class="bento-content">
               <h3 class="bento-title">Automated ML Pipeline</h3>
               <p class="bento-desc">
-                Deploy diverse algorithms concurrently. We run Random Forest, SVMs, Decision Trees, K-Neighbors, and XGBoost with automated grid hyperparameter validation.
+                Deploy diverse algorithms concurrently. We run Random Forest,
+                SVMs, Decision Trees, K-Neighbors, and XGBoost with automated
+                grid hyperparameter validation.
               </p>
               <div class="bento-preview-box train-preview">
                 <div class="mini-chart-row">
@@ -319,15 +516,32 @@
           <div class="bento-card medium glass-panel reveal">
             <div class="card-glow"></div>
             <div class="bento-icon-wrapper">
-              <svg class="bento-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="url(#cyan-gradient)" stroke-width="2" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="url(#cyan-gradient)" stroke-width="2" stroke-linejoin="round" />
+              <svg
+                class="bento-svg-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
+                  stroke="url(#cyan-gradient)"
+                  stroke-width="2"
+                />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  stroke="url(#cyan-gradient)"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                />
               </svg>
             </div>
             <div class="bento-content">
               <h3 class="bento-title">Advanced Feature Engineering</h3>
               <p class="bento-desc">
-                Resolve real-world data issues directly. Handle class imbalances with synthetic SMOTE oversampling, apply robust label/one-hot encoding, clean extreme outliers, and normalize columns with different scalers. 
+                Resolve real-world data issues directly. Handle class imbalances
+                with synthetic SMOTE oversampling, apply robust label/one-hot
+                encoding, clean extreme outliers, and normalize columns with
+                different scalers.
               </p>
               <div class="bento-preview-box spec-preview">
                 <div class="pill-group">
@@ -343,18 +557,59 @@
           <div class="bento-card large glass-panel reveal">
             <div class="card-glow"></div>
             <div class="bento-icon-wrapper">
-              <svg class="bento-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 3V21H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M18.5 7.5L13.5 12.5L9.5 8.5L4.5 13.5" stroke="url(#cyan-gradient)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="18.5" cy="7.5" r="2" fill="#9D4EDD" stroke="#ffffff" stroke-width="1"/>
-                <circle cx="13.5" cy="12.5" r="2" fill="#00F0FF" stroke="#ffffff" stroke-width="1"/>
-                <circle cx="9.5" cy="8.5" r="2" fill="#9D4EDD" stroke="#ffffff" stroke-width="1"/>
+              <svg
+                class="bento-svg-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 3V21H21"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M18.5 7.5L13.5 12.5L9.5 8.5L4.5 13.5"
+                  stroke="url(#cyan-gradient)"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <circle
+                  cx="18.5"
+                  cy="7.5"
+                  r="2"
+                  fill="#9D4EDD"
+                  stroke="#ffffff"
+                  stroke-width="1"
+                />
+                <circle
+                  cx="13.5"
+                  cy="12.5"
+                  r="2"
+                  fill="#00F0FF"
+                  stroke="#ffffff"
+                  stroke-width="1"
+                />
+                <circle
+                  cx="9.5"
+                  cy="8.5"
+                  r="2"
+                  fill="#9D4EDD"
+                  stroke="#ffffff"
+                  stroke-width="1"
+                />
               </svg>
             </div>
             <div class="bento-content">
               <h3 class="bento-title">Interactive Visualizations</h3>
               <p class="bento-desc">
-                Experience crystal clear model transparency. Interactively study Pearson feature correlation heatmaps, plot classification margins, evaluate model matrices, and track training residuals with Chart.js dashboards.
+                Experience crystal clear model transparency. Interactively study
+                Pearson feature correlation heatmaps, plot classification
+                margins, evaluate model matrices, and track training residuals
+                with Chart.js dashboards.
               </p>
               <div class="bento-preview-box chart-preview">
                 <div class="heatmap-mock">
@@ -383,39 +638,80 @@
     <!-- How It Works Section (Interactive Workflow Canvas Redesign) -->
     <section class="how-it-works-section reveal" id="how-it-works">
       <div class="canvas-grid-overlay"></div>
-      
+
       <!-- Faint neural background line graphics -->
       <div class="neural-bg-graphics">
-        <svg class="neural-bg-svg" viewBox="0 0 1000 800" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M100 100 L300 200 L500 150 L450 460 L800 600 L900 400" stroke="rgba(255, 255, 255, 0.01)" stroke-width="1.5" />
-          <path d="M200 650 L350 460 L150 200" stroke="rgba(255, 255, 255, 0.01)" stroke-width="1.5" />
-          <path d="M850 700 L450 460 L700 200" stroke="rgba(255, 255, 255, 0.01)" stroke-width="1.5" />
+        <svg
+          class="neural-bg-svg"
+          viewBox="0 0 1000 800"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M100 100 L300 200 L500 150 L450 460 L800 600 L900 400"
+            stroke="rgba(255, 255, 255, 0.01)"
+            stroke-width="1.5"
+          />
+          <path
+            d="M200 650 L350 460 L150 200"
+            stroke="rgba(255, 255, 255, 0.01)"
+            stroke-width="1.5"
+          />
+          <path
+            d="M850 700 L450 460 L700 200"
+            stroke="rgba(255, 255, 255, 0.01)"
+            stroke-width="1.5"
+          />
         </svg>
       </div>
 
       <div class="canvas-ambient-glow orb-cyan"></div>
       <div class="canvas-ambient-glow orb-purple"></div>
-      
+
       <div class="section-container">
         <div class="section-header">
           <h2 class="section-title">From Raw Data to Intelligent Models</h2>
           <p class="section-subtitle">
-            An intelligent end-to-end machine learning workflow designed to simplify preprocessing, training, and diagnostics through a visual AI-powered pipeline.
+            An intelligent end-to-end machine learning workflow designed to
+            simplify preprocessing, training, and diagnostics through a visual
+            AI-powered pipeline.
           </p>
         </div>
 
         <!-- Workflow Canvas Container -->
         <div class="workflow-canvas">
-          
           <!-- Central Simple Single Vertical Connection Path -->
           <div class="canvas-spine-container">
-            <svg class="canvas-spine-svg" viewBox="0 0 100 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              class="canvas-spine-svg"
+              viewBox="0 0 100 800"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <!-- Static subtle path -->
-              <path d="M50 0 V800" stroke="rgba(255, 255, 255, 0.05)" stroke-width="2" stroke-linecap="round" />
+              <path
+                d="M50 0 V800"
+                stroke="rgba(255, 255, 255, 0.05)"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
               <!-- Glowing neon pulse path -->
-              <path class="pulse-line" d="M50 0 V800" stroke="url(#spine-pulse-gradient)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="25 180" />
+              <path
+                class="pulse-line"
+                d="M50 0 V800"
+                stroke="url(#spine-pulse-gradient)"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-dasharray="25 180"
+              />
               <defs>
-                <linearGradient id="spine-pulse-gradient" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient
+                  id="spine-pulse-gradient"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
                   <stop offset="0%" stop-color="#00F0FF" stop-opacity="0" />
                   <stop offset="50%" stop-color="#3B82F6" stop-opacity="1" />
                   <stop offset="100%" stop-color="#9D4EDD" stop-opacity="0" />
@@ -429,22 +725,40 @@
 
           <!-- Nodes container -->
           <div class="canvas-nodes">
-            
             <!-- Node 1: Upload Dataset -->
             <div class="canvas-node glass-panel reveal" id="node-upload">
               <!-- Infrastructure Telemetry Ribbon -->
               <div class="node-telemetry">
-                <span class="tel-item"><span class="tel-dot green"></span> NODE_01 // INGESTION</span>
+                <span class="tel-item"
+                  ><span class="tel-dot green"></span> NODE_01 //
+                  INGESTION</span
+                >
                 <span class="tel-item">SYS_STATUS: ONLINE</span>
                 <span class="tel-item">LATENCY: 14ms</span>
                 <span class="tel-item">SPEED: 4.2 MB/s</span>
               </div>
-              
+
               <div class="node-header">
                 <div class="node-icon-box">
-                  <svg class="node-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 15V3M12 3L8 7M12 3L16 7" stroke="#00F0FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M20 17V18.5C20 19.8807 18.8807 21 17.5 21H6.5C5.11929 21 4 19.8807 4 18.5V17" stroke="#00F0FF" stroke-width="2" stroke-linecap="round"/>
+                  <svg
+                    class="node-svg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 15V3M12 3L8 7M12 3L16 7"
+                      stroke="#00F0FF"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M20 17V18.5C20 19.8807 18.8807 21 17.5 21H6.5C5.11929 21 4 19.8807 4 18.5V17"
+                      stroke="#00F0FF"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
                   </svg>
                 </div>
                 <div class="node-meta-info">
@@ -453,9 +767,10 @@
                 </div>
               </div>
               <p class="node-desc">
-                Simply drag and drop your raw files. Instantly parse schemas, map columns, and ingest rows to the server.
+                Simply drag and drop your raw files. Instantly parse schemas,
+                map columns, and ingest rows to the server.
               </p>
-              
+
               <!-- Mini visualizer for Upload -->
               <div class="node-visualizer upload-visualizer">
                 <div class="upload-progress-ring">
@@ -465,9 +780,18 @@
                 <div class="visual-table-rows">
                   <!-- Shimmer overlay -->
                   <div class="scan-shimmer"></div>
-                  <div class="table-row-stream tr-1"><span>120</span><span>"customer_churn"</span><span>0.98</span><span>True</span></div>
-                  <div class="table-row-stream tr-2"><span>121</span><span>"customer_churn"</span><span>0.34</span><span>False</span></div>
-                  <div class="table-row-stream tr-3"><span>122</span><span>"customer_churn"</span><span>0.56</span><span>True</span></div>
+                  <div class="table-row-stream tr-1">
+                    <span>120</span><span>"customer_churn"</span
+                    ><span>0.98</span><span>True</span>
+                  </div>
+                  <div class="table-row-stream tr-2">
+                    <span>121</span><span>"customer_churn"</span
+                    ><span>0.34</span><span>False</span>
+                  </div>
+                  <div class="table-row-stream tr-3">
+                    <span>122</span><span>"customer_churn"</span
+                    ><span>0.56</span><span>True</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -476,16 +800,28 @@
             <div class="canvas-node glass-panel reveal" id="node-cleanse">
               <!-- Infrastructure Telemetry Ribbon -->
               <div class="node-telemetry">
-                <span class="tel-item"><span class="tel-dot green"></span> NODE_02 // CLEANSE</span>
+                <span class="tel-item"
+                  ><span class="tel-dot green"></span> NODE_02 // CLEANSE</span
+                >
                 <span class="tel-item">SYS_STATUS: SYNCED</span>
                 <span class="tel-item">LATENCY: 28ms</span>
                 <span class="tel-item">SCAN_RATE: 99.8%</span>
               </div>
-              
+
               <div class="node-header">
                 <div class="node-icon-box orange-glow">
-                  <svg class="node-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M19.5 10.5C21.3787 12.3787 21.3787 15.4213 19.5 17.3M17 8C18.5 9.5 18.5 11.5 17 13M12.5 15C13.5 16 13.5 17.5 12.5 18.5M10.5 4L4 10.5M15.5 9L9 15.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                  <svg
+                    class="node-svg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M19.5 10.5C21.3787 12.3787 21.3787 15.4213 19.5 17.3M17 8C18.5 9.5 18.5 11.5 17 13M12.5 15C13.5 16 13.5 17.5 12.5 18.5M10.5 4L4 10.5M15.5 9L9 15.5"
+                      stroke="#f59e0b"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
                   </svg>
                 </div>
                 <div class="node-meta-info">
@@ -494,9 +830,10 @@
                 </div>
               </div>
               <p class="node-desc">
-                Clean null items, synthesize balanced minority clusters via SMOTE, and scale numeric rows dynamically.
+                Clean null items, remove duplicates, handle outliers, and scale
+                numeric rows dynamically.
               </p>
-              
+
               <!-- Mini visualizer for Cleanse -->
               <div class="node-visualizer cleanse-visualizer">
                 <div class="null-grid-simulator">
@@ -522,20 +859,36 @@
 
             <!-- Node 3: Automated Training -->
             <div class="canvas-node glass-panel reveal" id="node-train">
-
               <!-- Infrastructure Telemetry Ribbon -->
               <div class="node-telemetry">
-                <span class="tel-item"><span class="tel-dot green"></span> NODE_03 // AUTO_ML</span>
+                <span class="tel-item"
+                  ><span class="tel-dot green"></span> NODE_03 // AUTO_ML</span
+                >
                 <span class="tel-item">SYS_STATUS: TRAINING</span>
                 <span class="tel-item">LATENCY: 42ms</span>
                 <span class="tel-item">GPU_LOAD: 88%</span>
               </div>
-              
+
               <div class="node-header">
                 <div class="node-icon-box purple-glow">
-                  <svg class="node-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 22H22L12 2Z" stroke="#9D4EDD" stroke-width="2" stroke-linejoin="round"/>
-                    <path d="M12 6L16 18H8L12 6Z" stroke="#00F0FF" stroke-width="1.5" stroke-linejoin="round"/>
+                  <svg
+                    class="node-svg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 2L2 22H22L12 2Z"
+                      stroke="#9D4EDD"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M12 6L16 18H8L12 6Z"
+                      stroke="#00F0FF"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"
+                    />
                   </svg>
                 </div>
                 <div class="node-meta-info">
@@ -544,21 +897,42 @@
                 </div>
               </div>
               <p class="node-desc">
-                Deploy diverse classifiers concurrently. Monitor weights and parameter updates with real-time feedback loops.
+                Deploy diverse classifiers concurrently. Monitor weights and
+                parameter updates with real-time feedback loops.
               </p>
-              
+
               <!-- Mini visualizer for Training -->
-              <div class="node-visualizer train-visualizer active-visualizer-bg">
+              <div
+                class="node-visualizer train-visualizer active-visualizer-bg"
+              >
                 <div class="neural-activity-visualizer">
-                  <div class="algo-chip cyan">RF: <span class="live-acc">95.2%</span></div>
-                  <div class="algo-chip purple">SVM: <span class="live-acc">91.4%</span></div>
-                  <div class="algo-chip active-chip-glowing">XGB: <span class="live-acc-pulsing">94.8%</span></div>
+                  <div class="algo-chip cyan">
+                    RF: <span class="live-acc">95.2%</span>
+                  </div>
+                  <div class="algo-chip purple">
+                    SVM: <span class="live-acc">91.4%</span>
+                  </div>
+                  <div class="algo-chip active-chip-glowing">
+                    XGB: <span class="live-acc-pulsing">94.8%</span>
+                  </div>
                 </div>
                 <!-- Mini fitting line chart -->
                 <div class="training-line-chart">
                   <svg class="fitting-line-svg" viewBox="0 0 100 40">
-                    <path class="fitting-line-path" d="M0 38 Q 20 20, 40 15 T 80 5 T 100 2" fill="none" stroke="#00F0FF" stroke-width="2" />
-                    <circle cx="100" cy="2" r="3" fill="#00F0FF" class="pulsing-endpoint" />
+                    <path
+                      class="fitting-line-path"
+                      d="M0 38 Q 20 20, 40 15 T 80 5 T 100 2"
+                      fill="none"
+                      stroke="#00F0FF"
+                      stroke-width="2"
+                    />
+                    <circle
+                      cx="100"
+                      cy="2"
+                      r="3"
+                      fill="#00F0FF"
+                      class="pulsing-endpoint"
+                    />
                   </svg>
                 </div>
               </div>
@@ -568,16 +942,30 @@
             <div class="canvas-node glass-panel reveal" id="node-diagnose">
               <!-- Infrastructure Telemetry Ribbon -->
               <div class="node-telemetry">
-                <span class="tel-item"><span class="tel-dot green"></span> NODE_04 // DIAGNOSTICS</span>
+                <span class="tel-item"
+                  ><span class="tel-dot green"></span> NODE_04 //
+                  DIAGNOSTICS</span
+                >
                 <span class="tel-item">SYS_STATUS: COMPLETE</span>
                 <span class="tel-item">LATENCY: 8ms</span>
                 <span class="tel-item">EXPORT: JOBLIB</span>
               </div>
-              
+
               <div class="node-header">
                 <div class="node-icon-box pink-glow">
-                  <svg class="node-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 12H7L10 19L14 5L17 12H21" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg
+                    class="node-svg-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M3 12H7L10 19L14 5L17 12H21"
+                      stroke="#ec4899"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
                   </svg>
                 </div>
                 <div class="node-meta-info">
@@ -586,24 +974,31 @@
                 </div>
               </div>
               <p class="node-desc">
-                Examine ROC curves, study detailed confusion matrices, evaluate metrics, and export finished joblib pipelines.
+                Examine ROC curves, study detailed confusion matrices, evaluate
+                metrics, and export finished joblib pipelines.
               </p>
-              
+
               <!-- Mini visualizer for Diagnostics -->
               <div class="node-visualizer diagnose-visualizer">
                 <div class="mini-confusion-matrix">
-                  <div class="matrix-cell tp">TP<span class="val">84</span></div>
+                  <div class="matrix-cell tp">
+                    TP<span class="val">84</span>
+                  </div>
                   <div class="matrix-cell fp">FP<span class="val">4</span></div>
                   <div class="matrix-cell fn">FN<span class="val">2</span></div>
-                  <div class="matrix-cell tn">TN<span class="val">78</span></div>
+                  <div class="matrix-cell tn">
+                    TN<span class="val">78</span>
+                  </div>
                 </div>
                 <div class="diagnose-download-badge">
                   <span class="download-icon-pulse">📥</span>
-                  <span class="download-lbl">Download model.joblib <span class="blinking-cursor">_</span></span>
+                  <span class="download-lbl"
+                    >Download model.joblib
+                    <span class="blinking-cursor">_</span></span
+                  >
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -615,7 +1010,8 @@
         <div class="section-header">
           <h2 class="section-title">About The Platform</h2>
           <p class="section-subtitle">
-            An open-source, student-built research tool created to break down barriers to data science literacy.
+            An open-source, student-built research tool created to break down
+            barriers to data science literacy.
           </p>
         </div>
 
@@ -625,7 +1021,10 @@
             <div class="about-premium-icon">🎯</div>
             <h3 class="about-premium-title">The Academic Mission</h3>
             <p class="about-premium-desc">
-              DataSage bridges the gap between machine learning formulas and practical application. We engineered an accessible interface enabling you to upload data, scale parameters, compile algorithms, and critique models without standard programming friction.
+              DataSage bridges the gap between machine learning formulas and
+              practical application. We engineered an accessible interface
+              enabling you to upload data, scale parameters, compile algorithms,
+              and critique models without standard programming friction.
             </p>
           </div>
 
@@ -634,7 +1033,10 @@
             <div class="about-premium-icon">🎓</div>
             <h3 class="about-premium-title">Built with True Engineering</h3>
             <p class="about-premium-desc">
-              Designed and implemented entirely from scratch as a final-year project. We avoided generic quick-fix templates, constructing a highly resilient pipeline using Nuxt 3, custom CSS variables, and powerful backend libraries.
+              Designed and implemented entirely from scratch as a final-year
+              project. We avoided generic quick-fix templates, constructing a
+              highly resilient pipeline using Nuxt 3, custom CSS variables, and
+              powerful backend libraries.
             </p>
           </div>
 
@@ -643,7 +1045,10 @@
             <div class="about-premium-icon">🌍</div>
             <h3 class="about-premium-title">100% Free & Open Source</h3>
             <p class="about-premium-desc">
-              Committed to keeping learning open to everyone. No hidden monthly limits, no high premium subscription lockouts. You can research freely, study core ML workflows, and inspect the open-source pipeline integrity anytime.
+              Committed to keeping learning open to everyone. No hidden monthly
+              limits, no high premium subscription lockouts. You can research
+              freely, study core ML workflows, and inspect the open-source
+              pipeline integrity anytime.
             </p>
           </div>
         </div>
@@ -656,16 +1061,17 @@
         <div class="section-header">
           <h2 class="section-title">Frequently Asked Questions</h2>
           <p class="section-subtitle">
-            Answers to common questions regarding technical features, security, and open-source availability.
+            Answers to common questions regarding technical features, security,
+            and open-source availability.
           </p>
         </div>
 
         <div class="faq-accordion-list">
-          <div 
-            class="faq-accordion-card glass-panel" 
-            v-for="(item, index) in faqItems" 
+          <div
+            class="faq-accordion-card glass-panel"
+            v-for="(item, index) in faqItems"
             :key="index"
-            :class="{ 'expanded': openFaqIndex === index }"
+            :class="{ expanded: openFaqIndex === index }"
           >
             <button class="faq-trigger" @click="toggleFaq(index)">
               <span class="faq-question-text">{{ item.question }}</span>
@@ -687,9 +1093,10 @@
       <div class="section-container">
         <h2 class="cta-header-title">Ready to Experience Data Sage?</h2>
         <p class="cta-header-subtitle">
-          Accelerate your data science journey or classroom assignments today. No installation, no setup, pure machine learning instantly.
+          Accelerate your data science journey or classroom assignments today.
+          No installation, no setup, pure machine learning instantly.
         </p>
-        
+
         <div class="cta-action-holder">
           <button @click="goToSignup" class="cta-button primary large glow">
             <span>🚀</span>
@@ -698,9 +1105,17 @@
         </div>
 
         <div class="cta-support-badges">
-          <div class="support-badge"><span class="badge-check">✓</span><span>Free Dataset Previews</span></div>
-          <div class="support-badge"><span class="badge-check">✓</span><span>Cross-Validation Support</span></div>
-          <div class="support-badge"><span class="badge-check">✓</span><span>Full Confusion Matrices</span></div>
+          <div class="support-badge">
+            <span class="badge-check">✓</span><span>Free Dataset Previews</span>
+          </div>
+          <div class="support-badge">
+            <span class="badge-check">✓</span
+            ><span>Cross-Validation Support</span>
+          </div>
+          <div class="support-badge">
+            <span class="badge-check">✓</span
+            ><span>Full Confusion Matrices</span>
+          </div>
         </div>
       </div>
     </section>
@@ -711,15 +1126,26 @@
         <div class="footer-col brand-col">
           <div class="footer-logo-wrap">
             <div class="brand-logo">
-              <img src="@/assets/logo.jpeg" alt="DataSage Logo" class="logo-img">
+              <img
+                src="@/assets/logo.jpeg"
+                alt="DataSage Logo"
+                class="logo-img"
+              />
             </div>
             <h3 class="footer-brand-title">DataSage</h3>
           </div>
           <p class="footer-brand-desc">
-            Transform raw structured data into production-ready insights using our state-of-the-art visual ML platform.
+            Transform raw structured data into production-ready insights using
+            our state-of-the-art visual ML platform.
           </p>
           <div class="footer-socials">
-            <a href="https://www.linkedin.com/in/atharva-bagade-85813528b/" target="_blank" rel="noopener noreferrer" class="social-icon">LN</a>
+            <a
+              href="https://www.linkedin.com/in/atharva-bagade-85813528b/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="social-icon"
+              >LN</a
+            >
             <a class="social-icon">GH</a>
           </div>
         </div>
@@ -738,7 +1164,14 @@
           <ul class="footer-links-list">
             <li><a @click="scrollTo('about')">About Project</a></li>
             <li><a>GitHub Repository</a></li>
-            <li><a href="https://www.irjet.net/archives/V12/i11/IRJET-V12I1139.pdf" target="_blank" rel="noopener noreferrer">Research Paper</a></li>
+            <li>
+              <a
+                href="https://www.irjet.net/archives/V12/i11/IRJET-V12I1139.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Research Paper</a
+              >
+            </li>
           </ul>
         </div>
 
@@ -752,7 +1185,10 @@
       </div>
 
       <div class="footer-credits">
-        <p>&copy; 2025–2026 DataSage. Built with ❤️ for educational and research excellence.</p>
+        <p>
+          &copy; 2025–2026 DataSage. Built with ❤️ for educational and research
+          excellence.
+        </p>
       </div>
     </footer>
 
@@ -760,14 +1196,22 @@
     <transition name="fade">
       <div v-if="showDemoModal" class="demo-modal" @click="closeDemoModal">
         <div class="demo-modal-content glass-panel" @click.stop>
-          <button @click="closeDemoModal" class="demo-modal-close-btn">&times;</button>
+          <button @click="closeDemoModal" class="demo-modal-close-btn">
+            &times;
+          </button>
           <h3 class="modal-title-text">DataSage Platform Demo</h3>
           <div class="modal-body-content">
             <div class="modal-demo-icon">🎬</div>
             <p class="modal-text-lead">Interactive visual demo coming soon!</p>
-            <p class="modal-text-sub">We are working on bringing a guided tutorial experience here. In the meantime, you can sign up or log in to explore the live workspace instantly.</p>
+            <p class="modal-text-sub">
+              We are working on bringing a guided tutorial experience here. In
+              the meantime, you can sign up or log in to explore the live
+              workspace instantly.
+            </p>
           </div>
-          <button @click="goToSignup" class="modal-action-btn">Launch Platform Workspace</button>
+          <button @click="goToSignup" class="modal-action-btn">
+            Launch Platform Workspace
+          </button>
         </div>
       </div>
     </transition>
@@ -775,251 +1219,341 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from "vue";
 
 // Nuxt SEO and Meta Optimization
 useHead({
-  title: 'DataSage - Premium No-Code Machine Learning Platform | Final Year Project',
+  title:
+    "DataSage - Premium No-Code Machine Learning Platform | Final Year Project",
   meta: [
-    { name: 'description', content: 'Explore DataSage, the state-of-the-art unified no-code machine learning platform designed for students, educators, and researchers. Clean datasets, train algorithms, and visualize performance interactively.' },
-    { name: 'keywords', content: 'machine learning, data science, student project, no-code, ML pipeline, hyperparameter tuning, data cleaning, SMOTE, VueJS, Nuxt 3' },
-    { property: 'og:title', content: 'DataSage - No-Code ML Platform' },
-    { property: 'og:description', content: 'Interactive, student-built machine learning pipeline. Free for classroom and research work.' },
-    { property: 'og:type', content: 'website' }
-  ]
-})
+    {
+      name: "description",
+      content:
+        "Explore DataSage, the state-of-the-art unified no-code machine learning platform designed for students, educators, and researchers. Clean datasets, train algorithms, and visualize performance interactively.",
+    },
+    {
+      name: "keywords",
+      content:
+        "machine learning, data science, student project, no-code, ML pipeline, hyperparameter tuning, data cleaning, SMOTE, VueJS, Nuxt 3",
+    },
+    { property: "og:title", content: "DataSage - No-Code ML Platform" },
+    {
+      property: "og:description",
+      content:
+        "Interactive, student-built machine learning pipeline. Free for classroom and research work.",
+    },
+    { property: "og:type", content: "website" },
+  ],
+});
 
 // Navigation & Interactive UI States
-const isScrolled = ref(false)
-const showMobileMenu = ref(false)
-const showDemoModal = ref(false)
-const openFaqIndex = ref(null)
+const isScrolled = ref(false);
+const showMobileMenu = ref(false);
+const showDemoModal = ref(false);
+const openFaqIndex = ref(null);
 
 // Pipeline Animation States
-const activePipelineStep = ref(-1)
-const pipelineProgress = ref(0)
-const modelAccuracy = ref(94.2)
-const modelAccuracyRF = ref(70)
-const modelAccuracyXGB = ref(60)
+const activePipelineStep = ref(-1);
+const pipelineProgress = ref(0);
+const modelAccuracy = ref(94.2);
+const modelAccuracyRF = ref(70);
+const modelAccuracyXGB = ref(60);
 
 // Predefined Data Assets
 const features = ref([
-  { id: 1, icon: '📊', title: 'Smart Data Processing', description: 'Upload raw CSV or Excel sheets. Our profile analyser structures schemas, handles data quality profiling, and suggests scaling steps.', highlights: [] },
-  { id: 2, icon: '🤖', title: 'Automated ML Pipeline', description: 'Train classification or regression models concurrently. Includes automated hyperparameter grids and validation partitioning.', highlights: [] }
-])
+  {
+    id: 1,
+    icon: "📊",
+    title: "Smart Data Processing",
+    description:
+      "Upload raw CSV or Excel sheets. Our profile analyser structures schemas, handles data quality profiling, and suggests scaling steps.",
+    highlights: [],
+  },
+  {
+    id: 2,
+    icon: "🤖",
+    title: "Automated ML Pipeline",
+    description:
+      "Train classification or regression models concurrently. Includes automated hyperparameter grids and validation partitioning.",
+    highlights: [],
+  },
+]);
 
 const steps = ref([
-  { id: 1, icon: '📁', title: 'Upload Dataset', description: 'Simply drag and drop your structured CSV or Excel dataset. The platform immediately auto-detects rows, columns, data types, and quality defects.' },
-  { id: 2, icon: '⚙️', title: 'Interactive Cleanse', description: 'Apply scale normalization, fix imbalanced labels via SMOTE oversampling, resolve empty rows, and encode categories with simple visual settings.' },
-  { id: 3, icon: '🚀', title: 'Automated Training', description: 'Run Random Forest, SVM, XGBoost, Decision Trees, and K-Neighbors simultaneously. View live training metrics as hyperparameter weights tune.' },
-  { id: 4, icon: '📈', title: 'Model Diagnostics', description: 'Compare algorithms with detailed metrics. Study interactive confusion matrices, precision/recall curves, and download completed joblib files.' }
-])
+  {
+    id: 1,
+    icon: "📁",
+    title: "Upload Dataset",
+    description:
+      "Simply drag and drop your structured CSV or Excel dataset. The platform immediately auto-detects rows, columns, data types, and quality defects.",
+  },
+  {
+    id: 2,
+    icon: "⚙️",
+    title: "Interactive Cleanse",
+    description:
+      "Apply scale normalization, fix imbalanced labels via SMOTE oversampling, resolve empty rows, and encode categories with simple visual settings.",
+  },
+  {
+    id: 3,
+    icon: "🚀",
+    title: "Automated Training",
+    description:
+      "Run Random Forest, SVM, XGBoost, Decision Trees, and K-Neighbors simultaneously. View live training metrics as hyperparameter weights tune.",
+  },
+  {
+    id: 4,
+    icon: "📈",
+    title: "Model Diagnostics",
+    description:
+      "Compare algorithms with detailed metrics. Study interactive confusion matrices, precision/recall curves, and download completed joblib files.",
+  },
+]);
 
 const faqItems = ref([
-  { question: 'Is DataSage completely free to use?', answer: 'Yes, 100%! DataSage was created as an educational final-year engineering project. It is fully open-source and free from hidden tiers, commercial subscription limits, or feature locking.' },
+  {
+    question: "Is DataSage completely free to use?",
+    answer:
+      "Yes, 100%! DataSage was created as an educational final-year engineering project. It is fully open-source and free from hidden tiers, commercial subscription limits, or feature locking.",
+  },
 
-  { question: 'Do I need any programming experience?', answer: 'None whatsoever. The interface is meticulously designed to abstract Python libraries like scikit-learn, category_encoders, and imblearn, letting you control full ML execution with intuitive visual controls.' },
+  {
+    question: "Do I need any programming experience?",
+    answer:
+      "None whatsoever. The interface is meticulously designed to abstract Python libraries like scikit-learn, category_encoders, and imblearn, letting you control full ML execution with intuitive visual controls.",
+  },
 
-  {question: 'Can I use my own datasets?', answer: 'Absolutely. You can upload any structured dataset in CSV or Excel format. DataSage also provides sample datasets if you want to explore the platform first. '},
+  {
+    question: "Can I use my own datasets?",
+    answer:
+      "Absolutely. You can upload any structured dataset in CSV or Excel format. DataSage also provides sample datasets if you want to explore the platform first. ",
+  },
 
-  { question: 'What dataset formats are supported?', answer: 'DataSage currently supports structured tabular data in CSV (.csv) and Excel (.xlsx) file formats. You can drag and drop your datasets directly into the dashboard upload zone.' },
+  {
+    question: "What dataset formats are supported?",
+    answer:
+      "DataSage currently supports structured tabular data in CSV (.csv) and Excel (.xlsx) file formats. You can drag and drop your datasets directly into the dashboard upload zone.",
+  },
 
-  { question: 'Which machine learning models are available?', answer: 'We support standard supervised algorithms: Random Forest, Support Vector Machines (SVM), Extreme Gradient Boosting (XGBoost), K-Nearest Neighbors (KNN), Decision Trees, and Logistic/Linear Regression.' },
+  {
+    question: "Which machine learning models are available?",
+    answer:
+      "We support standard supervised algorithms: Random Forest, Support Vector Machines (SVM), Extreme Gradient Boosting (XGBoost), K-Nearest Neighbors (KNN), Decision Trees, and Logistic/Linear Regression.",
+  },
 
-  { question: 'How is data security handled?', answer: 'Data Sage executes processing files securely inside active database/session memories. Your local CSV data remains private and is never distributed or sold to third-party networks.' }
-])
- 
+  {
+    question: "How is data security handled?",
+    answer:
+      "Data Sage executes processing files securely inside active database/session memories. Your local CSV data remains private and is never distributed or sold to third-party networks.",
+  },
+]);
+
 // Navigation Methods
 const scrollToTop = () => {
-  if (process.client) window.scrollTo({ top: 0, behavior: 'smooth' })
-}
+  if (process.client) window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
 const scrollTo = (elementId) => {
   if (process.client) {
-    const el = document.getElementById(elementId)
-    if (el) el.scrollIntoView({ behavior: 'smooth' })
+    const el = document.getElementById(elementId);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
   }
-}
+};
 
 const goToLogin = async () => {
   try {
-    await navigateTo('/login')
+    await navigateTo("/login");
   } catch (err) {
-    if (process.client) window.location.href = '/login'
+    if (process.client) window.location.href = "/login";
   }
-}
+};
 
 const goToSignup = async () => {
   try {
-    await navigateTo('/login#signup')
+    await navigateTo("/login#signup");
   } catch (err) {
-    if (process.client) window.location.href = '/login#signup'
+    if (process.client) window.location.href = "/login#signup";
   }
-}
+};
 
 const toggleMobileMenu = () => {
-  showMobileMenu.value = !showMobileMenu.value
-}
+  showMobileMenu.value = !showMobileMenu.value;
+};
 
 const handleMobileMenuClick = async (section) => {
-  showMobileMenu.value = false
-  scrollTo(section)
-}
+  showMobileMenu.value = false;
+  scrollTo(section);
+};
 
 // Modal Control
-const watchDemo = () => { showDemoModal.value = true }
-const closeDemoModal = () => { showDemoModal.value = false }
+const watchDemo = () => {
+  showDemoModal.value = true;
+};
+const closeDemoModal = () => {
+  showDemoModal.value = false;
+};
 
 // FAQ Accordion Control
 const toggleFaq = (index) => {
-  openFaqIndex.value = openFaqIndex.value === index ? null : index
-}
+  openFaqIndex.value = openFaqIndex.value === index ? null : index;
+};
 
 // Scroll detection helper
 const handleScroll = () => {
   if (process.client) {
-    isScrolled.value = window.scrollY > 40
+    isScrolled.value = window.scrollY > 40;
   }
-}
+};
 
 // Helper calculation for interactive horizontal pipeline connector fill
 const getConnectorProgress = (connectorIndex) => {
-  if (activePipelineStep.value < connectorIndex) return 0
-  if (activePipelineStep.value > connectorIndex) return 100
-  return pipelineProgress.value
-}
+  if (activePipelineStep.value < connectorIndex) return 0;
+  if (activePipelineStep.value > connectorIndex) return 100;
+  return pipelineProgress.value;
+};
 
 // Live interactive console states
 const getConsoleStatusText = () => {
-  if (activePipelineStep.value === -1) return 'System Status: Idle'
-  if (activePipelineStep.value === 0) return 'System Status: Parsing customer_churn.csv'
-  if (activePipelineStep.value === 1) return 'System Status: Running balancing algorithms'
-  if (activePipelineStep.value === 2) return 'System Status: Training parallel estimators'
-  if (activePipelineStep.value === 3) return 'System Status: Compiling precision matrix'
-  return 'System Status: Idle'
-}
+  if (activePipelineStep.value === -1) return "System Status: Idle";
+  if (activePipelineStep.value === 0)
+    return "System Status: Parsing customer_churn.csv";
+  if (activePipelineStep.value === 1)
+    return "System Status: Running balancing algorithms";
+  if (activePipelineStep.value === 2)
+    return "System Status: Training parallel estimators";
+  if (activePipelineStep.value === 3)
+    return "System Status: Compiling precision matrix";
+  return "System Status: Idle";
+};
 
 const getConsoleIndicatorClass = () => {
-  if (activePipelineStep.value === -1) return 'idle'
-  if (activePipelineStep.value === 3) return 'success'
-  return 'busy'
-}
+  if (activePipelineStep.value === -1) return "idle";
+  if (activePipelineStep.value === 3) return "success";
+  return "busy";
+};
 
 // High-fidelity pipeline simulator lifecycle
-let pipelineCycleInterval = null
+let pipelineCycleInterval = null;
 
 const initPipelineSimulator = () => {
-  if (!process.client) return
-  
-  const nodesCount = 4
-  const nodeDuration = 3500 // duration spent per node in ms
-  let elapsed = 0
-  const tick = 100
-  let isIdlePause = false
+  if (!process.client) return;
+
+  const nodesCount = 4;
+  const nodeDuration = 3500; // duration spent per node in ms
+  let elapsed = 0;
+  const tick = 100;
+  let isIdlePause = false;
 
   pipelineCycleInterval = setInterval(() => {
-    if (isIdlePause) return
+    if (isIdlePause) return;
 
-    elapsed += tick
-    const totalCycleTime = nodesCount * nodeDuration
+    elapsed += tick;
+    const totalCycleTime = nodesCount * nodeDuration;
 
     if (elapsed >= totalCycleTime) {
       // Completed full pipeline iteration, pause on the final validation visual, then reset
-      activePipelineStep.value = 3
-      pipelineProgress.value = 100
-      isIdlePause = true
+      activePipelineStep.value = 3;
+      pipelineProgress.value = 100;
+      isIdlePause = true;
 
       setTimeout(() => {
-        activePipelineStep.value = -1
-        pipelineProgress.value = 0
-        modelAccuracyRF.value = 70
-        modelAccuracyXGB.value = 60
-        elapsed = 0
-        isIdlePause = false
-      }, 2500)
-      return
+        activePipelineStep.value = -1;
+        pipelineProgress.value = 0;
+        modelAccuracyRF.value = 70;
+        modelAccuracyXGB.value = 60;
+        elapsed = 0;
+        isIdlePause = false;
+      }, 2500);
+      return;
     }
 
-    const currentProgressPercentage = (elapsed % nodeDuration) / nodeDuration * 100
-    const currentNodeIdx = Math.floor(elapsed / nodeDuration)
+    const currentProgressPercentage =
+      ((elapsed % nodeDuration) / nodeDuration) * 100;
+    const currentNodeIdx = Math.floor(elapsed / nodeDuration);
 
-    activePipelineStep.value = currentNodeIdx
-    pipelineProgress.value = currentProgressPercentage
+    activePipelineStep.value = currentNodeIdx;
+    pipelineProgress.value = currentProgressPercentage;
 
     // Micro bar animation inside model training simulation
     if (currentNodeIdx === 2) {
-      modelAccuracyRF.value = Math.min(70 + (currentProgressPercentage / 100 * 25.2), 95.2)
-      modelAccuracyXGB.value = Math.min(60 + (currentProgressPercentage / 100 * 34.8), 94.8)
+      modelAccuracyRF.value = Math.min(
+        70 + (currentProgressPercentage / 100) * 25.2,
+        95.2,
+      );
+      modelAccuracyXGB.value = Math.min(
+        60 + (currentProgressPercentage / 100) * 34.8,
+        94.8,
+      );
     }
-  }, tick)
-}
+  }, tick);
+};
 
 // Scroll reveal observer API
-let scrollRevealObserver = null
-let nodeScrollObserver = null
+let scrollRevealObserver = null;
+let nodeScrollObserver = null;
 
 const initScrollReveal = () => {
-  if (!process.client) return
+  if (!process.client) return;
 
   const options = {
     threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
-  }
+    rootMargin: "0px 0px -50px 0px",
+  };
 
   scrollRevealObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
+    entries.forEach((entry) => {
       if (entry.isIntersecting) {
-        entry.target.classList.add('active')
-        scrollRevealObserver.unobserve(entry.target)
+        entry.target.classList.add("active");
+        scrollRevealObserver.unobserve(entry.target);
       }
-    })
-  }, options)
+    });
+  }, options);
 
-  document.querySelectorAll('.reveal').forEach(el => {
-    scrollRevealObserver.observe(el)
-  })
+  document.querySelectorAll(".reveal").forEach((el) => {
+    scrollRevealObserver.observe(el);
+  });
 
   // Guided storytelling observer for canvas workflow nodes
   const nodeOptions = {
     threshold: 0.25,
-    rootMargin: '0px 0px -15% 0px'
-  }
+    rootMargin: "0px 0px -15% 0px",
+  };
 
   nodeScrollObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
+    entries.forEach((entry) => {
       if (entry.isIntersecting) {
-        entry.target.classList.add('node-active-glowing')
+        entry.target.classList.add("node-active-glowing");
       } else {
-        entry.target.classList.remove('node-active-glowing')
+        entry.target.classList.remove("node-active-glowing");
       }
-    })
-  }, nodeOptions)
+    });
+  }, nodeOptions);
 
-  document.querySelectorAll('.canvas-node').forEach(node => {
-    nodeScrollObserver.observe(node)
-  })
-}
+  document.querySelectorAll(".canvas-node").forEach((node) => {
+    nodeScrollObserver.observe(node);
+  });
+};
 
 // LifeCycle hooks
 onMounted(() => {
   if (process.client) {
-    window.addEventListener('scroll', handleScroll)
-    initPipelineSimulator()
+    window.addEventListener("scroll", handleScroll);
+    initPipelineSimulator();
     setTimeout(() => {
-      initScrollReveal()
-    }, 200)
-    console.log('💎 Premium DataSage landing-new loaded.')
+      initScrollReveal();
+    }, 200);
+    console.log("💎 Premium DataSage landing-new loaded.");
   }
-})
+});
 
 onUnmounted(() => {
   if (process.client) {
-    window.removeEventListener('scroll', handleScroll)
-    if (pipelineCycleInterval) clearInterval(pipelineCycleInterval)
-    if (scrollRevealObserver) scrollRevealObserver.disconnect()
-    if (nodeScrollObserver) nodeScrollObserver.disconnect()
+    window.removeEventListener("scroll", handleScroll);
+    if (pipelineCycleInterval) clearInterval(pipelineCycleInterval);
+    if (scrollRevealObserver) scrollRevealObserver.disconnect();
+    if (nodeScrollObserver) nodeScrollObserver.disconnect();
   }
-})
+});
 
 // Expose states to Vue template
 defineExpose({
@@ -1045,12 +1579,12 @@ defineExpose({
   scrollToTop,
   getConnectorProgress,
   getConsoleStatusText,
-  getConsoleIndicatorClass
-})
+  getConsoleIndicatorClass,
+});
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap");
 
 /* Global resets for index-new scope */
 * {
@@ -1060,7 +1594,15 @@ defineExpose({
 }
 
 .landing-container {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
   background-color: #030307;
   color: #ffffff;
   min-height: 100vh;
@@ -1114,9 +1656,15 @@ defineExpose({
 }
 
 @keyframes float {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(5%, -5%) scale(1.05); }
-  100% { transform: translate(-5%, 5%) scale(0.95); }
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(5%, -5%) scale(1.05);
+  }
+  100% {
+    transform: translate(-5%, 5%) scale(0.95);
+  }
 }
 
 /* Glass panel global layout token */
@@ -1183,7 +1731,7 @@ defineExpose({
 }
 
 .brand-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.5px;
@@ -1214,7 +1762,7 @@ defineExpose({
 }
 
 .nav-link::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
@@ -1324,7 +1872,7 @@ defineExpose({
 }
 
 .drawer-link {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.8rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.8);
@@ -1362,12 +1910,16 @@ defineExpose({
 .hero-grid-overlay {
   position: absolute;
   inset: 0;
-  background-image: 
+  background-image:
     linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 40px 40px;
   mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
-  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    circle at center,
+    black 40%,
+    transparent 100%
+  );
   pointer-events: none;
   z-index: 0;
 }
@@ -1417,7 +1969,7 @@ defineExpose({
 }
 
 .hero-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 3.8rem;
   font-weight: 900;
   line-height: 1.1;
@@ -1453,7 +2005,7 @@ defineExpose({
   gap: 0.75rem;
   padding: 1.15rem 2.25rem;
   border-radius: 16px;
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
@@ -1533,7 +2085,9 @@ defineExpose({
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), 0 0 100px rgba(0, 240, 255, 0.05);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.6),
+    0 0 100px rgba(0, 240, 255, 0.05);
   transform: rotateY(-3deg) rotateX(2deg);
   transition: transform 0.5s ease;
 }
@@ -1563,9 +2117,15 @@ defineExpose({
   display: block;
 }
 
-.dot-red { background: #ef4444; }
-.dot-yellow { background: #f59e0b; }
-.dot-green { background: #10b981; }
+.dot-red {
+  background: #ef4444;
+}
+.dot-yellow {
+  background: #f59e0b;
+}
+.dot-green {
+  background: #10b981;
+}
 
 .mockup-tab {
   display: flex;
@@ -1630,7 +2190,11 @@ defineExpose({
 }
 
 .horizontal-node.active .horizontal-icon-container {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(157, 78, 221, 0.15) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(0, 240, 255, 0.15) 0%,
+    rgba(157, 78, 221, 0.15) 100%
+  );
   border-color: rgba(0, 240, 255, 0.4);
   box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
 }
@@ -1728,10 +2292,18 @@ defineExpose({
   color: rgba(255, 255, 255, 0.85);
 }
 
-.text-muted { color: rgba(255, 255, 255, 0.4); }
-.text-cyan { color: #00f0ff; }
-.text-success { color: #10b981; }
-.text-purple { color: #d8b4fe; }
+.text-muted {
+  color: rgba(255, 255, 255, 0.4);
+}
+.text-cyan {
+  color: #00f0ff;
+}
+.text-success {
+  color: #10b981;
+}
+.text-purple {
+  color: #d8b4fe;
+}
 
 .training-algorithms-preview {
   display: flex;
@@ -1826,7 +2398,7 @@ defineExpose({
 }
 
 .section-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 2.8rem;
   font-weight: 800;
   letter-spacing: -1px;
@@ -1872,7 +2444,11 @@ defineExpose({
   left: 0;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(0, 240, 255, 0.08) 0%, transparent 60%);
+  background: radial-gradient(
+    circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(0, 240, 255, 0.08) 0%,
+    transparent 60%
+  );
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.5s ease;
@@ -1886,7 +2462,9 @@ defineExpose({
 .glass-panel:hover {
   transform: translateY(-6px);
   border-color: rgba(0, 240, 255, 0.25);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 50px rgba(0, 240, 255, 0.05);
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.4),
+    0 0 50px rgba(0, 240, 255, 0.05);
 }
 
 .bento-icon-wrapper {
@@ -1924,7 +2502,7 @@ defineExpose({
 .bento-svg-icon {
   width: 24px;
   height: 24px;
-  color: #00F0FF;
+  color: #00f0ff;
   display: block;
   transition: transform 0.3s ease;
 }
@@ -1934,7 +2512,7 @@ defineExpose({
 }
 
 .bento-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   margin-bottom: 0.75rem;
@@ -2011,8 +2589,12 @@ defineExpose({
   flex-shrink: 0;
 }
 
-.bullet.red { background-color: #ef4444; }
-.bullet.green { background-color: #10b981; }
+.bullet.red {
+  background-color: #ef4444;
+}
+.bullet.green {
+  background-color: #10b981;
+}
 
 .train-preview {
   display: flex;
@@ -2121,7 +2703,11 @@ defineExpose({
 .grad-bar {
   width: 8px;
   height: 50px;
-  background: linear-gradient(180deg, rgba(0, 240, 255, 0.8), rgba(255, 255, 255, 0.05));
+  background: linear-gradient(
+    180deg,
+    rgba(0, 240, 255, 0.8),
+    rgba(255, 255, 255, 0.05)
+  );
   border-radius: 20px;
 }
 
@@ -2140,8 +2726,10 @@ defineExpose({
   left: 0;
   width: 100%;
   height: 100%;
-  background-size: 50px 50px, 10px 10px;
-  background-image: 
+  background-size:
+    50px 50px,
+    10px 10px;
+  background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
     radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
@@ -2179,7 +2767,7 @@ defineExpose({
 .canvas-ambient-glow.orb-cyan {
   width: 600px;
   height: 600px;
-  background-color: #00F0FF;
+  background-color: #00f0ff;
   top: 10%;
   left: 5%;
   animation: floatOrbOne 35s infinite alternate ease-in-out;
@@ -2188,20 +2776,28 @@ defineExpose({
 .canvas-ambient-glow.orb-purple {
   width: 700px;
   height: 700px;
-  background-color: #9D4EDD;
+  background-color: #9d4edd;
   bottom: 5%;
   right: 2%;
   animation: floatOrbTwo 40s infinite alternate ease-in-out;
 }
 
 @keyframes floatOrbOne {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(80px, 50px) scale(1.15); }
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(80px, 50px) scale(1.15);
+  }
 }
 
 @keyframes floatOrbTwo {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(-60px, -90px) scale(1.1); }
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-60px, -90px) scale(1.1);
+  }
 }
 
 /* Canvas Container */
@@ -2211,8 +2807,6 @@ defineExpose({
   margin: 5rem auto 0;
   z-index: 2;
 }
-
-
 
 /* Central spine line path canvas container */
 .canvas-spine-container {
@@ -2234,12 +2828,16 @@ defineExpose({
 /* Simple single line pulse trail */
 .pulse-line {
   animation: flowSingleSpine 8s linear infinite;
-  filter: drop-shadow(0 0 5px #00F0FF);
+  filter: drop-shadow(0 0 5px #00f0ff);
 }
 
 @keyframes flowSingleSpine {
-  0% { stroke-dashoffset: 0; }
-  100% { stroke-dashoffset: -205; }
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -205;
+  }
 }
 
 /* Orbiting data particles along central canvas vertical coordinate */
@@ -2250,34 +2848,54 @@ defineExpose({
   height: 8px;
   border-radius: 50%;
   transform: translateX(-50%);
-  filter: drop-shadow(0 0 8px #00F0FF);
+  filter: drop-shadow(0 0 8px #00f0ff);
   pointer-events: none;
 }
 
 .flowing-particle.pt-1 {
-  background-color: #00F0FF;
+  background-color: #00f0ff;
   animation: flowParticleDown1 10s infinite cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .flowing-particle.pt-2 {
-  background-color: #9D4EDD;
-  filter: drop-shadow(0 0 8px #9D4EDD);
+  background-color: #9d4edd;
+  filter: drop-shadow(0 0 8px #9d4edd);
   animation: flowParticleDown2 10s infinite cubic-bezier(0.4, 0, 0.2, 1);
   animation-delay: 5s;
 }
 
 @keyframes flowParticleDown1 {
-  0% { top: 0%; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
 @keyframes flowParticleDown2 {
-  0% { top: 0%; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
 /* Canvas Nodes */
@@ -2322,8 +2940,8 @@ defineExpose({
 .canvas-node:hover {
   transform: translateY(-8px) scale(1.02);
   border-color: rgba(0, 240, 255, 0.35);
-  box-shadow: 
-    0 20px 45px rgba(0, 0, 0, 0.55), 
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.55),
     0 0 35px rgba(0, 240, 255, 0.08);
 }
 
@@ -2357,12 +2975,12 @@ defineExpose({
 }
 
 .tel-dot.green {
-  background-color: #10B981;
-  box-shadow: 0 0 6px #10B981;
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
 }
 
 .cyan-highlight {
-  color: #00F0FF !important;
+  color: #00f0ff !important;
   font-weight: 700;
   letter-spacing: 1px;
 }
@@ -2427,7 +3045,7 @@ defineExpose({
 }
 
 .node-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   color: #ffffff;
@@ -2478,7 +3096,9 @@ defineExpose({
 }
 
 @keyframes rotateDashedRing {
-  100% { transform: rotate(360deg); }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .upload-progress-ring .file-icon,
@@ -2488,13 +3108,13 @@ defineExpose({
 
 .upload-progress-ring .file-icon {
   font-size: 1.25rem;
-  filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.2));
 }
 
 .upload-progress-ring .upload-badge {
   font-size: 0.52rem;
   font-weight: 700;
-  color: #00F0FF;
+  color: #00f0ff;
   margin-top: 0.15rem;
   text-transform: uppercase;
 }
@@ -2515,16 +3135,27 @@ defineExpose({
   left: -150%;
   width: 150%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.04),
+    transparent
+  );
   transform: skewX(-20deg);
   animation: scanShimmerAnimation 6s ease-in-out infinite;
   pointer-events: none;
 }
 
 @keyframes scanShimmerAnimation {
-  0% { left: -150%; }
-  30% { left: 150%; }
-  100% { left: 150%; }
+  0% {
+    left: -150%;
+  }
+  30% {
+    left: 150%;
+  }
+  100% {
+    left: 150%;
+  }
 }
 
 .table-row-stream {
@@ -2540,16 +3171,24 @@ defineExpose({
   animation: flowRowsUp 5s linear infinite;
 }
 
-.table-row-stream.tr-2 { animation-delay: 1.66s; }
-.table-row-stream.tr-3 { animation-delay: 3.33s; }
+.table-row-stream.tr-2 {
+  animation-delay: 1.66s;
+}
+.table-row-stream.tr-3 {
+  animation-delay: 3.33s;
+}
 
 @keyframes flowRowsUp {
   0% {
     transform: translateY(40px);
     opacity: 0;
   }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
   100% {
     transform: translateY(-40px);
     opacity: 0;
@@ -2577,18 +3216,28 @@ defineExpose({
   left: 0;
   width: 100%;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #F59E0B, transparent);
-  box-shadow: 0 0 10px #F59E0B;
+  background: linear-gradient(90deg, transparent, #f59e0b, transparent);
+  box-shadow: 0 0 10px #f59e0b;
   animation: scanLaserSweep 3.5s ease-in-out infinite;
   pointer-events: none;
   z-index: 2;
 }
 
 @keyframes scanLaserSweep {
-  0% { top: 0%; opacity: 0; }
-  5% { opacity: 1; }
-  95% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
 .grid-cell {
@@ -2609,7 +3258,7 @@ defineExpose({
   font-family: monospace;
   font-size: 0.58rem;
   font-weight: 700;
-  color: #10B981;
+  color: #10b981;
 }
 
 .grid-cell.pulsing-green {
@@ -2632,12 +3281,12 @@ defineExpose({
   60% {
     background-color: rgba(16, 185, 129, 0.08);
     border-color: rgba(16, 185, 129, 0.25);
-    color: #10B981;
+    color: #10b981;
   }
   100% {
     background-color: rgba(16, 185, 129, 0.08);
     border-color: rgba(16, 185, 129, 0.25);
-    color: #10B981;
+    color: #10b981;
   }
 }
 
@@ -2662,16 +3311,21 @@ defineExpose({
 .ratio-progress .progress-fill {
   height: 100%;
   width: 50%;
-  animation: fillProgressPulse 3s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fillProgressPulse 3s infinite alternate
+    cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ratio-progress .progress-fill.green-gradient {
-  background: linear-gradient(90deg, #f59e0b, #10B981);
+  background: linear-gradient(90deg, #f59e0b, #10b981);
 }
 
 @keyframes fillProgressPulse {
-  0% { width: 35%; }
-  100% { width: 100%; }
+  0% {
+    width: 35%;
+  }
+  100% {
+    width: 100%;
+  }
 }
 
 /* 3. Train visualizer */
@@ -2718,7 +3372,7 @@ defineExpose({
 .algo-chip.active-chip-glowing {
   background: rgba(0, 240, 255, 0.07) !important;
   border-color: rgba(0, 240, 255, 0.35) !important;
-  color: #00F0FF !important;
+  color: #00f0ff !important;
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
 }
 
@@ -2732,8 +3386,12 @@ defineExpose({
 }
 
 @keyframes accMetricPulse {
-  0% { opacity: 0.6; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .training-line-chart {
@@ -2759,8 +3417,12 @@ defineExpose({
 }
 
 @keyframes drawFittingLine {
-  0% { stroke-dashoffset: 200; }
-  100% { stroke-dashoffset: 0; }
+  0% {
+    stroke-dashoffset: 200;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
 }
 
 .pulsing-endpoint {
@@ -2768,8 +3430,14 @@ defineExpose({
 }
 
 @keyframes endpointPulseOpacity {
-  0% { opacity: 0.3; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1.3); }
+  0% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
 }
 
 /* 4. Diagnose visualizer */
@@ -2811,13 +3479,13 @@ defineExpose({
 .matrix-cell.tp {
   background: rgba(16, 185, 129, 0.07);
   border-color: rgba(16, 185, 129, 0.15);
-  color: #10B981;
+  color: #10b981;
 }
 
 .matrix-cell.tn {
   background: rgba(16, 185, 129, 0.07);
   border-color: rgba(16, 185, 129, 0.15);
-  color: #10B981;
+  color: #10b981;
 }
 
 .diagnose-download-badge {
@@ -2844,7 +3512,7 @@ defineExpose({
   100% {
     border-color: rgba(0, 240, 255, 0.2);
     background: rgba(0, 240, 255, 0.02);
-    color: #00F0FF;
+    color: #00f0ff;
   }
 }
 
@@ -2855,12 +3523,14 @@ defineExpose({
 
 .blinking-cursor {
   font-weight: 700;
-  color: #00F0FF;
+  color: #00f0ff;
   animation: textCursorBlink 0.9s steps(2, start) infinite;
 }
 
 @keyframes textCursorBlink {
-  to { visibility: hidden; }
+  to {
+    visibility: hidden;
+  }
 }
 
 /* Responsive adjustments for canvas layout */
@@ -2870,7 +3540,7 @@ defineExpose({
     transform: none;
     width: 20px;
   }
-  
+
   .ai-core-hub {
     display: none; /* Hide center core on small screens */
   }
@@ -2884,17 +3554,17 @@ defineExpose({
     align-self: flex-start !important;
     padding-left: 3rem;
   }
-  
+
   .canvas-node::after {
     left: 20px !important;
     width: 20px !important;
   }
-  
+
   .canvas-node .port-in,
   .canvas-node .port-out {
     left: 16px !important;
   }
-  
+
   .flowing-particle {
     left: 20px !important;
   }
@@ -2928,9 +3598,15 @@ defineExpose({
   pointer-events: none;
 }
 
-.about-glow.color-cyan { background-color: #00f0ff; }
-.about-glow.color-purple { background-color: #9d4edd; }
-.about-glow.color-blue { background-color: #3b82f6; }
+.about-glow.color-cyan {
+  background-color: #00f0ff;
+}
+.about-glow.color-purple {
+  background-color: #9d4edd;
+}
+.about-glow.color-blue {
+  background-color: #3b82f6;
+}
 
 .about-premium-icon {
   font-size: 2.5rem;
@@ -2938,7 +3614,7 @@ defineExpose({
 }
 
 .about-premium-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   margin-bottom: 1rem;
@@ -2972,7 +3648,9 @@ defineExpose({
 .faq-accordion-card.expanded {
   background: rgba(12, 12, 28, 0.65);
   border-color: rgba(0, 240, 255, 0.3);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 25px rgba(0, 240, 255, 0.03);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.4),
+    0 0 25px rgba(0, 240, 255, 0.03);
 }
 
 .faq-trigger {
@@ -2988,7 +3666,7 @@ defineExpose({
 }
 
 .faq-question-text {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.1rem;
   font-weight: 600;
   color: #ffffff;
@@ -3008,7 +3686,7 @@ defineExpose({
 
 .faq-indicator-icon::before,
 .faq-indicator-icon::after {
-  content: '';
+  content: "";
   position: absolute;
   background-color: rgba(255, 255, 255, 0.7);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -3064,12 +3742,17 @@ defineExpose({
   transform: translate(-50%, -50%);
   width: 60vw;
   height: 60vw;
-  background: radial-gradient(circle, rgba(0, 240, 255, 0.08) 0%, rgba(157, 78, 221, 0.04) 50%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(0, 240, 255, 0.08) 0%,
+    rgba(157, 78, 221, 0.04) 50%,
+    transparent 70%
+  );
   pointer-events: none;
 }
 
 .cta-header-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 3.2rem;
   font-weight: 800;
   letter-spacing: -1.5px;
@@ -3140,7 +3823,7 @@ defineExpose({
 }
 
 .footer-brand-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.4rem;
   font-weight: 800;
   color: #ffffff;
@@ -3182,7 +3865,7 @@ defineExpose({
 }
 
 .footer-col-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -3259,7 +3942,7 @@ defineExpose({
 }
 
 .modal-title-text {
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-size: 1.6rem;
   font-weight: 800;
   margin-bottom: 1.5rem;
@@ -3291,7 +3974,7 @@ defineExpose({
   background: linear-gradient(135deg, #00f0ff 0%, #3b82f6 100%);
   border: none;
   color: #ffffff;
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
@@ -3306,14 +3989,26 @@ defineExpose({
 
 /* Animations declarations */
 @keyframes shineGradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.15); opacity: 1; }
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
 /* Vue Transitions classes */
@@ -3354,19 +4049,41 @@ defineExpose({
   transform: translateY(0);
 }
 
-.bento-grid .reveal:nth-child(1) { transition-delay: 0.05s; }
-.bento-grid .reveal:nth-child(2) { transition-delay: 0.15s; }
-.bento-grid .reveal:nth-child(3) { transition-delay: 0.25s; }
-.bento-grid .reveal:nth-child(4) { transition-delay: 0.35s; }
+.bento-grid .reveal:nth-child(1) {
+  transition-delay: 0.05s;
+}
+.bento-grid .reveal:nth-child(2) {
+  transition-delay: 0.15s;
+}
+.bento-grid .reveal:nth-child(3) {
+  transition-delay: 0.25s;
+}
+.bento-grid .reveal:nth-child(4) {
+  transition-delay: 0.35s;
+}
 
-.timeline-steps .reveal:nth-child(1) { transition-delay: 0.05s; }
-.timeline-steps .reveal:nth-child(2) { transition-delay: 0.15s; }
-.timeline-steps .reveal:nth-child(3) { transition-delay: 0.25s; }
-.timeline-steps .reveal:nth-child(4) { transition-delay: 0.35s; }
+.timeline-steps .reveal:nth-child(1) {
+  transition-delay: 0.05s;
+}
+.timeline-steps .reveal:nth-child(2) {
+  transition-delay: 0.15s;
+}
+.timeline-steps .reveal:nth-child(3) {
+  transition-delay: 0.25s;
+}
+.timeline-steps .reveal:nth-child(4) {
+  transition-delay: 0.35s;
+}
 
-.about-cards-grid .reveal:nth-child(1) { transition-delay: 0.05s; }
-.about-cards-grid .reveal:nth-child(2) { transition-delay: 0.15s; }
-.about-cards-grid .reveal:nth-child(3) { transition-delay: 0.25s; }
+.about-cards-grid .reveal:nth-child(1) {
+  transition-delay: 0.05s;
+}
+.about-cards-grid .reveal:nth-child(2) {
+  transition-delay: 0.15s;
+}
+.about-cards-grid .reveal:nth-child(3) {
+  transition-delay: 0.25s;
+}
 
 /* Responsive adjustments */
 @media (max-width: 1200px) {

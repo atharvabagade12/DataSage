@@ -161,6 +161,12 @@
                     <div class="fill" :style="{ width: uploadProgress + '%' }"></div>
                   </div>
                   <p>{{ uploadMessage }}</p>
+                  <button type="button" @click.stop="cancelUpload" class="cancel-upload-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    </svg>
+                    Stop Upload
+                  </button>
                 </div>
 
                 <transition name="scale">
@@ -530,7 +536,7 @@ const router = useRouter()
 const route = useRoute()
 const mlStore = useMLDataFlowStore()
 const experimentStore = useExperimentStore()
-const { showError, showSuccess } = useToast()
+const { showError, showSuccess, showInfo } = useToast()
 
 // Navigation & View State
 // Use URL query 'tab' as the source of truth for the active tab
@@ -547,6 +553,13 @@ const uploadSuccess = ref(false)
 const uploadProgress = ref(0)
 const uploadMessage = ref('')
 const uploadedFile = ref(null)
+let uploadAbortController = null
+
+const cancelUpload = () => {
+  if (uploadAbortController) {
+    uploadAbortController.abort()
+  }
+}
 
 // Refs
 const fileInput = ref(null)
@@ -771,6 +784,7 @@ const processFile = async (file) => {
   uploadSuccess.value = false
   uploadProgress.value = 0
   uploadMessage.value = 'Preparing upload...'
+  uploadAbortController = new AbortController()
   
   try {
     const formData = new FormData()
@@ -785,6 +799,7 @@ const processFile = async (file) => {
     const finalUrl = resolveUrl(`/api/upload-dataset`)
     
     const response = await axios.post(finalUrl, formData, {
+      signal: uploadAbortController.signal,
       headers: {
         'Authorization': token ? `Bearer ${token}` : '',
         'ngrok-skip-browser-warning': 'true'
@@ -818,10 +833,19 @@ const processFile = async (file) => {
     
     fetchData(true)
   } catch (error) {
-    console.error('Core Upload Error:', error)
-    const errorMsg = error.response?.data?.detail || error.message || 'Network intelligence failure'
-    showError('Upload Failed', errorMsg)
+    if (axios.isCancel(error)) {
+      console.log('Upload aborted by user')
+      showInfo('Upload Cancelled', 'Dataset upload was cancelled.')
+    } else {
+      console.error('Core Upload Error:', error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Network intelligence failure'
+      showError('Upload Failed', errorMsg)
+    }
     isUploading.value = false
+    uploadProgress.value = 0
+    uploadMessage.value = ''
+  } finally {
+    uploadAbortController = null
   }
 }
 
@@ -1250,6 +1274,35 @@ onUnmounted(() => performanceChart?.destroy())
 .format-badges span.fmt-parquet { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
 
 .premium-spinner { width: 40px; height: 40px; border: 3px solid rgba(102, 126, 234, 0.1); border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.5rem; }
+.cancel-upload-btn {
+  margin: 1.5rem auto 0;
+  padding: 10px 24px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+.cancel-upload-btn:hover {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+.cancel-upload-btn svg {
+  transition: transform 0.3s;
+}
+.cancel-upload-btn:hover svg {
+  transform: scale(1.1);
+}
 .mini-progress-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 1.5rem 0; overflow: hidden; }
 .mini-progress-bar .fill { height: 100%; background: linear-gradient(to right, #667eea, #a88beb); transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px rgba(102, 126, 234, 0.5); }
 

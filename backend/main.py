@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, HTTPException, UploadFile, File, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
@@ -186,6 +186,7 @@ y_test_storage: Dict[str, Any] = {}
 X_train_before_smote: Dict[str, Any] = {}
 y_train_before_smote: Dict[str, Any] = {}
 split_scalers: Dict[str, Any] = {}
+pca_transformers: Dict[str, Any] = {}
 
 
 categorical_encoders: Dict[str, Dict[str, Any]] = {}  # dataset_id -> {col_name: encoder_info}
@@ -1427,11 +1428,14 @@ async def list_models(
 
 @app.post("/api/upload-dataset")
 async def upload_dataset(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: dict = Depends(auth.get_current_user)
 ):
     """Upload and analyze CSV dataset - Persisted with 15-dataset limit"""
+    file_path = None
+    dataset = None
     try:
         user_id = current_user['id']
         
@@ -1446,9 +1450,21 @@ async def upload_dataset(
 
         print(f"Receiving file upload: {file.filename}")
         
+        # Check for client disconnect before upload save started
+        if await request.is_disconnected():
+            print("🛑 Client disconnected before upload save started")
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
         # 1. Save file to Supabase Storage (returns bucket_key + size)
         file_path, file_size = await file_service.save_dataset(file, user_id)
         
+        # Check for client disconnect after save
+        if await request.is_disconnected():
+            print(f"🛑 Client disconnected after saving dataset. Deleting {file_path}")
+            if file_path:
+                file_service.delete_file(file_path)
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
         # 2. Read DataFrame for analysis — download from Supabase right away.
         #    The DataFrame goes into memory (DatasetMemoryManager), so subsequent
         #    requests are served from RAM and won't hit Supabase again.
@@ -1456,11 +1472,19 @@ async def upload_dataset(
             df = file_service.load_dataframe(file_path)
         except Exception as e:
             # Clean up the just-uploaded file from Supabase if parsing fails
-            file_service.delete_file(file_path)
+            if file_path:
+                file_service.delete_file(file_path)
             print(f"❌ Failed to parse uploaded file {file.filename}: {e}")
             ext = (file.filename or "").rsplit(".", 1)[-1].upper()
             raise HTTPException(status_code=400, detail=f"Failed to parse as {ext}: {str(e)}")
             
+        # Check for client disconnect after pandas parsing
+        if await request.is_disconnected():
+            print(f"🛑 Client disconnected after loading DataFrame. Deleting {file_path}")
+            if file_path:
+                file_service.delete_file(file_path)
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
         # 3. Create DB Record  (storage_path now holds the Supabase bucket key)
         dataset = DatasetModel(
             user_id=user_id,
@@ -1508,10 +1532,26 @@ async def upload_dataset(
             print(f"⚠️ Could not calculate initial quality score: {q_err}")
             dataset.column_metadata = {"quality_score": 0} # Default
 
+        # Check for client disconnect before DB commit
+        if await request.is_disconnected():
+            print(f"🛑 Client disconnected before committing. Deleting {file_path}")
+            if file_path:
+                file_service.delete_file(file_path)
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
         db.add(dataset)
         db.commit()
         db.refresh(dataset)
         
+        # Check for client disconnect after commit
+        if await request.is_disconnected():
+            print(f"🛑 Client disconnected after commit. Deleting {file_path} and cleaning database record.")
+            db.delete(dataset)
+            db.commit()
+            if file_path:
+                file_service.delete_file(file_path)
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
         dataset_id = str(dataset.id)
         
         # 3.2 Log Action
@@ -2095,9 +2135,16 @@ async def get_dataset_statistics(
                             "max": float(clean_series.max()),
                             "range": float(clean_series.max() - clean_series.min()),
                             "skewness": float(clean_series.skew()) if len(clean_series) > 1 else 0,
+                            "kurtosis": float(clean_series.kurtosis()) if len(clean_series) > 1 else 0,
+                            "variance": float(clean_series.var()) if len(clean_series) > 1 else 0,
                             "iqr": iqr,
+                            "count": int(len(clean_series)),
                             "outliers_count": int(outliers_mask.sum()),
-                            "zeros_pct": float((clean_series == 0).sum() / len(clean_series) * 100) if not clean_series.empty else 0
+                            "outliers_pct": float(outliers_mask.sum() / len(clean_series) * 100) if not clean_series.empty else 0,
+                            "zeros_pct": float((clean_series == 0).sum() / len(clean_series) * 100) if not clean_series.empty else 0,
+                            "negatives_pct": float((clean_series < 0).sum() / len(clean_series) * 100) if not clean_series.empty else 0,
+                            "unique_count": int(clean_series.nunique()),
+                            "unique_ratio": float(clean_series.nunique() / len(clean_series)) if not clean_series.empty else 0
                         }
                 else: 
                     # Calculate value counts for categorical columns
@@ -3584,7 +3631,7 @@ async def reset_split(
     current_user: dict = Depends(auth.get_current_user)
 ):
     """Clear split state and cached previews so the dataset returns to its full/unsplit form."""
-    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, datasets, split_scalers, categorical_encoders, target_encoders, X_train_before_smote, y_train_before_smote
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, datasets, split_scalers, categorical_encoders, target_encoders, X_train_before_smote, y_train_before_smote, pca_transformers
 
     try:
         # 1. Verify dataset ownership
@@ -3597,7 +3644,7 @@ async def reset_split(
             raise HTTPException(status_code=403, detail="Not authorized")
 
         # 2. Remove in-memory split globals and feature/encoder states
-        for store in [X_train_storage, X_test_storage, y_train_storage, y_test_storage, split_scalers, categorical_encoders, target_encoders, X_train_before_smote, y_train_before_smote]:
+        for store in [X_train_storage, X_test_storage, y_train_storage, y_test_storage, split_scalers, categorical_encoders, target_encoders, X_train_before_smote, y_train_before_smote, pca_transformers]:
             store.pop(dataset_id, None)
 
         # 3. Clear in-memory split flags and pop dataset to force reload original from storage
@@ -4154,6 +4201,426 @@ async def apply_scaling(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COLUMN TRANSFORMATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ColumnTransform(BaseModel):
+    name: str
+    method: str = 'log1p'   # log | log1p | sqrt | square | cbrt
+
+class ColumnTransformRequest(BaseModel):
+    dataset_id: str
+    columns: List[ColumnTransform]
+
+@app.post("/api/datasets/apply-column-transform")
+async def apply_column_transform(
+    request: ColumnTransformRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """
+    Apply mathematical column transformations (log, sqrt, square, cbrt) to
+    specified numerical columns.  Parameters (e.g. shift offsets) are derived
+    from the training set ONLY and then applied to the test set to prevent
+    data leakage.
+    """
+    global X_train_storage, X_test_storage
+
+    try:
+        dataset_id = request.dataset_id
+        columns_to_transform = request.columns
+
+        print("\n" + "=" * 80)
+        print(f"🔧 COLUMN TRANSFORMATION REQUEST: Dataset {dataset_id}")
+        print(f"   Columns: {[c.name for c in columns_to_transform]}")
+        print("=" * 80)
+
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+
+        if not dataset_info.get('is_split', False):
+            raise HTTPException(
+                status_code=400,
+                detail="Dataset must be split before applying column transformations."
+            )
+
+        if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
+            raise HTTPException(status_code=400, detail="Split data not found in memory.")
+
+        X_train = X_train_storage[dataset_id].copy()
+        X_test  = X_test_storage[dataset_id].copy()
+
+        transformed_columns = []
+
+        for col_info in columns_to_transform:
+            col_name = col_info.name
+            method   = col_info.method.lower()
+
+            if col_name not in X_train.columns:
+                print(f"⚠️  Column '{col_name}' not found — skipping.")
+                continue
+
+            train_col = X_train[col_name].astype(float)
+            test_col  = X_test[col_name].astype(float)
+
+            print(f"  Transforming '{col_name}' with method='{method}' ...")
+
+            if method == 'none':
+                # User explicitly chose no transformation — skip silently
+                print(f"  ⏭  Skipping '{col_name}' (method=none).")
+                continue
+
+            elif method == 'log':
+                # Shift so minimum is 1 to avoid log(0) / log(negative)
+                shift = max(0.0, 1.0 - float(train_col.min()))
+                X_train[col_name] = np.log(train_col + shift)
+                X_test[col_name]  = np.log(test_col  + shift)
+
+            elif method == 'log1p':
+                shift = max(0.0, -float(train_col.min()))
+                X_train[col_name] = np.log1p(train_col + shift)
+                X_test[col_name]  = np.log1p(test_col  + shift)
+
+            elif method == 'sqrt':
+                shift = max(0.0, -float(train_col.min()))
+                X_train[col_name] = np.sqrt(train_col + shift)
+                X_test[col_name]  = np.sqrt(test_col  + shift)
+
+            elif method == 'square':
+                X_train[col_name] = np.square(train_col)
+                X_test[col_name]  = np.square(test_col)
+
+            elif method == 'cbrt':
+                X_train[col_name] = np.cbrt(train_col)
+                X_test[col_name]  = np.cbrt(test_col)
+
+            elif method == 'yeo-johnson':
+                # sklearn PowerTransformer: fits on train, transforms both
+                from sklearn.preprocessing import PowerTransformer
+                pt = PowerTransformer(method='yeo-johnson', standardize=False)
+                X_train[col_name] = pt.fit_transform(train_col.values.reshape(-1, 1)).ravel()
+                X_test[col_name]  = pt.transform(test_col.values.reshape(-1, 1)).ravel()
+
+            elif method == 'box-cox':
+                # Box-Cox requires strictly positive values.
+                # Derive shift from train minimum to guarantee positivity.
+                from scipy.stats import boxcox
+                from scipy.special import inv_boxcox
+                shift = max(0.0, 1e-6 - float(train_col.min()))
+                train_shifted = train_col + shift
+                test_shifted  = test_col  + shift
+                # Fit lambda on training data only (anti-leakage)
+                transformed_train, lmbda = boxcox(train_shifted.clip(lower=1e-9))
+                # Apply same lambda to test set
+                if lmbda == 0:
+                    transformed_test = np.log(test_shifted.clip(lower=1e-9))
+                else:
+                    transformed_test = (np.power(test_shifted.clip(lower=1e-9), lmbda) - 1) / lmbda
+                X_train[col_name] = transformed_train
+                X_test[col_name]  = transformed_test
+
+            else:
+                print(f"⚠️  Unknown transform method '{method}' — skipping '{col_name}'.")
+                continue
+
+            transformed_columns.append(col_name)
+
+
+        # ── Persist updated splits ───────────────────────────────────────────
+        X_train_storage[dataset_id] = X_train
+        X_test_storage[dataset_id]  = X_test
+
+        # ── Sync base dataframe ──────────────────────────────────────────────
+        try:
+            y_train_sync = y_train_storage.get(dataset_id)
+            y_test_sync  = y_test_storage.get(dataset_id)
+            full_X = pd.concat([X_train, X_test], axis=0).reset_index(drop=True)
+            if y_train_sync is not None and y_test_sync is not None:
+                full_y = pd.concat([y_train_sync, y_test_sync], axis=0).reset_index(drop=True)
+                full_df = pd.concat([full_X, full_y], axis=1)
+            else:
+                full_df = full_X
+            dataset_info['dataframe'] = full_df
+            print(f"✅ Base dataframe synced after transform. Shape: {full_df.shape}")
+        except Exception as sync_err:
+            print(f"⚠️  Could not sync base dataframe: {sync_err}")
+
+        # ── Build previews ───────────────────────────────────────────────────
+        y_train = y_train_storage.get(dataset_id)
+        y_test  = y_test_storage.get(dataset_id)
+
+        if y_train is not None and y_test is not None:
+            train_preview = pd.concat([X_train.head(200), y_train.head(200)], axis=1).to_dict('records')
+            test_preview  = pd.concat([X_test.head(200),  y_test.head(200)],  axis=1).to_dict('records')
+        else:
+            train_preview = X_train.head(200).to_dict('records')
+            test_preview  = X_test.head(200).to_dict('records')
+
+        print(f"✅ Column transformation complete: {transformed_columns}")
+        print("=" * 80 + "\n")
+
+        return {
+            "success": True,
+            "message": f"Successfully transformed {len(transformed_columns)} column(s).",
+            "transformed_columns": transformed_columns,
+            "train_preview": train_preview,
+            "test_preview":  test_preview,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Column transform error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRINCIPAL COMPONENT ANALYSIS (PCA)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PCADryRunRequest(BaseModel):
+    dataset_id: str
+    columns: List[str]
+
+class ApplyPCARequest(BaseModel):
+    dataset_id: str
+    mode: str = 'variance'  # 'variance' | 'fixed'
+    variance_ratio: float = 95.0
+    num_components: int = 10
+    columns: List[str]
+
+@app.post("/api/datasets/pca-dry-run")
+async def pca_dry_run(
+    request: PCADryRunRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """
+    Dry-run endpoint for PCA. Runs a fast SVD/PCA on active training set data
+    to return cumulative explained variance ratios for frontend sliders.
+    Strictly unscaled (no secret scaling) as requested.
+    """
+    global X_train_storage
+    
+    try:
+        dataset_id = request.dataset_id
+        columns = request.columns
+        
+        print(f"\n📊 PCA DRY-RUN: Dataset {dataset_id}, columns: {len(columns)}")
+        
+        # Verify split
+        if dataset_id not in X_train_storage:
+            raise HTTPException(status_code=400, detail="Split data not found. Please split first.")
+            
+        X_train = X_train_storage[dataset_id]
+        
+        # Verify columns exist
+        missing_cols = [c for c in columns if c not in X_train.columns]
+        if missing_cols:
+            raise HTTPException(status_code=400, detail=f"Columns not found in training set: {missing_cols}")
+            
+        if not columns:
+            return {
+                "success": True,
+                "cumulative_variance": [],
+                "feature_count": 0,
+                "zero_variance_columns": [],
+                "has_missing_values": False
+            }
+            
+        # Check missing values
+        X_train_sel = X_train[columns]
+        has_missing_values = bool(X_train_sel.isnull().any().any())
+        
+        # Compute variances and detect zero/near-zero variance columns
+        variances = X_train_sel.var(ddof=0)
+        zero_variance_cols = list(variances[variances < 1e-5].index)
+        
+        # Cumulative sum of explained variance
+        cumulative_variance = []
+        if not has_missing_values and len(columns) > 0:
+            try:
+                # Run standard PCA directly on raw selected columns without silent scaling.
+                pca = PCA(n_components=min(len(columns), 50))
+                pca.fit(X_train_sel)
+                cumulative_variance = np.cumsum(pca.explained_variance_ratio_).tolist()
+            except Exception as pca_err:
+                print(f"⚠️ SVD calculation failed: {pca_err}")
+                cumulative_variance = []
+                
+        return {
+            "success": True,
+            "cumulative_variance": cumulative_variance,
+            "feature_count": len(columns),
+            "zero_variance_columns": zero_variance_cols,
+            "has_missing_values": has_missing_values
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ PCA dry run error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/datasets/apply-pca")
+async def apply_pca(
+    request: ApplyPCARequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """
+    Applies PCA to the specified columns. Replaces the original columns in
+    X_train and X_test with principal components, preserving other features.
+    Saves PCA state in pca_transformers.
+    """
+    global X_train_storage, X_test_storage, y_train_storage, y_test_storage, pca_transformers
+    
+    try:
+        dataset_id = request.dataset_id
+        columns = request.columns
+        mode = request.mode.lower()
+        variance_ratio = request.variance_ratio
+        num_components = request.num_components
+        
+        print("\n" + "=" * 80)
+        print(f"🔮 APPLY PCA REQUEST: Dataset {dataset_id}")
+        print(f"   Mode: {mode}, Columns: {columns}")
+        print("=" * 80)
+        
+        # Verify split
+        if dataset_id not in X_train_storage or dataset_id not in X_test_storage:
+            raise HTTPException(status_code=400, detail="Dataset must be split first.")
+            
+        X_train = X_train_storage[dataset_id].copy()
+        X_test = X_test_storage[dataset_id].copy()
+        
+        # Verify columns exist
+        missing_cols = [c for c in columns if c not in X_train.columns]
+        if missing_cols:
+            raise HTTPException(status_code=400, detail=f"Columns not found in dataset: {missing_cols}")
+            
+        if not columns:
+            raise HTTPException(status_code=400, detail="No columns selected for PCA.")
+            
+        # Verify missing values handled
+        X_train_sel = X_train[columns]
+        X_test_sel = X_test[columns]
+        if X_train_sel.isnull().any().any() or X_test_sel.isnull().any().any():
+            raise HTTPException(status_code=400, detail="Selected columns contain missing values. Please handle them first.")
+            
+        # Determine PCA configuration
+        if mode == 'variance':
+            # Store slider ratio is 70 to 99, convert to float 0.70 to 0.99
+            ratio = float(variance_ratio) / 100.0
+            pca = PCA(n_components=ratio, svd_solver='full')
+        elif mode == 'fixed':
+            n_comp = min(int(num_components), len(columns))
+            pca = PCA(n_components=n_comp)
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid PCA mode: {mode}")
+            
+        # Run PCA fit on Training data only
+        try:
+            X_train_pca_arr = pca.fit_transform(X_train_sel)
+            X_test_pca_arr = pca.transform(X_test_sel)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"PCA Fit failed: {str(e)}. This can happen if columns are highly constant or have near-zero variance.")
+            
+        # Create PCA dataframes
+        n_components_derived = X_train_pca_arr.shape[1]
+        component_names = [f"PC_{i+1}" for i in range(n_components_derived)]
+        
+        X_train_pca_df = pd.DataFrame(X_train_pca_arr, columns=component_names, index=X_train.index)
+        X_test_pca_df = pd.DataFrame(X_test_pca_arr, columns=component_names, index=X_test.index)
+        
+        # Drop original columns and concatenate PCA components
+        X_train_new = X_train.drop(columns=columns)
+        X_test_new = X_test.drop(columns=columns)
+        
+        X_train_final = pd.concat([X_train_new, X_train_pca_df], axis=1)
+        X_test_final = pd.concat([X_test_new, X_test_pca_df], axis=1)
+        
+        # Persist updated splits
+        X_train_storage[dataset_id] = X_train_final
+        X_test_storage[dataset_id] = X_test_final
+        
+        # Save PCA model object
+        pca_transformers[dataset_id] = {
+            "pca": pca,
+            "columns": columns,
+            "n_components": n_components_derived,
+            "explained_variance_ratio": pca.explained_variance_ratio_.tolist()
+        }
+        
+        # Sync base dataframe
+        dataset_info, _ = await ensure_user_dataset_in_memory(dataset_id, db, current_user)
+        try:
+            full_X = pd.concat([X_train_final, X_test_final], axis=0).reset_index(drop=True)
+            y_train_sync = y_train_storage.get(dataset_id)
+            y_test_sync = y_test_storage.get(dataset_id)
+            if y_train_sync is not None and y_test_sync is not None:
+                full_y = pd.concat([y_train_sync, y_test_sync], axis=0).reset_index(drop=True)
+                full_df = pd.concat([full_X, full_y], axis=1)
+            else:
+                full_df = full_X
+            dataset_info['dataframe'] = full_df
+            print(f"✅ Base dataframe synced after PCA. Shape: {full_df.shape}")
+        except Exception as sync_err:
+            print(f"⚠️ Could not sync base dataframe: {sync_err}")
+            
+        # Update metadata
+        dataset_info['pca_applied'] = True
+        dataset_info['pca_columns'] = columns
+        
+        # Calculate compression ratio
+        compression_ratio = int((1.0 - (n_components_derived / len(columns))) * 100)
+        variance_retained = float(np.sum(pca.explained_variance_ratio_))
+        
+        # Build previews
+        y_train = y_train_storage.get(dataset_id)
+        y_test = y_test_storage.get(dataset_id)
+        if y_train is not None and y_test is not None:
+            train_preview = pd.concat([X_train_final.head(200), y_train.head(200)], axis=1).to_dict('records')
+            test_preview = pd.concat([X_test_final.head(200), y_test.head(200)], axis=1).to_dict('records')
+        else:
+            train_preview = X_train_final.head(200).to_dict('records')
+            test_preview = X_test_final.head(200).to_dict('records')
+            
+        print(f"✅ PCA execution complete. Reduced {len(columns)} to {n_components_derived} components.")
+        print("=" * 80 + "\n")
+        
+        # Include target column in the columns list if it exists
+        all_columns = list(X_train_final.columns)
+        if y_train is not None:
+            target_col_name = y_train.name if hasattr(y_train, 'name') else 'target'
+            all_columns.append(target_col_name)
+            
+        return {
+            "success": True,
+            "message": f"Successfully applied PCA and reduced features from {len(columns)} to {n_components_derived}",
+            "original_feature_count": len(columns),
+            "reduced_feature_count": n_components_derived,
+            "variance_retained": variance_retained,
+            "compression_ratio": compression_ratio,
+            "explained_variance_ratio": pca.explained_variance_ratio_.tolist(),
+            "train_preview": train_preview,
+            "test_preview": test_preview,
+            "columns": all_columns
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Apply PCA error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/detect-problem-type")

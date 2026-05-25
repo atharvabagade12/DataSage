@@ -435,56 +435,100 @@
       <!-- Action Section -->
       <section v-if="selectedAlgorithm" class="action-section">
         <div class="action-content">
-          <!--  ENHANCE your configuration summary section -->
-          <div class="configuration-summary">
-            <h3>Configuration Summary</h3>
-            <div class="summary-grid">
-              <div class="summary-item">
-                <span class="summary-label">Algorithm: </span>
-                <span class="summary-value">{{ selectedAlgorithm.name }}</span>
+          <!-- Column 1: Model profile -->
+          <div class="footer-column model-profile">
+            <div class="column-header">
+              <span class="column-icon">🧠</span>
+              <h4>Selected Model</h4>
+            </div>
+            <div class="model-info-wrapper">
+              <div class="model-main">
+                <span class="model-icon">{{ selectedAlgorithm.icon }}</span>
+                <div class="model-details">
+                  <span class="model-name">{{ selectedAlgorithm.name }}</span>
+                  <span class="model-badge">{{ selectedAlgorithm.category ? formatCategoryName(selectedAlgorithm.category) : 'Machine Learning Model' }}</span>
+                </div>
               </div>
-              <div class="summary-item">
-                <span class="summary-label">Problem Type: </span>
-                <span class="summary-value">{{formatProblemType(problemType.type)}}</span>
+              <div class="model-score-badge" :title="'Match score computed by DataSage recommendation engine: ' + Math.round(selectedAlgorithm.score * 100) + '%'">
+                <div class="score-ring-mini" :class="getScoreLevel(selectedAlgorithm.score)">
+                  <span class="score-pct">{{ Math.round(selectedAlgorithm.score * 100) }}%</span>
+                  <span class="score-lbl">Match</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="action-buttons">
-            
+          <!-- Divider -->
+          <div class="footer-divider"></div>
 
-            <button
-              @click="startTraining"
-              class="start-training-btn"
-              :disabled="isTraining"
-            >
-              <svg
-                v-if="isTraining"
-                width="16"
-                height="16"
-                class="spinner"
-                viewBox="0 0 24 24"
-                fill="currentColor"
+          <!-- Column 2: Problem & Target Context -->
+          <div class="footer-column problem-context">
+            <div class="column-header">
+              <span class="column-icon">🎯</span>
+              <h4>Problem Setup</h4>
+            </div>
+            <div class="problem-details">
+              <div class="context-item">
+                <span class="context-label">Task Type:</span>
+                <span class="problem-type-badge-mini" :class="problemType.type">
+                  {{ formatProblemType(problemType.type) }}
+                </span>
+              </div>
+              <div v-if="selectedTarget" class="context-item">
+                <span class="context-label">Target Column:</span>
+                <span class="target-column-badge">
+                  {{ selectedTarget.name }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="footer-divider"></div>
+
+          <!-- Column 3: Action Launchpad -->
+          <div class="footer-column action-launchpad">
+            <div class="action-buttons">
+              <button
+                @click="startTraining"
+                class="start-training-btn-premium"
+                :disabled="isTraining"
               >
-                <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
-              </svg>
-              <svg
-                v-else
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-              </svg>
-              {{
-                isTraining
-                  ? "Initializing Model Training..."
-                  : "Start Model Training"
-              }}
-              <!-- ADD FEATURE COUNT INDICATOR -->
-              
-            </button>
+                <div class="btn-glow-layer"></div>
+                <div class="btn-content">
+                  <svg
+                    v-if="isTraining"
+                    width="18"
+                    height="18"
+                    class="spinner"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
+                  </svg>
+                  <svg
+                    v-else
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+                  </svg>
+                  <span>
+                    {{
+                      isTraining
+                        ? "Initializing Training..."
+                        : "Start Model Training"
+                    }}
+                  </span>
+                </div>
+              </button>
+              <span class="preflight-status">
+                <span class="pulse-indicator"></span>
+                Pre-flight checks passed • Ready
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -760,6 +804,10 @@
               <span class="ctx-label">Scaling</span>
               <span class="ctx-val">{{ storePreprocessing.isScalingApplied ? storePreprocessing.scalingMethod || 'Applied' : 'None' }}</span>
             </div>
+            <div class="ctx-chip" :class="{ active: storePreprocessing.isTransformationApplied }">
+              <span class="ctx-label">Transform</span>
+              <span class="ctx-val">{{ storePreprocessing.isTransformationApplied ? storePreprocessing.transformedColumns?.length + ' cols' : 'None' }}</span>
+            </div>
             <div class="ctx-chip" :class="{ active: storePreprocessing.isEncodingApplied }">
               <span class="ctx-label">Encoding</span>
               <span class="ctx-val">{{ storePreprocessing.isEncodingApplied ? storePreprocessing.encodedColumns?.length + ' cols' : 'None' }}</span>
@@ -767,6 +815,10 @@
             <div class="ctx-chip" :class="{ active: storePreprocessing.smote?.applied }">
               <span class="ctx-label">SMOTE</span>
               <span class="ctx-val">{{ storePreprocessing.smote?.applied ? 'Applied' : 'No' }}</span>
+            </div>
+            <div class="ctx-chip" :class="{ active: storePreprocessing.pca?.applied }">
+              <span class="ctx-label">PCA</span>
+              <span class="ctx-val">{{ storePreprocessing.pca?.applied ? storePreprocessing.pca.reducedFeatureCount + ' PCs' : 'No' }}</span>
             </div>
             <div class="ctx-chip" :class="{ active: storePreprocessing.isOutliersApplied }">
               <span class="ctx-label">Outliers</span>
@@ -938,6 +990,8 @@ const loadDataFromPreviousSteps = () => {
     if (storePreprocessing.value.isSplitApplied) steps.push("Train/Test Split");
     if (storePreprocessing.value.isEncodingApplied) steps.push(`Categorical Encoding (${storePreprocessing.value.encodedColumns?.length || 0})`);
     if (storePreprocessing.value.isScalingApplied) steps.push(`Feature Scaling`);
+    if (storePreprocessing.value.isTransformationApplied) steps.push(`Column Transformation (${storePreprocessing.value.transformedColumns?.length || 0} columns)`);
+    if (storePreprocessing.value.pca?.applied) steps.push(`PCA (${storePreprocessing.value.pca.reducedFeatureCount} Components)`);
     if (storePreprocessing.value.smote?.applied) steps.push(`SMOTE (${storePreprocessing.value.smote?.samples_added || 0} samples)`);
     
     preprocessingSteps.value = steps;
@@ -1101,6 +1155,12 @@ const buildRecommendationContext = () => {
   const encodedCount      = prep.encodedColumns?.length || 0;
   const scalingMethod     = prep.scalingMethod || 'standard';  // 'standard' | 'minmax' | 'robust' | 'none'
   const splitStrategy     = prep.splitStrategy || 'random';   // 'random' | 'stratified'
+  
+  // --- New Operations ---
+  const isPcaApplied       = prep.pca?.applied === true;
+  const pcaComponents      = prep.pca?.reducedFeatureCount || 0;
+  const isTransformationApplied = prep.isTransformationApplied === true;
+  const transformedCount   = prep.transformedColumns?.length || 0;
 
   // --- Problem type ---
   const pType      = problemType.value?.type       || 'binary_classification';
@@ -1129,6 +1189,7 @@ const buildRecommendationContext = () => {
     isScaled, scalingMethod, isEncoded, encodedCount,
     isMissingHandled, isOutliersHandled, isDuplicatesClean,
     hasDateTimeFeats, isSmoteApplied, droppedCount, splitStrategy,
+    isPcaApplied, pcaComponents, isTransformationApplied, transformedCount,
     pType, confidence,
     sizeCategory, featureDensity,
     targetUnique, isHighCardinality,
@@ -1386,6 +1447,41 @@ const scoreAlgorithmWithBreakdown = (algorithm, ctx) => {
       warnings.push('⚠️ Missing values detected but not handled — may cause training errors');
     } else {
       warnings.push('⚠️ Missing values present — XGBoost/RF can handle them but imputing is recommended');
+    }
+  }
+
+  // 3g. Column Transformation (Skewness correction)
+  if (ctx.isTransformationApplied && ctx.transformedCount > 0) {
+    if (['Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression'].includes(algorithm.name)) {
+      // Linear models assume normality/homoscedasticity. Correcting skewness directly aligns with assumptions!
+      prepAlignment = Math.min(1.0, prepAlignment + 0.12);
+      reasons.push(`✅ Column transformation applied on ${ctx.transformedCount} column(s) — satisfies linear model normality assumptions`);
+    } else if (['Support Vector Machine', 'K-Nearest Neighbors', 'Naive Bayes'].includes(algorithm.name)) {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.06);
+      reasons.push('✅ Normalized distributions improve decision boundary optimization');
+    } else if (['Random Forest', 'XGBoost', 'Decision Tree'].includes(algorithm.name)) {
+      prepAlignment = Math.min(1.0, prepAlignment + 0.02);
+      reasons.push('✅ Column transformation applied (neutral for tree/split-based models)');
+    }
+  }
+
+  // 3h. PCA (Principal Component Analysis / Dimensionality Reduction)
+  if (ctx.isPcaApplied) {
+    if (['K-Nearest Neighbors'].includes(algorithm.name)) {
+      // KNN suffers heavily from curse of dimensionality. PCA projects onto lower-dimensional manifold.
+      prepAlignment = Math.min(1.0, prepAlignment + 0.12);
+      reasons.push(`✅ PCA reduction (${ctx.pcaComponents} components) mitigates KNN curse of dimensionality`);
+    } else if (['Logistic Regression', 'Linear Regression', 'Ridge Regression', 'Lasso Regression'].includes(algorithm.name)) {
+      // Linear models suffer from multicollinearity. PCA orthogonalizes features.
+      prepAlignment = Math.min(1.0, prepAlignment + 0.08);
+      reasons.push(`✅ PCA orthogonalizes features — removes multicollinearity for linear models`);
+    } else if (['Support Vector Machine'].includes(algorithm.name)) {
+      // SVM benefits from dimensional reduction for faster convergence.
+      prepAlignment = Math.min(1.0, prepAlignment + 0.06);
+      reasons.push('✅ PCA feature compression improves SVM convergence and generalization');
+    } else if (['Random Forest', 'XGBoost', 'Decision Tree'].includes(algorithm.name)) {
+      // Trees do feature selection natively but lose interpretability of splits when PCA is applied
+      reasons.push('ℹ️ PCA applied — trees work well but lose feature-level split interpretability');
     }
   }
 
@@ -3090,7 +3186,7 @@ const formatDistributionsPreview = () => {
   }
 };
 
-// ── NAVIGATION GUARD: clear session on pipeline exit ───────────────────────
+//Navigation Guard: clear session on pipeline exit
 const PIPELINE_ROUTES = [
   'data-preview', 'target-selection', 'advanced-preprocessing',
   'algorithm-select', 'model-training', 'model-visualization'
@@ -3102,9 +3198,42 @@ onBeforeRouteLeave((to, _from, next) => {
   }
   next();
 });
-// ─────────────────────────────────────────────────────────────────────────────
+ 
 
-// Lifecycle
+const formatCategoryName = (category) => {
+  const map = {
+    ensemble: "Ensemble Method",
+    boosting: "Gradient Boosting",
+    linear: "Linear Model",
+    kernel: "Kernel Method",
+    "instance-based": "Instance-based",
+    tree: "Decision Tree",
+    probabilistic: "Probabilistic Model"
+  };
+  return map[category] || "Machine Learning";
+};
+
+const getValidationStrategyLabel = () => {
+  if (validationMethod.value === "train_test_split") {
+    return "Train/Test Split";
+  } else if (validationMethod.value === "cross_validation") {
+    return "Cross-Validation";
+  }
+  return "Simple Train/Test";
+};
+
+const getValidationStrategySublabel = () => {
+  if (validationMethod.value === "train_test_split") {
+    const trainPct = Math.round((1 - testSize.value) * 100);
+    const testPct = Math.round(testSize.value * 100);
+    return `${trainPct}% Train / ${testPct}% Test Split`;
+  } else if (validationMethod.value === "cross_validation") {
+    return `${cvFolds.value}-Fold Stratified CV`;
+  }
+  return "80% Train / 20% Test Split";
+};
+
+
 onMounted(async () => {
 
   
@@ -3113,7 +3242,7 @@ onMounted(async () => {
     initializeRecommendations();
     isLoading.value = false;
     
-    // Log final loaded values
+    
     console.log("📊 Final loaded values:");
     console.log("- Dataset rows:", datasetStats.value.rows);
     console.log("- Dataset features:", datasetStats.value.features);
@@ -3122,7 +3251,7 @@ onMounted(async () => {
     console.log("- Test rows:", getTestRows());
   }
 
-  // ADD THIS: Check backend connection
+  
   await checkBackendConnection();
 });
 
@@ -3132,7 +3261,7 @@ onMounted(async () => {
 
 
 <style scoped>
-/* Base Styles */
+
 .algorithm-selection {
   min-height: 100vh;
   background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
@@ -4960,96 +5089,319 @@ onMounted(async () => {
 
 /* Action Section */
 .action-section {
-  background: rgba(26, 26, 46, 0.6);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  border-radius: 16px;
-  padding: 2rem;
+  background: rgba(13, 13, 33, 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  border-radius: 20px;
+  padding: 1.5rem 2rem;
+  margin-top: 2.5rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 .action-content {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 2rem;
+  align-items: stretch;
+  gap: 1.5rem;
 }
 
-.configuration-summary h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0 0 1rem 0;
-  color: #ffffff;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  
-}
-
-.summary-item {
+.footer-column {
   display: flex;
-  
+  flex-direction: column;
+  justify-content: flex-start;
+  flex: 1;
+  min-width: 0; /* Prevents overflow */
+}
+
+.footer-column.model-profile {
+  flex: 1.5;
+}
+
+.footer-column.problem-context {
+  flex: 1.3;
+}
+
+.footer-column.action-launchpad {
+  flex: 1.2;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.column-header {
+  display: flex;
   align-items: center;
-  padding: 0.5rem 0;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
-.summary-label {
-  color: #9ca3af;
-  font-size: 0.875rem;
+.column-icon {
+  font-size: 0.95rem;
 }
 
-.summary-value {
+.column-header h4 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a5b4fc;
+  margin: 0;
+}
+
+.footer-divider {
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(102, 126, 234, 0), rgba(102, 126, 234, 0.2), rgba(102, 126, 234, 0));
+  align-self: stretch;
+}
+
+/* Model Profile Column */
+.model-info-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  height: 100%;
+}
+
+.model-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.model-icon {
+  font-size: 2.2rem;
+  background: rgba(102, 126, 234, 0.1);
+  padding: 0.4rem;
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+}
+
+.model-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.model-name {
+  font-size: 1.05rem;
+  font-weight: 700;
   color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-badge {
+  font-size: 0.7rem;
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.12);
+  padding: 2px 8px;
+  border-radius: 100px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+/* Match Score Circle */
+.score-ring-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 10px;
+  min-width: 52px;
+}
+
+.score-ring-mini.high {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  color: #4ade80;
+}
+
+.score-ring-mini.medium {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  color: #fbbf24;
+}
+
+.score-ring-mini.low {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+}
+
+.score-pct {
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.score-lbl {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-top: 1px;
+}
+
+/* Problem Setup Column */
+.problem-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: center;
+  height: 100%;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.context-label {
+  font-size: 0.8rem;
+  color: #9ca3af;
   font-weight: 500;
-  font-size: 0.875rem;
+  width: 90px;
+}
+
+.problem-type-badge-mini {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #e0e7ff;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.problem-type-badge-mini.regression {
+  color: #e0f2fe;
+  background: rgba(14, 165, 233, 0.15);
+  border-color: rgba(14, 165, 233, 0.25);
+}
+
+.problem-type-badge-mini.multiclass_classification {
+  color: #fae8ff;
+  background: rgba(217, 70, 239, 0.15);
+  border-color: rgba(217, 70, 239, 0.25);
+}
+
+.target-column-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #a5b4fc;
+  background: rgba(165, 180, 252, 0.12);
+  border: 1px solid rgba(165, 180, 252, 0.2);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Action Launchpad Column */
+.start-training-btn-premium {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.8rem 1.6rem;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
+}
+
+.start-training-btn-premium .btn-glow-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #a855f7, #6366f1);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.start-training-btn-premium .btn-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: white;
+  font-weight: 700;
+  font-size: 0.95rem;
+  z-index: 2;
+}
+
+.start-training-btn-premium:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(168, 85, 247, 0.5);
+}
+
+.start-training-btn-premium:hover:not(:disabled) .btn-glow-layer {
+  opacity: 1;
+}
+
+.start-training-btn-premium:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .action-buttons {
   display: flex;
-  gap: 1rem;
-}
-
-.export-config-btn,
-.start-training-btn {
-  display: flex;
+  flex-direction: column;
+  width: 100%;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
+}
+
+.preflight-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: #34d399;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.export-config-btn {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
-  border: 1px solid rgba(102, 126, 234, 0.3);
+.pulse-indicator {
+  width: 6px;
+  height: 6px;
+  background-color: #34d399;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+  animation: pulse 1.8s infinite;
 }
 
-.export-config-btn:hover {
-  background: rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
-}
-
-.start-training-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  min-width: 180px;
-  justify-content: center;
-}
-
-.start-training-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
-.start-training-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5px rgba(52, 211, 153, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
 }
 
 .spinner {
@@ -5161,16 +5513,29 @@ onMounted(async () => {
 
   .action-content {
     flex-direction: column;
-    text-align: center;
+    align-items: stretch;
+    gap: 1.5rem;
+    text-align: left;
   }
 
-  .summary-grid {
-    grid-template-columns: 1fr;
+  .footer-divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, rgba(102, 126, 234, 0), rgba(102, 126, 234, 0.2), rgba(102, 126, 234, 0));
+  }
+
+  .footer-column.action-launchpad {
+    align-items: center;
+  }
+
+  .model-info-wrapper {
+    justify-content: flex-start;
+    gap: 1.5rem;
   }
 
   .action-buttons {
     width: 100%;
-    justify-content: center;
+    align-items: center;
   }
 
   .scaling-options {

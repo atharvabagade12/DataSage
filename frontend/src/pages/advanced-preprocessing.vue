@@ -1042,14 +1042,11 @@
                 @click="showSmoteModal = true" 
                 :disabled="!splitApplied || (!hasClassImbalance && !smoteApplied) || problemType !== 'classification'"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
-                </svg>
-                {{ smoteApplied ? 'View SMOTE Details' : 'Configure SMOTE' }}
+                Configure SMOTE
               </Button>
             </div>
           </Card>
-          
+
           <!-- SMOTE Configuration Modal -->
           <Modal v-model="showSmoteModal" title="SMOTE Configuration" size="xl">
             <div class="modal-section">
@@ -1224,7 +1221,621 @@
             </template>
           </Modal>
 
-          <!-- ========== CARD 5: TF-IDF VECTORIZATION ========== -->
+          <!-- ========== CARD 5: COLUMN TRANSFORMATION ========== -->
+          <Card class="preprocessing-tool-card" hover :class="{ disabled: !splitApplied }">
+            <div class="tool-header">
+              <div class="tool-icon" style="background: rgba(251,191,36,0.10); color: #fbbf24;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.36 2.72L20.78 4.14L15.06 9.85C15.67 11.17 15.37 12.74 14.28 13.83C13.04 15.07 11.14 15.32 9.62 14.5L12.53 11.59L11.11 10.17L8.2 13.08C7.37 11.56 7.62 9.66 8.87 8.42C9.9 7.39 11.31 7.03 12.6 7.3L14.05 5.85C13.07 5.55 12.02 5.5 11 5.7V3.68C12.05 3.45 13.12 3.46 14.16 3.72L15.52 2.36L19.36 2.72M6 19.5C6 20.88 7.12 22 8.5 22C9.88 22 11 20.88 11 19.5V18H6V19.5Z"/>
+                </svg>
+              </div>
+              <div class="tool-info">
+                <h3>
+                  Column Transformation
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                </h3>
+                <p>Apply log, sqrt, or power transformations to correct skewed distributions</p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': transformationApplied }">
+                {{ transformationApplied ? "✓ Applied" : "Not Applied" }}
+              </div>
+            </div>
+            <div class="tool-footer">
+              <Button variant="primary" @click="showTransformModal = true" :disabled="!splitApplied">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                Configure Transformation
+              </Button>
+            </div>
+          </Card>
+
+          <!-- Column Transformation Modal -->
+          <Modal v-model="showTransformModal" title="Column Transformation" size="xl">
+            <div class="modal-section">
+
+              <!-- Info Alert -->
+              <div class="info-alert">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+                </svg>
+                <div>
+                  <strong>What is Column Transformation?</strong>
+                  <p>Apply mathematical transforms (Log, Sqrt, Square, Cube Root) to reduce skewness and stabilise variance. Transformations are fitted on the training set and applied to both sets.</p>
+                </div>
+              </div>
+
+              <!-- Column Selection -->
+              <div class="config-group">
+                <label class="config-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                  Select Columns to Transform
+                </label>
+
+                <div class="selection-controls">
+                  <button @click="selectAllTransformColumns" class="btn-secondary small">Select All</button>
+                  <button @click="selectRecommendedTransformColumns" class="btn-secondary small">Select Recommended</button>
+                  <button @click="deselectAllTransformColumns" class="btn-secondary small">Deselect All</button>
+                </div>
+
+                <!-- Column header row -->
+                <div class="transform-col-header">
+                  <span></span>
+                  <span>Column</span>
+                  <span>Type</span>
+                  <span>Distribution</span>
+                  <span>Missing</span>
+                  <span>Outliers</span>
+                  <span>Recommended</span>
+                  <span>Method</span>
+                </div>
+
+                <div class="encoding-list transform-list">
+                  <div
+                    v-for="(col, index) in transformableColumns"
+                    :key="col.name"
+                    class="transform-col-row"
+                    :class="{ active: col.transform, 'has-details': col.showDetails }"
+                  >
+                    <!-- 1. Checkbox -->
+                    <label class="checkbox-label transform-checkbox">
+                      <input type="checkbox" v-model="col.transform" />
+                      <span class="checkbox-custom"></span>
+                    </label>
+
+                    <!-- 2. Column Name with elegant click-to-expand details -->
+                    <div class="col-name-container">
+                      <span class="transform-col-name">{{ col.name }}</span>
+                      <div
+                        class="stats-popover-wrapper"
+                        v-if="col.backendMetrics"
+                        @click.stop="col.showDetails = !col.showDetails"
+                        :class="{ 'details-active': col.showDetails }"
+                        title="Click to view statistical profile"
+                      >
+                        <svg class="info-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 002 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2m-1 15h2v-6h-2v6z"/>
+                        </svg>
+                      </div>
+                    </div>
+
+                    <!-- 3. Data Type Badge -->
+                    <span class="col-stat-chip type-chip">NUMERIC</span>
+
+                    <!-- 4. Distribution / Skewness Badge -->
+                    <span
+                      class="col-stat-chip skew-chip"
+                      :class="getSkewBadgeClass(col)"
+                      :title="col.backendMetrics ? 'Skewness: ' + Number(col.backendMetrics.skewness || 0).toFixed(3) : 'No stats'"
+                    >
+                      {{ getSkewLabel(col) }}
+                    </span>
+
+                    <!-- 5. Missing Values -->
+                    <span class="col-stat-chip missing-chip">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.7">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                      </svg>
+                      {{ col.backendMetrics ? (Number(col.backendMetrics.missing_pct ?? col.backendMetrics.missing_percentage ?? 0).toFixed(1) + '%') : 'N/A' }}
+                    </span>
+
+                    <!-- 6. Outlier Info -->
+                    <span class="col-stat-chip outlier-chip" :class="{ 'outlier-high': (col.backendMetrics?.outliers_pct ?? 0) > 5 }">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.7">
+                        <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                      </svg>
+                      {{ col.backendMetrics ? (Number(col.backendMetrics.outliers_pct ?? ((col.backendMetrics.outliers_count ?? 0) / Math.max(col.backendMetrics.count ?? 1, 1) * 100)).toFixed(1) + '%') : 'N/A' }}
+                    </span>
+
+                    <!-- 7. Recommended Transformation Badge -->
+                    <span
+                      class="col-stat-chip rec-method-chip"
+                      :class="'rec-' + getTransformRecommendation(col).method"
+                      :title="getTransformRecommendation(col).reason"
+                    >
+                      {{ getTransformRecommendation(col).label }}
+                    </span>
+
+                    <!-- 8. Method Dropdown (always visible, pre-filled with recommendation) -->
+                    <div class="transform-method-cell">
+                      <select
+                        v-model="col.transformMethod"
+                        class="encoding-select transform-select"
+                        @change="col.transform = true"
+                      >
+                        <option value="none">None</option>
+                        <option value="log" :disabled="col.backendMetrics && (col.backendMetrics.min <= 0 || col.backendMetrics.negatives_pct > 0)">
+                          Log (ln) {{ col.backendMetrics && (col.backendMetrics.min <= 0 || col.backendMetrics.negatives_pct > 0) ? ' [≤ 0 values]' : '' }}
+                        </option>
+                        <option value="log1p" :disabled="col.backendMetrics && (col.backendMetrics.min <= -1 || col.backendMetrics.negatives_pct > 0)">
+                          Log1p — ln(x+1) {{ col.backendMetrics && (col.backendMetrics.min <= -1 || col.backendMetrics.negatives_pct > 0) ? ' [≤ -1 values]' : '' }}
+                        </option>
+                        <option value="sqrt" :disabled="col.backendMetrics && (col.backendMetrics.min < 0 || col.backendMetrics.negatives_pct > 0)">
+                          Square Root {{ col.backendMetrics && (col.backendMetrics.min < 0 || col.backendMetrics.negatives_pct > 0) ? ' [< 0 values]' : '' }}
+                        </option>
+                        <option value="cbrt">Cube Root</option>
+                        <option value="square">Square (x²)</option>
+                        <option value="yeo-johnson">Yeo-Johnson</option>
+                        <option value="box-cox" :disabled="col.backendMetrics && (col.backendMetrics.min <= 0 || col.backendMetrics.negatives_pct > 0)">
+                          Box-Cox {{ col.backendMetrics && (col.backendMetrics.min <= 0 || col.backendMetrics.negatives_pct > 0) ? ' [≤ 0 values]' : '' }}
+                        </option>
+                      </select>
+                    </div>
+
+                    <!-- Inline Details (Spans full width, completely eliminates vertical layout clipping) -->
+                    <div class="row-details-panel" v-if="col.showDetails">
+                      <div class="popover-title">Statistical Profile: {{ col.name }}</div>
+                      <div class="popover-grid">
+                        <div class="popover-stat">
+                          <span class="stat-label">Skewness</span>
+                          <span class="stat-val" :style="{ color: Math.abs(col.backendMetrics.skewness) >= 1.5 ? '#f87171' : (Math.abs(col.backendMetrics.skewness) >= 0.5 ? '#fbbf24' : '#34d399') }">
+                            {{ Number(col.backendMetrics.skewness || 0).toFixed(3) }}
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Kurtosis</span>
+                          <span class="stat-val" :style="{ color: Math.abs(col.backendMetrics.kurtosis) >= 3.0 ? '#c4b5fd' : '#e2e8f0' }">
+                            {{ Number(col.backendMetrics.kurtosis || 0).toFixed(3) }}
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Variance</span>
+                          <span class="stat-val">
+                            {{ Number(col.backendMetrics.variance || 0).toFixed(3) }}
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Unique Ratio</span>
+                          <span class="stat-val" :style="{ color: (col.backendMetrics.unique_ratio || 1.0) < 0.05 ? '#64748b' : '#e2e8f0' }">
+                            {{ Number((col.backendMetrics.unique_ratio || 0) * 100).toFixed(1) }}%
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Negatives</span>
+                          <span class="stat-val" :style="{ color: (col.backendMetrics.negatives_pct || 0) > 0 ? '#fbbf24' : '#64748b' }">
+                            {{ (col.backendMetrics.negatives_pct || 0) > 0 ? Number(col.backendMetrics.negatives_pct).toFixed(1) + '%' : 'None' }}
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Zeros</span>
+                          <span class="stat-val" :style="{ color: (col.backendMetrics.zeros_pct || 0) > 0 ? '#60a5fa' : '#64748b' }">
+                            {{ (col.backendMetrics.zeros_pct || 0) > 0 ? Number(col.backendMetrics.zeros_pct).toFixed(1) + '%' : 'None' }}
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Outliers</span>
+                          <span class="stat-val" :style="{ color: (col.backendMetrics.outliers_pct || 0) > 5 ? '#f87171' : '#e2e8f0' }">
+                            {{ Number(col.backendMetrics.outliers_pct || 0).toFixed(1) }}%
+                          </span>
+                        </div>
+                        <div class="popover-stat">
+                          <span class="stat-label">Samples</span>
+                          <span class="stat-val">{{ col.backendMetrics.count || 'N/A' }}</span>
+                        </div>
+                      </div>
+                      <div class="popover-divider"></div>
+                      <div class="popover-recommendation">
+                        <strong>AutoML Recommendation:</strong> {{ getTransformRecommendation(col).reason }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="transformableColumns.length === 0" class="empty-state">
+                    No numerical feature columns found.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Anti-leakage note -->
+              <div class="leakage-warning">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/>
+                </svg>
+                <span><strong>Anti-Leakage Protection:</strong> Shift offsets and Box-Cox lambdas are computed on Training data only and then applied to the Test set.</span>
+              </div>
+            </div>
+
+            <template #footer>
+              <Button variant="ghost" @click="showTransformModal = false">Cancel</Button>
+              <Button
+                variant="primary"
+                :loading="isProcessing"
+                @click="applyColumnTransformation"
+                :disabled="!splitApplied || !transformableColumns.some(c => c.transform && c.transformMethod !== 'none')"
+              >
+                Apply Transformation
+              </Button>
+            </template>
+          </Modal>
+
+          <!-- ========== CARD 5.5: PRINCIPAL COMPONENT ANALYSIS (PCA) ========== -->
+          <Card class="preprocessing-tool-card" hover :class="{ disabled: !splitApplied }">
+            <div class="tool-header">
+              <div class="tool-icon" style="background: rgba(139, 92, 246, 0.10); color: #a78bfa;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21,11.5A8.5,8.5 0 0,1 12.5,20A8.5,8.5 0 0,1 4,11.5A8.5,8.5 0 0,1 12.5,3A8.5,8.5 0 0,1 21,11.5M23,11.5C23,5.7 18.3,1 12.5,1C6.7,1 2,5.7 2,11.5C2,17.3 6.7,22 12.5,22C18.3,22 23,17.3 23,11.5M12.5,7A4.5,4.5 0 0,0 8,11.5A4.5,4.5 0 0,0 12.5,16A4.5,4.5 0 0,0 17,11.5A4.5,4.5 0 0,0 12.5,7Z"/>
+                </svg>
+              </div>
+              <div class="tool-info">
+                <h3>
+                  Principal Component Analysis (PCA)
+                  <span v-if="!splitApplied" class="requires-split-inline">⚠️ Requires Split</span>
+                  <span v-else-if="pcaApplied" class="balanced-badge" style="background: rgba(139, 92, 246, 0.2); color: #c084fc; border-color: rgba(139, 92, 246, 0.3);">
+                    ✓ Applied
+                  </span>
+                </h3>
+                <p>Reduce dataset dimensionality by compressing correlated numerical features while preserving maximum variance</p>
+                <p v-if="pcaApplied && preprocessing.pca" class="rec-note" style="color: #a78bfa; margin-top: 4px; font-weight: 500; font-size: 0.85rem;">
+                  Active: {{ preprocessing.pca.reducedFeatureCount }} components explaining {{ preprocessing.pca.varianceRetained }}% variance ({{ preprocessing.pca.compressionRatio }}% compressed)
+                </p>
+              </div>
+              <div class="tool-badge" :class="{ 'success-badge': pcaApplied }">
+                {{ pcaApplied ? "✓ Applied" : "Not Applied" }}
+              </div>
+            </div>
+            <div class="tool-footer">
+              <Button variant="primary" @click="showPcaModal = true" :disabled="!splitApplied">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+                Configure PCA
+              </Button>
+            </div>
+          </Card>
+
+          <!-- PCA Modal -->
+          <Modal v-model="showPcaModal" title="Principal Component Analysis (PCA)" size="xl">
+            <div class="modal-section" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+              
+              <!-- CONDITIONAL COMPATIBILITY WARNINGS -->
+              <div v-if="pcaDryRunData.has_missing_values" class="leakage-warning" style="background: rgba(239, 68, 68, 0.05); color: #ef4444; border-color: rgba(239, 68, 68, 0.2); display: flex; align-items: center; gap: 0.75rem; padding: 12px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink: 0;">
+                  <path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/>
+                </svg>
+                <div>
+                  <strong style="display: block; font-size: 0.9rem;">Missing Values Detected</strong>
+                  <p style="margin: 4px 0 0 0; font-size: 0.8rem; opacity: 0.9;">
+                    PCA cannot process datasets with missing values. Please apply column imputation first in the preprocessing checklist.
+                  </p>
+                </div>
+              </div>
+
+              <div v-if="unscaledPcaColumns.length > 0" class="leakage-warning" style="background: rgba(245, 158, 11, 0.05); color: #fbbf24; border-color: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; padding: 12px; border-radius: 8px; border-left: 4px solid #fbbf24;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink: 0;">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                  </svg>
+                  <div>
+                    <strong style="display: block; font-size: 0.9rem;">Scaling Recommended</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.8rem; opacity: 0.9; line-height: 1.4;">
+                      The following features are not scaled: <strong style="color: #fff; font-family: monospace; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; letter-spacing: 0.02em;">{{ unscaledPcaColumns.join(', ') }}</strong>. PCA is highly sensitive to feature magnitudes; unscaled columns with larger ranges will dominate projections.
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="primary" 
+                  size="sm"
+                  @click="applyScalingAutomatically"
+                  style="background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%); border: none; font-size: 0.75rem; padding: 6px 12px; font-weight: 600; box-shadow: 0 0 10px rgba(139, 92, 246, 0.25); flex-shrink: 0;"
+                >
+                  Apply Standard Scaling
+                </Button>
+              </div>
+
+              <!-- Main Split Grid (Controls on Left, Scree Plot + Stats on Right) -->
+              <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem; align-items: start;">
+                
+                <!-- LEFT PANEL: PCA PARAMETERS & FEATURE SELECTION -->
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                  
+                  <!-- PCA Target Configuration -->
+                  <div class="config-group" style="background: rgba(30, 41, 59, 0.2); border: 1px solid rgba(255, 255, 255, 0.04); padding: 1.25rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <label class="config-label" style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #f1f5f9; margin-bottom: 1rem;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"/>
+                      </svg>
+                      PCA Target Configuration
+                    </label>
+                    
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 1.25rem;">
+                      <button 
+                        type="button" 
+                        class="btn-secondary small" 
+                        :style="{ background: pcaMode === 'variance' ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%)' : 'rgba(255,255,255,0.03)', borderColor: pcaMode === 'variance' ? '#a78bfa' : 'rgba(255,255,255,0.08)', color: pcaMode === 'variance' ? '#c084fc' : '#94a3b8', flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease', fontWeight: '600' }"
+                        @click="pcaMode = 'variance'"
+                      >
+                        Variance Retention
+                      </button>
+                      <button 
+                        type="button" 
+                        class="btn-secondary small" 
+                        :style="{ background: pcaMode === 'fixed' ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%)' : 'rgba(255,255,255,0.03)', borderColor: pcaMode === 'fixed' ? '#a78bfa' : 'rgba(255,255,255,0.08)', color: pcaMode === 'fixed' ? '#c084fc' : '#94a3b8', flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease', fontWeight: '600' }"
+                        @click="pcaMode = 'fixed'"
+                      >
+                        Fixed Components
+                      </button>
+                    </div>
+
+                    <!-- Slider: Variance Retention -->
+                    <div v-if="pcaMode === 'variance'" class="slider-group">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.8rem; color: #94a3b8;">Target Variance Ratio</span>
+                        <span class="config-value-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc; font-weight: bold; border: 1px solid rgba(139, 92, 246, 0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem;">{{ pcaVarianceRatio }}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        v-model.number="pcaVarianceRatio" 
+                        min="70" 
+                        max="99" 
+                        step="1"
+                        class="config-slider"
+                        style="width: 100%; cursor: pointer;"
+                      />
+                      <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;">
+                        <span>70% (High compression)</span>
+                        <span>95% (Recommended)</span>
+                        <span>99% (Max variance)</span>
+                      </div>
+                    </div>
+
+                    <!-- Slider: Fixed Components -->
+                    <div v-if="pcaMode === 'fixed'" class="slider-group">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.8rem; color: #94a3b8;">Number of Components</span>
+                        <span class="config-value-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-weight: bold; border: 1px solid rgba(59, 130, 246, 0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.8rem;">{{ pcaNumComponents }}</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        v-model.number="pcaNumComponents" 
+                        min="1" 
+                        :max="pcaApplyScope === 'all' ? Math.max(1, pcaNumericalColumns.length) : Math.max(1, pcaSelectedColumns.length)" 
+                        step="1"
+                        class="config-slider"
+                        style="width: 100%; cursor: pointer;"
+                      />
+                      <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;">
+                        <span>1 Component</span>
+                        <span>{{ pcaApplyScope === 'all' ? pcaNumericalColumns.length : pcaSelectedColumns.length }} (Max)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Scope / Features Selection -->
+                  <div class="config-group" style="background: rgba(30, 41, 59, 0.2); border: 1px solid rgba(255, 255, 255, 0.04); padding: 1.25rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
+                    <label class="config-label" style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #f1f5f9; margin-bottom: 0.75rem;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/>
+                      </svg>
+                      Apply Scope
+                    </label>
+
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+                      <button 
+                        type="button" 
+                        class="btn-secondary small" 
+                        :style="{ background: pcaApplyScope === 'all' ? 'rgba(255,255,255,0.06)' : 'transparent', borderColor: pcaApplyScope === 'all' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', flex: 1, padding: '6px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer' }"
+                        @click="pcaApplyScope = 'all'"
+                      >
+                        All Numerical Features
+                      </button>
+                      <button 
+                        type="button" 
+                        class="btn-secondary small" 
+                        :style="{ background: pcaApplyScope === 'selective' ? 'rgba(255,255,255,0.06)' : 'transparent', borderColor: pcaApplyScope === 'selective' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', flex: 1, padding: '6px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer' }"
+                        @click="pcaApplyScope = 'selective'"
+                      >
+                        Select Features
+                      </button>
+                    </div>
+
+                    <!-- Checklist (Only visible when selective is active) -->
+                    <div v-if="pcaApplyScope === 'selective'" style="border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(15, 23, 42, 0.3); max-height: 180px; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 4px;">
+                      <div 
+                        v-for="col in pcaNumericalColumns" 
+                        :key="col.name" 
+                        style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.01);"
+                      >
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; width: 100%;">
+                          <input 
+                            type="checkbox" 
+                            :value="col.name" 
+                            v-model="pcaSelectedColumns"
+                            style="accent-color: #8b5cf6;"
+                          />
+                          <span style="font-size: 0.8rem; color: #e2e8f0; font-weight: 500;">
+                            {{ col.name }}
+                            <span v-if="col.isAlreadyScaled || experimentStore.preprocessing.scaledColumns?.includes(col.name)" style="font-size: 0.65rem; color: #34d399; margin-left: 6px; background: rgba(52, 211, 153, 0.1); padding: 1px 4px; border-radius: 3px;">Scaled</span>
+                          </span>
+                        </label>
+                        <span class="semantic-type-pill numeric" style="font-size: 0.6rem; padding: 1px 4px; opacity: 0.8; background: rgba(255,255,255,0.05); color: #fff; border-radius: 3px;">NUMERIC</span>
+                      </div>
+                    </div>
+                    
+                    <div v-else style="font-size: 0.8rem; color: #64748b; line-height: 1.4; padding: 0.5rem 0;">
+                      Currently targets all <strong>{{ pcaNumericalColumns.length }}</strong> numerical columns for dimensionality reduction.
+                    </div>
+                  </div>
+                  
+                </div>
+
+                <!-- RIGHT PANEL: INTERACTIVE SCREE PLOT & GLOWING STATS -->
+                <div style="display: flex; flex-direction: column; gap: 1.25rem; height: 100%;">
+                  
+                  <!-- Scree Plot Chart Card -->
+                  <div style="background: rgba(30, 41, 59, 0.2); border: 1px solid rgba(255, 255, 255, 0.04); padding: 1.25rem 1.5rem; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                      <label class="config-label" style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #f1f5f9; margin-bottom: 0;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z"/>
+                        </svg>
+                        Explained Cumulative Variance (Scree Plot)
+                      </label>
+                      <span style="font-size: 0.7rem; color: #64748b; font-style: italic;">
+                        💡 Click bars to set fixed components
+                      </span>
+                    </div>
+
+                    <!-- Scree Plot Rendering -->
+                    <div v-if="isPcaDryRunLoading" style="height: 160px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.75rem; color: #94a3b8; font-size: 0.85rem;">
+                      <div style="width: 20px; height: 20px; border: 2px solid #8b5cf6; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                      Running SVD projections on active data split...
+                    </div>
+
+                    <div v-else-if="!pcaDryRunData.cumulative_variance || pcaDryRunData.cumulative_variance.length === 0" style="height: 160px; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 0.85rem; border: 1px dashed rgba(255,255,255,0.05); border-radius: 8px; background: rgba(0,0,0,0.1);">
+                      No features selected. Please select numerical features to view projection.
+                    </div>
+
+                    <div v-else style="display: flex; flex-direction: column; justify-content: flex-end; height: 160px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); position: relative; margin-top: 0.5rem; width: 100%;">
+                      
+                      <!-- 90% Grid Line Indicator -->
+                      <div style="position: absolute; left: 0; right: 0; top: 10%; border-top: 1px dashed rgba(167, 139, 250, 0.15); font-size: 0.6rem; color: rgba(167, 139, 250, 0.4); padding-top: 2px; pointer-events: none;">
+                        90% Variance Target
+                      </div>
+                      
+                      <!-- 95% Grid Line Indicator -->
+                      <div style="position: absolute; left: 0; right: 0; top: 5%; border-top: 1px dashed rgba(96, 165, 250, 0.15); font-size: 0.6rem; color: rgba(96, 165, 250, 0.4); padding-top: 2px; pointer-events: none;">
+                        95% Recommended Target
+                      </div>
+
+                      <!-- Bars Wrapper -->
+                      <div style="display: flex; align-items: flex-end; gap: 4px; height: 100%; width: 100%;">
+                        <div 
+                          v-for="(val, idx) in pcaDryRunData.cumulative_variance" 
+                          :key="idx"
+                          @click="pcaMode = 'fixed'; pcaNumComponents = idx + 1"
+                          @mouseenter="hoveredBarIndex = idx"
+                          @mouseleave="hoveredBarIndex = null"
+                          style="flex: 1; min-width: 8px; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative; height: 100%; justify-content: flex-end;"
+                        >
+                          <!-- Interactive Reactive Hover Tooltip -->
+                          <div 
+                            v-if="hoveredBarIndex === idx"
+                            style="position: absolute; bottom: calc(100% + 8px); background: #1e293b; border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 6px; padding: 4px 8px; font-size: 0.7rem; white-space: nowrap; color: #fff; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: none; transform: translateX(-50%); left: 50%; display: flex; flex-direction: column; align-items: center;"
+                          >
+                            <span style="font-weight: 600; color: #a78bfa;">PC{{ idx + 1 }}</span>
+                            <span style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px;">{{ Number(val * 100).toFixed(1) }}% Cumulative</span>
+                          </div>
+                          
+                          <!-- Bar Graphics -->
+                          <div 
+                            style="width: 100%; border-radius: 4px 4px 0 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);"
+                            :style="{
+                              height: Math.max(4, Math.round(val * 100)) + '%',
+                              background: (idx + 1 <= (pcaMode === 'variance' ? estimatedComponents : pcaNumComponents))
+                                ? 'linear-gradient(180deg, #a78bfa 0%, #3b82f6 100%)' 
+                                : 'rgba(255, 255, 255, 0.08)',
+                              boxShadow: (idx + 1 <= (pcaMode === 'variance' ? estimatedComponents : pcaNumComponents))
+                                ? '0 0 10px rgba(139, 92, 246, 0.35)' 
+                                : 'none'
+                            }"
+                          ></div>
+                          
+                          <!-- X-Axis Label -->
+                          <span style="font-size: 0.6rem; color: #64748b; margin-top: 6px;">PC{{ idx + 1 }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Glassmorphic Estimated Output Summary Card -->
+                  <div style="background: rgba(30, 41, 59, 0.15); border: 1px solid rgba(255, 255, 255, 0.04); padding: 1.25rem 1.5rem; border-radius: 12px; backdrop-filter: blur(12px); box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.01);">
+                    <label class="config-label" style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #f1f5f9; margin-bottom: 0.75rem;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/>
+                      </svg>
+                      Estimated Projection Summary
+                    </label>
+
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
+                      
+                      <!-- Original Features -->
+                      <div style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.04); padding: 0.75rem 0.5rem; border-radius: 10px; display: flex; flex-direction: column; align-items: center; text-align: center;">
+                        <span style="font-size: 1.25rem; font-weight: 800; color: #cbd5e1;">
+                          {{ pcaApplyScope === 'all' ? pcaNumericalColumns.length : pcaSelectedColumns.length }}
+                        </span>
+                        <span style="font-size: 0.6rem; color: #64748b; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Original</span>
+                      </div>
+
+                      <!-- Reduced Components -->
+                      <div style="background: rgba(139, 92, 246, 0.04); border: 1px solid rgba(139, 92, 246, 0.15); padding: 0.75rem 0.5rem; border-radius: 10px; display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.02);">
+                        <span style="font-size: 1.25rem; font-weight: 800; color: #c084fc; text-shadow: 0 0 8px rgba(167, 139, 250, 0.2);">
+                          {{ isPcaDryRunLoading ? "..." : (pcaMode === 'variance' ? estimatedComponents : pcaNumComponents) }}
+                        </span>
+                        <span style="font-size: 0.6rem; color: #a78bfa; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Reduced</span>
+                      </div>
+
+                      <!-- Variance Retained -->
+                      <div style="background: rgba(59, 130, 246, 0.04); border: 1px solid rgba(59, 130, 246, 0.15); padding: 0.75rem 0.5rem; border-radius: 10px; display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.02);">
+                        <span style="font-size: 1.25rem; font-weight: 800; color: #60a5fa; text-shadow: 0 0 8px rgba(96, 165, 250, 0.2);">
+                          {{ isPcaDryRunLoading ? "..." : estimatedVarianceRetained }}%
+                        </span>
+                        <span style="font-size: 0.6rem; color: #60a5fa; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Retained</span>
+                      </div>
+
+                      <!-- Compression Ratio -->
+                      <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.15); padding: 0.75rem 0.5rem; border-radius: 10px; display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.02);">
+                        <span style="font-size: 1.25rem; font-weight: 800; color: #34d399; text-shadow: 0 0 8px rgba(52, 211, 153, 0.2);">
+                          {{ isPcaDryRunLoading ? "..." : estimatedCompressionRatio }}%
+                        </span>
+                        <span style="font-size: 0.6rem; color: #34d399; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Compressed</span>
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+            <template #footer>
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <!-- Educational Footer helper note -->
+                <span style="font-size: 0.8rem; color: #64748b; max-width: 60%; text-align: left; line-height: 1.4;">
+                  💡 PCA reduces dimensionality by compressing correlated numerical features while preserving important variance.
+                </span>
+                
+                <div style="display: flex; gap: 0.75rem;">
+                  <Button variant="ghost" @click="showPcaModal = false">
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    :loading="isProcessing"
+                    @click="applyPCA"
+                    :disabled="!splitApplied || pcaDryRunData.has_missing_values || (pcaApplyScope === 'selective' && pcaSelectedColumns.length === 0)"
+                  >
+                    Apply PCA
+                  </Button>
+                </div>
+              </div>
+            </template>
+          </Modal>
+
+          <!-- ========== CARD 6: TF-IDF VECTORIZATION ========== -->
           
 
           <!-- Reset Confirmation Modal -->
@@ -1490,6 +2101,7 @@ const randomSeed = computed({
 const splitApplied = computed(() => preprocessing.value.isSplitApplied);
 const scalingApplied = computed(() => preprocessing.value.isScalingApplied);
 const encodingApplied = computed(() => preprocessing.value.isEncodingApplied);
+const pcaApplied = computed(() => preprocessing.value.pca?.applied || false);
 
 // ==================== LOCAL UI STATE (Not Persisted) ====================
 const fileName = ref("dataset.csv"); // Transient name
@@ -1509,7 +2121,24 @@ const showResetSplitModal = ref(false);
 const showSmoteModal = ref(false);
 const showTargetEncodingModal = ref(false);
 const showVersionModal = ref(false);
+const showTransformModal = ref(false);
+const showPcaModal = ref(false);
 const newVersionName = ref("");
+
+// PCA Interactive UI States
+const pcaMode = ref('variance'); // 'variance' | 'fixed'
+const pcaVarianceRatio = ref(95); // 70 to 99
+const pcaNumComponents = ref(10);
+const pcaApplyScope = ref('all'); // 'all' | 'selective'
+const pcaSelectedColumns = ref([]); // checklist of selected numerical columns
+const pcaDryRunData = ref({
+  cumulative_variance: [],
+  feature_count: 0,
+  zero_variance_columns: [],
+  has_missing_values: false
+});
+const isPcaDryRunLoading = ref(false);
+const hoveredBarIndex = ref(null);
 
 const openVersionModal = () => {
     const now = new Date();
@@ -1860,7 +2489,324 @@ const numericalColumns = computed(() => {
   return results;
 });
 
+const pcaNumericalColumns = computed(() => {
+  const targetName = (typeof selectedTarget.value === 'object' && selectedTarget.value !== null) 
+    ? selectedTarget.value.name 
+    : selectedTarget.value;
+
+  const results = columns.value.filter(col => {
+    // 1. Exclude target column
+    if (col.name === targetName) return false;
+
+    // 2. Exclude One-Hot encoded columns (dummies)
+    if (col.isOneHot) return false;
+    
+    // Pattern fallback: check if name represents a one-hot dummy column (especially after page reload)
+    if (col.name.includes('_')) {
+      const prefix = col.name.substring(0, col.name.lastIndexOf('_'));
+      // Check Pinia store encoding history or active categoricallyEncodedColumns ref
+      const encodedList = experimentStore.preprocessing.encodedColumns || [];
+      const isPrefixEncoded = encodedList.some(enc => {
+        const name = typeof enc === 'object' && enc !== null ? enc.name : enc;
+        return name === prefix;
+      });
+      if (isPrefixEncoded || categoricallyEncodedColumns.value.has(prefix)) return false;
+      
+      // Check if original columns contains this prefix as a categorical/string column
+      const orig = columns.value.find(c => c.name === prefix);
+      if (orig && (orig.type === 'categorical' || orig.semanticType?.toLowerCase() === 'categorical')) return false;
+    }
+    
+    const sType = (getColumnSemanticType(col.name) || "").toLowerCase();
+    
+    // 3. Numeric should be strictly numeric, exclude others even if raw type is numerical
+    const isNumericType = sType === 'numeric' || sType === 'integer' || sType === 'float';
+    const isFallbackNumeric = (sType === 'unknown' || sType === '') && (col.type === 'numerical' || col.type === 'numeric');
+    
+    return isNumericType || isFallbackNumeric;
+  });
+
+  return results;
+});
+
+// ── Column Transformation ───────────────────────────────────────────────────
+// A column is eligible for transformation if it's numeric, not the target,
+// not already scaled, and (ideally) skewed. We include all numeric columns
+// so the user can choose even mildly skewed ones.
+const transformableColumns = computed(() => {
+  const targetName = (typeof selectedTarget.value === 'object' && selectedTarget.value !== null)
+    ? selectedTarget.value.name
+    : selectedTarget.value;
+
+  return columns.value.filter(col => {
+    if (col.name === targetName) return false;
+    if (col.isOneHot) return false;
+    
+    // Pattern fallback: check if name represents a one-hot dummy column (especially after page reload)
+    if (col.name.includes('_')) {
+      const prefix = col.name.substring(0, col.name.lastIndexOf('_'));
+      // Check Pinia store encoding history or active categoricallyEncodedColumns ref
+      const encodedList = experimentStore.preprocessing.encodedColumns || [];
+      const isPrefixEncoded = encodedList.some(enc => {
+        const name = typeof enc === 'object' && enc !== null ? enc.name : enc;
+        return name === prefix;
+      });
+      if (isPrefixEncoded || categoricallyEncodedColumns.value.has(prefix)) return false;
+      
+      // Check if original columns contains this prefix as a categorical/string column
+      const orig = columns.value.find(c => c.name === prefix);
+      if (orig && (orig.type === 'categorical' || orig.semanticType?.toLowerCase() === 'categorical')) return false;
+    }
+    
+    const sType = (getColumnSemanticType(col.name) || '').toLowerCase();
+    const isNumericType = sType === 'numeric' || sType === 'integer' || sType === 'float';
+    const isFallbackNumeric = (sType === 'unknown' || sType === '') &&
+      (col.type === 'numerical' || col.type === 'numeric');
+    return isNumericType || isFallbackNumeric;
+  });
+});
+
+const transformationApplied = computed(() =>
+  columns.value.some(c => c.transformationApplied)
+);
+
+// ── Skew distribution label & badge class ───────────────────────────────────
+const getSkewLabel = (col) => {
+  if (!col.backendMetrics) return 'UNKNOWN';
+  const skew = col.backendMetrics.skewness ?? 0;
+  const kurt = col.backendMetrics.kurtosis ?? 0;
+  const abs = Math.abs(skew);
+  if (abs < 0.5) return kurt > 3 ? 'HEAVY TAIL' : 'NORMAL';
+  if (skew > 0) {
+    if (abs >= 2) return 'HIGH RIGHT SKEW';
+    return 'MILD RIGHT SKEW';
+  } else {
+    if (abs >= 2) return 'HIGH LEFT SKEW';
+    return 'LEFT SKEW';
+  }
+};
+
+const getSkewBadgeClass = (col) => {
+  if (!col.backendMetrics) return 'skew-unknown';
+  const skew = col.backendMetrics.skewness ?? 0;
+  const kurt = col.backendMetrics.kurtosis ?? 0;
+  const abs = Math.abs(skew);
+  if (abs < 0.5) return kurt > 3 ? 'skew-heavy' : 'skew-normal';
+  if (abs >= 2)  return 'skew-high';
+  return 'skew-mild';
+};
+
+// Returns recommended transform + reason based on multi-metric statistical checks
+const getTransformRecommendation = (col) => {
+  if (!col.backendMetrics) {
+    return {
+      method: 'yeo-johnson',
+      label: 'YEO-JOHNSON',
+      reason: 'No statistics available. Yeo-Johnson is the safest general-purpose choice.'
+    };
+  }
+
+  const m = col.backendMetrics;
+  const skew = m.skewness ?? 0;
+  const absSkew = Math.abs(skew);
+  const kurt = m.kurtosis ?? 0;
+  const variance = m.variance ?? 0;
+  const min = m.min ?? 0;
+  const zerosPct = m.zeros_pct ?? 0;
+  const negativesPct = m.negatives_pct ?? (min < 0 ? 100 : 0);
+  const outliersPct = m.outliers_pct ?? 0;
+  const uniqueCount = m.unique_count ?? 999;
+  const uniqueRatio = m.unique_ratio ?? 1.0;
+
+  // 1. Check for near-constant / low-variance columns
+  if (variance < 1e-5) {
+    return {
+      method: 'none',
+      label: 'NONE',
+      reason: `Near-constant column (variance: ${variance.toExponential(2)}). Mathematical transformations have no effect.`
+    };
+  }
+
+  // 2. Check for discrete / low-cardinality ordinal columns
+  if (uniqueCount < 10 || (uniqueRatio < 0.05 && uniqueCount < 25)) {
+    return {
+      method: 'none',
+      label: 'NONE',
+      reason: `Likely a discrete/ordinal feature (${uniqueCount} unique values, ratio: ${(uniqueRatio * 100).toFixed(1)}%). Mathematical transforms are not recommended.`
+    };
+  }
+
+  // 3. Normal / Symmetric distribution check
+  if (absSkew < 0.5 && Math.abs(kurt) < 1.0 && outliersPct < 2.0) {
+    return {
+      method: 'none',
+      label: 'NONE',
+      reason: `Distribution is highly symmetric and near-normal (skewness: ${skew.toFixed(2)}, kurtosis: ${kurt.toFixed(2)}).`
+    };
+  }
+
+  // 4. Handle Negative values (strict mathematical constraints)
+  if (negativesPct > 0 || min < 0) {
+    // Log and Box-Cox are strictly invalid for negative values
+    if (absSkew >= 0.5) {
+      return {
+        method: 'yeo-johnson',
+        label: 'YEO-JOHNSON',
+        reason: `Contains negative values (${negativesPct.toFixed(1)}%). Yeo-Johnson power transform safely handles negatives to correct ${skew > 0 ? 'right' : 'left'} skew.`
+      };
+    } else if (kurt > 2.0) {
+      return {
+        method: 'yeo-johnson',
+        label: 'YEO-JOHNSON',
+        reason: `Heavy tails (kurtosis: ${kurt.toFixed(2)}) with negative values present. Yeo-Johnson stabilizes variance.`
+      };
+    } else {
+      return {
+        method: 'none',
+        label: 'NONE',
+        reason: 'Sufficiently symmetric distribution with negative values; no transformation needed.'
+      };
+    }
+  }
+
+  // 5. Handle Zeros (strictly non-negative, but has zeros)
+  const hasZeros = zerosPct > 0 || min === 0;
+
+  // 6. Highly skewed distributions (absSkew >= 1.5)
+  if (absSkew >= 1.5) {
+    if (skew > 0) {
+      // Right skewed
+      if (hasZeros) {
+        if (absSkew >= 2.5) {
+          return {
+            method: 'yeo-johnson',
+            label: 'YEO-JOHNSON',
+            reason: `Extreme right skew (skewness: ${skew.toFixed(2)}) with zeros present. Yeo-Johnson power transform is optimal.`
+          };
+        } else {
+          return {
+            method: 'log1p',
+            label: 'LOG1P',
+            reason: `Strong right skew (skewness: ${skew.toFixed(2)}) with zero values. Log1p - ln(x+1) safely compresses large values.`
+          };
+        }
+      } else {
+        // Strictly positive
+        if (absSkew >= 2.0) {
+          return {
+            method: 'box-cox',
+            label: 'BOX-COX',
+            reason: `Strictly positive with extreme right skew (skewness: ${skew.toFixed(2)}). Box-Cox power transform is mathematically optimal.`
+          };
+        } else {
+          return {
+            method: 'log',
+            label: 'LOG',
+            reason: `Strictly positive with strong right skew (skewness: ${skew.toFixed(2)}). Log (ln) transformation reduces skewness effectively.`
+          };
+        }
+      }
+    } else {
+      // Left skewed
+      return {
+        method: 'yeo-johnson',
+        label: 'YEO-JOHNSON',
+        reason: `Strong left skew (skewness: ${skew.toFixed(2)}). Yeo-Johnson power transform corrects left skew without manual reflection.`
+      };
+    }
+  }
+
+  // 7. Moderately skewed distributions (0.5 <= absSkew < 1.5)
+  if (absSkew >= 0.5) {
+    if (skew > 0) {
+      if (hasZeros) {
+        return {
+          method: 'log1p',
+          label: 'LOG1P',
+          reason: `Moderate right skew (skewness: ${skew.toFixed(2)}) with zero values. Log1p - ln(x+1) provides a gentle compression.`
+        };
+      } else {
+        return {
+          method: 'sqrt',
+          label: 'SQRT',
+          reason: `Moderate right skew (skewness: ${skew.toFixed(2)}) with positive values. Square Root is a gentle, highly interpretable transform.`
+        };
+      }
+    } else {
+      return {
+        method: 'yeo-johnson',
+        label: 'YEO-JOHNSON',
+        reason: `Moderate left skew (skewness: ${skew.toFixed(2)}). Yeo-Johnson power transform is recommended.`
+      };
+    }
+  }
+
+  // 8. Low Skewness but High Kurtosis (Heavy Tails or Outliers)
+  if (kurt > 2.0 || outliersPct > 5.0) {
+    if (hasZeros || negativesPct > 0) {
+      return {
+        method: 'yeo-johnson',
+        label: 'YEO-JOHNSON',
+        reason: `Heavy tails (kurtosis: ${kurt.toFixed(2)}) and outliers (${outliersPct.toFixed(1)}%). Yeo-Johnson stabilizes variance.`
+      };
+    } else {
+      return {
+        method: 'box-cox',
+        label: 'BOX-COX',
+        reason: `Heavy tails (kurtosis: ${kurt.toFixed(2)}) and outliers (${outliersPct.toFixed(1)}%). Box-Cox stabilizes variance for positive values.`
+      };
+    }
+  }
+
+  return {
+    method: 'none',
+    label: 'NONE',
+    reason: `Distribution is normal and stable (skewness: ${skew.toFixed(2)}, kurtosis: ${kurt.toFixed(2)}). No transform required.`
+  };
+};
+
+const selectAllTransformColumns = () => {
+  transformableColumns.value.forEach(col => {
+    col.transform = true;
+    const rec = getTransformRecommendation(col);
+    if (!col.transformMethod || col.transformMethod === 'none') {
+      col.transformMethod = rec.method;
+    }
+  });
+};
+
+const selectRecommendedTransformColumns = () => {
+  transformableColumns.value.forEach(col => {
+    const rec    = getTransformRecommendation(col);
+    const absSkew = Math.abs(col.backendMetrics?.skewness ?? 0);
+    // Select only columns with meaningful skew OR outliers
+    const hasOutliers = (col.backendMetrics?.outliers_count ?? 0) > 0;
+    col.transform = absSkew >= 0.5 || hasOutliers;
+    col.transformMethod = rec.method;
+  });
+};
+
+const deselectAllTransformColumns = () => {
+  transformableColumns.value.forEach(col => {
+    col.transform = false;
+    col.transformMethod = 'none';
+  });
+};
+
+// Seed transform methods from recommendation when the modal first opens
+watch(showTransformModal, (opened) => {
+  if (opened) {
+    transformableColumns.value.forEach(col => {
+      if (!col.transformMethod) {
+        col.transformMethod = getTransformRecommendation(col).method;
+      }
+    });
+  }
+});
+// ────────────────────────────────────────────────────────────────────────────
+
 const smoteValidation = computed(() => {
+
   if (!columns.value || columns.value.length === 0) return { valid: true };
   
   const rawTarget = selectedTarget.value;
@@ -3072,6 +4018,335 @@ const resetScaling = async () => {
     console.log("🔄 Scaling reset");
   }
 };
+
+// ==================== COLUMN TRANSFORMATION ====================
+
+const applyColumnTransformation = async () => {
+  if (!preprocessing.value.isSplitApplied || isProcessing.value) {
+    showWarning('Split Required', 'Please apply a dataset split first.');
+    return;
+  }
+
+  const columnsToTransform = transformableColumns.value
+    .filter(col => col.transform && col.transformMethod && col.transformMethod !== 'none')
+    .map(col => ({
+      name: col.name,
+      method: col.transformMethod,
+    }));
+
+  if (columnsToTransform.length === 0) {
+    showWarning('Selection Required', 'Please select at least one column with a non-None transformation method.');
+    return;
+  }
+
+
+  uiStore.startProcessing('Applying column transformations...');
+
+  try {
+    const payload = {
+      dataset_id: datasetId.value,
+      columns: columnsToTransform,
+    };
+
+    console.log('🔧 Column Transform Request:', payload);
+
+    const response = await authenticatedPost('/api/datasets/apply-column-transform', payload);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log('✅ Column transformation successful');
+
+      // Update data store previews
+      const newTrain = data.train_preview || trainData.value;
+      const newTest  = data.test_preview  || testData.value;
+      dataStore.setSplitData(newTrain, newTest);
+
+      // Mark each transformed column on the local columns array
+      columnsToTransform.forEach(({ name }) => {
+        const col = columns.value.find(c => c.name === name);
+        if (col) col.transformationApplied = true;
+      });
+
+      // Save to Pinia Store
+      experimentStore.setTransformationApplied(true, columnsToTransform.map(c => c.name));
+
+      showSuccess('Transformation Applied', `Transformed ${columnsToTransform.length} column(s).`);
+      addPreprocessingStep('Column Transformation');
+      showTransformModal.value = false;
+      mlStore.isDirty = true;
+    } else {
+      throw new Error(data.error || 'Column transformation failed');
+    }
+  } catch (error) {
+    console.error('❌ Column transformation error:', error);
+    showError('Transformation Failed', error.message);
+  } finally {
+    uiStore.stopProcessing();
+  }
+};
+
+// ==================== PRINCIPAL COMPONENT ANALYSIS (PCA) ====================
+
+const fetchPcaDryRun = async () => {
+  if (!datasetId.value || !splitApplied.value) return;
+  
+  const cols = pcaApplyScope.value === 'all' 
+    ? pcaNumericalColumns.value.map(c => c.name) 
+    : pcaSelectedColumns.value;
+    
+  if (cols.length === 0) {
+    pcaDryRunData.value = {
+      cumulative_variance: [],
+      feature_count: 0,
+      zero_variance_columns: [],
+      has_missing_values: false
+    };
+    return;
+  }
+  
+  try {
+    isPcaDryRunLoading.value = true;
+    const response = await authenticatedPost('/api/datasets/pca-dry-run', {
+      dataset_id: datasetId.value,
+      columns: cols
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (data.success) {
+      pcaDryRunData.value = {
+        cumulative_variance: data.cumulative_variance || [],
+        feature_count: data.feature_count || 0,
+        zero_variance_columns: data.zero_variance_columns || [],
+        has_missing_values: data.has_missing_values || false
+      };
+    }
+  } catch (err) {
+    console.error("❌ PCA dry-run failed:", err);
+  } finally {
+    isPcaDryRunLoading.value = false;
+  }
+};
+
+const applyPCA = async () => {
+  if (!splitApplied.value || isProcessing.value) {
+    showWarning('Split Required', "Please apply split first");
+    return;
+  }
+
+  if (pcaDryRunData.value.has_missing_values) {
+    showWarning('Missing Values Detected', 'Please handle missing values before applying PCA.');
+    return;
+  }
+
+  const columnsToUse = pcaApplyScope.value === 'all'
+    ? pcaNumericalColumns.value.map(c => c.name)
+    : pcaSelectedColumns.value;
+
+  if (columnsToUse.length === 0) {
+    showWarning('Selection Required', 'Please select at least one feature for PCA.');
+    return;
+  }
+
+  uiStore.startProcessing("Applying Principal Component Analysis...");
+
+  if (!datasetId.value) {
+    showError('Error', "No dataset ID found.");
+    uiStore.stopProcessing();
+    return;
+  }
+
+  try {
+    const payload = {
+      dataset_id: datasetId.value,
+      mode: pcaMode.value,
+      variance_ratio: Number(pcaVarianceRatio.value),
+      num_components: Number(pcaNumComponents.value),
+      columns: columnsToUse
+    };
+
+    console.log('🔍 PCA Request:', payload);
+
+    const response = await authenticatedPost(`/api/datasets/apply-pca`, payload);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      console.log("✅ PCA successful");
+
+      // Update Data Store (Transient)
+      const newTrain = data.train_preview || trainData.value;
+      const newTest = data.test_preview || testData.value;
+      dataStore.setSplitData(newTrain, newTest);
+      
+      // Update Experiment Store (Persisted)
+      experimentStore.setPcaApplied(true, {
+        mode: pcaMode.value,
+        varianceRatio: Number(pcaVarianceRatio.value),
+        numComponents: Number(pcaNumComponents.value),
+        applyScope: pcaApplyScope.value,
+        selectedColumns: columnsToUse,
+        originalFeatureCount: data.original_feature_count,
+        reducedFeatureCount: data.reduced_feature_count,
+        varianceRetained: Number((data.variance_retained * 100).toFixed(1)),
+        compressionRatio: data.compression_ratio,
+        explainedVarianceRatio: data.explained_variance_ratio
+      });
+
+      showSuccess('PCA Applied', `Successfully reduced ${data.original_feature_count} features to ${data.reduced_feature_count} components.`);
+      addPreprocessingStep('Principal Component Analysis (PCA)');
+      showPcaModal.value = false;
+      mlStore.isDirty = true;
+
+      // Re-analyze columns to reflect changes
+      analyzeColumns();
+
+    } else {
+      throw new Error(data.error || "PCA failed");
+    }
+  } catch (error) {
+    console.error("❌ PCA error:", error);
+    showError('PCA Failed', error.message);
+  } finally {
+     uiStore.stopProcessing();
+  }
+};
+
+const unscaledPcaColumns = computed(() => {
+  const targets = pcaApplyScope.value === 'all'
+    ? pcaNumericalColumns.value.map(c => c.name)
+    : pcaSelectedColumns.value;
+  
+  const scaledSet = new Set(experimentStore.preprocessing.scaledColumns || []);
+  
+  return targets.filter(name => {
+    const col = columns.value.find(c => c.name === name);
+    const isScaled = col?.isAlreadyScaled || scaledSet.has(name);
+    return !isScaled;
+  });
+});
+
+const applyScalingAutomatically = async () => {
+  const columnsToScale = unscaledPcaColumns.value;
+
+  if (columnsToScale.length === 0) {
+    showWarning('Selection Required', 'All selected columns are already scaled.');
+    return;
+  }
+
+  uiStore.startProcessing("Scaling features for PCA...");
+
+  try {
+    const payload = {
+      dataset_id: datasetId.value,
+      columns: columnsToScale.map(name => ({ name, method: 'standard' }))
+    };
+
+    const response = await authenticatedPost(`/api/datasets/apply-scaling`, payload);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      const newTrain = data.scaled_train_preview || trainData.value;
+      const newTest = data.scaled_test_preview || testData.value;
+      dataStore.setSplitData(newTrain, newTest);
+      
+      const previouslyScaled = experimentStore.preprocessing.scaledColumns || [];
+      const updatedScaled = Array.from(new Set([...previouslyScaled, ...columnsToScale]));
+      
+      experimentStore.setScalingApplied(true);
+      experimentStore.preprocessing.scaledColumns = updatedScaled; 
+
+      showSuccess('Scaling Applied', `Automatically scaled ${columnsToScale.length} columns.`);
+      addPreprocessingStep('Feature Scaling');
+      mlStore.isDirty = true;
+
+      // Refresh columns
+      analyzeColumns();
+      // Re-run SVD dry run
+      await fetchPcaDryRun();
+    } else {
+      throw new Error(data.error || "Scaling failed");
+    }
+  } catch (error) {
+    console.error("❌ Automatic scaling error:", error);
+    showError('Scaling Failed', error.message);
+  } finally {
+    uiStore.stopProcessing();
+  }
+};
+
+// Computed Estimations for PCA Modal
+const estimatedComponents = computed(() => {
+  const list = pcaDryRunData.value.cumulative_variance || [];
+  if (list.length === 0) return 0;
+  const target = Number(pcaVarianceRatio.value) / 100.0;
+  const idx = list.findIndex(val => val >= target);
+  return idx === -1 ? list.length : idx + 1;
+});
+
+const estimatedVarianceRetained = computed(() => {
+  const list = pcaDryRunData.value.cumulative_variance || [];
+  if (list.length === 0) return 0;
+  if (pcaMode.value === 'variance') {
+    const ec = estimatedComponents.value;
+    if (ec === 0) return 0;
+    return Number((list[ec - 1] * 100).toFixed(1));
+  } else {
+    const fc = Math.min(Number(pcaNumComponents.value), list.length);
+    if (fc === 0) return 0;
+    return Number((list[fc - 1] * 100).toFixed(1));
+  }
+});
+
+const estimatedCompressionRatio = computed(() => {
+  const originalCount = pcaApplyScope.value === 'all'
+    ? pcaNumericalColumns.value.length
+    : pcaSelectedColumns.value.length;
+  if (originalCount === 0) return 0;
+  const reducedCount = pcaMode.value === 'variance' ? estimatedComponents.value : Number(pcaNumComponents.value);
+  return Math.max(0, Math.round((1.0 - (reducedCount / originalCount)) * 100));
+});
+
+// Watchers
+watch(showPcaModal, async (newVal) => {
+  if (newVal) {
+    pcaMode.value = preprocessing.value.pca?.mode || 'variance';
+    pcaVarianceRatio.value = preprocessing.value.pca?.varianceRatio || 95;
+    pcaNumComponents.value = preprocessing.value.pca?.numComponents || 10;
+    pcaApplyScope.value = preprocessing.value.pca?.applyScope || 'all';
+    
+    const allNumericNames = pcaNumericalColumns.value.map(c => c.name);
+    if (preprocessing.value.pca?.selectedColumns?.length > 0) {
+      pcaSelectedColumns.value = [...preprocessing.value.pca.selectedColumns];
+    } else {
+      pcaSelectedColumns.value = [...allNumericNames];
+    }
+    
+    await fetchPcaDryRun();
+  }
+});
+
+watch(pcaApplyScope, async () => {
+  await fetchPcaDryRun();
+});
+
+watch(pcaSelectedColumns, async () => {
+  await fetchPcaDryRun();
+}, { deep: true });
 
 // ==================== EXPORT FUNCTION ====================
 
@@ -8486,5 +9761,298 @@ watch(semanticTypes, () => {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* =========================================================
+   COLUMN TRANSFORMATION MODAL — rich per-column rows
+   ========================================================= */
+
+/* Header row */
+.transform-col-header {
+  display: grid;
+  grid-template-columns: 36px 1.8fr 80px 140px 80px 80px 110px 1fr;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  border-bottom: 1px solid rgba(102,126,234,0.15);
+  margin-bottom: 0.5rem;
+}
+
+/* Override encoding-list for transform layout */
+.transform-list {
+  gap: 0.45rem;
+  max-height: 520px;
+  min-height: 320px;
+}
+
+/* Per-column data row */
+.transform-col-row {
+  display: grid;
+  grid-template-columns: 36px 1.8fr 80px 140px 80px 80px 110px 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem;
+  background: rgba(102, 126, 234, 0.06);
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  border-radius: 8px;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.transform-col-row:hover {
+  background: rgba(102, 126, 234, 0.12);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.transform-col-row.active {
+  background: rgba(102, 126, 234, 0.14);
+  border-color: rgba(102, 126, 234, 0.4);
+  box-shadow: 0 0 0 1px rgba(102,126,234,0.2);
+}
+
+/* Checkbox cell */
+.transform-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+/* Column name */
+.transform-col-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Generic chip base ── */
+.col-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0.22rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+/* Data type badge */
+.type-chip {
+  background: rgba(255,255,255,0.07);
+  color: #94a3b8;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* ── Skew severity badges ── */
+.skew-chip.skew-normal {
+  background: rgba(16,185,129,0.15);
+  color: #34d399;
+  border-color: rgba(16,185,129,0.3);
+}
+
+.skew-chip.skew-mild {
+  background: rgba(245,158,11,0.15);
+  color: #fbbf24;
+  border-color: rgba(245,158,11,0.3);
+}
+
+.skew-chip.skew-high {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border-color: rgba(239,68,68,0.3);
+}
+
+.skew-chip.skew-heavy {
+  background: rgba(139,92,246,0.18);
+  color: #c4b5fd;
+  border-color: rgba(139,92,246,0.35);
+}
+
+.skew-chip.skew-unknown {
+  background: rgba(255,255,255,0.05);
+  color: #64748b;
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Missing values chip */
+.missing-chip {
+  background: rgba(59,130,246,0.1);
+  color: #93c5fd;
+  border-color: rgba(59,130,246,0.2);
+}
+
+/* Outlier chip */
+.outlier-chip {
+  background: rgba(245,158,11,0.1);
+  color: #fcd34d;
+  border-color: rgba(245,158,11,0.2);
+}
+
+.outlier-chip.outlier-high {
+  background: rgba(239,68,68,0.15);
+  color: #fca5a5;
+  border-color: rgba(239,68,68,0.3);
+}
+
+/* Recommended method chip */
+.rec-method-chip {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.rec-method-chip.rec-none      { background: rgba(100,116,139,0.15); color: #94a3b8; border-color: rgba(100,116,139,0.3); }
+.rec-method-chip.rec-log       { background: rgba(16,185,129,0.15);  color: #34d399; border-color: rgba(16,185,129,0.35); }
+.rec-method-chip.rec-log1p     { background: rgba(16,185,129,0.12);  color: #6ee7b7; border-color: rgba(16,185,129,0.25); }
+.rec-method-chip.rec-sqrt      { background: rgba(59,130,246,0.15);  color: #93c5fd; border-color: rgba(59,130,246,0.3);  }
+.rec-method-chip.rec-cbrt      { background: rgba(99,102,241,0.15);  color: #a5b4fc; border-color: rgba(99,102,241,0.3);  }
+.rec-method-chip.rec-square    { background: rgba(245,158,11,0.15);  color: #fcd34d; border-color: rgba(245,158,11,0.3);  }
+.rec-method-chip.rec-yeo-johnson { background: rgba(139,92,246,0.18); color: #c4b5fd; border-color: rgba(139,92,246,0.38); }
+.rec-method-chip.rec-box-cox   { background: rgba(236,72,153,0.15);  color: #f9a8d4; border-color: rgba(236,72,153,0.3);  }
+
+/* Dropdown cell */
+.transform-method-cell {
+  display: flex;
+  align-items: center;
+}
+
+.transform-select {
+  width: 100%;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  min-width: unset;
+}
+
+/* =========================================================
+   COLUMN TRANSFORMATION MODAL — Advanced Metrics Popover
+   ========================================================= */
+.col-name-container {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  position: relative;
+}
+
+.stats-popover-wrapper {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.info-icon {
+  color: #64748b;
+  transition: color 0.18s;
+  flex-shrink: 0;
+}
+
+.stats-popover-wrapper:hover .info-icon {
+  color: #a78bfa;
+}
+
+/* Inline expandable statistics grid spanning all columns (eliminates all clipping) */
+.row-details-panel {
+  grid-column: 1 / -1;
+  background: rgba(13, 13, 31, 0.9);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: inset 0 0 12px rgba(139, 92, 246, 0.08);
+  border-radius: 6px;
+  padding: 0.85rem;
+  margin-top: 0.6rem;
+  margin-bottom: 0.2rem;
+  animation: slideDownTransform 0.2s ease-out;
+}
+
+@keyframes slideDownTransform {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.transform-col-row.has-details {
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.05);
+  align-items: start;
+}
+
+.stats-popover-wrapper.details-active .info-icon {
+  color: #a78bfa !important;
+  transform: scale(1.15);
+}
+
+.popover-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #a78bfa;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+  padding-bottom: 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.popover-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem;
+}
+
+.popover-stat {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+}
+
+.stat-label {
+  font-size: 0.58rem;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.stat-val {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.popover-divider {
+  height: 1px;
+  background: rgba(167, 139, 250, 0.15);
+  margin: 0.5rem 0;
+}
+
+.popover-recommendation {
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+
+.popover-recommendation strong {
+  color: #a78bfa;
+  font-weight: 700;
 }
 </style>
