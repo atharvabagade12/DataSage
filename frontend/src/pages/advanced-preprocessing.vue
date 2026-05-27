@@ -4181,14 +4181,12 @@ const applyPCA = async () => {
     const data = await response.json();
 
     if (data.success) {
-      console.log("✅ PCA successful");
+      console.log("PCA successful");
 
-      // Update Data Store (Transient)
       const newTrain = data.train_preview || trainData.value;
       const newTest = data.test_preview || testData.value;
       dataStore.setSplitData(newTrain, newTest);
       
-      // Update Experiment Store (Persisted)
       experimentStore.setPcaApplied(true, {
         mode: pcaMode.value,
         varianceRatio: Number(pcaVarianceRatio.value),
@@ -4200,15 +4198,16 @@ const applyPCA = async () => {
         varianceRetained: Number((data.variance_retained * 100).toFixed(1)),
         compressionRatio: data.compression_ratio,
         explainedVarianceRatio: data.explained_variance_ratio
-      });
+      }); 
 
       showSuccess('PCA Applied', `Successfully reduced ${data.original_feature_count} features to ${data.reduced_feature_count} components.`);
       addPreprocessingStep('Principal Component Analysis (PCA)');
       showPcaModal.value = false;
       mlStore.isDirty = true;
+      
 
-      // Re-analyze columns to reflect changes
-      analyzeColumns();
+      
+      analyzeColumns(); // re ananlyze columns to refresh 
 
     } else {
       throw new Error(data.error || "PCA failed");
@@ -4508,180 +4507,6 @@ async function applyCategoricalEncoding() {
     uiStore.stopProcessing();
   }
 }
-
-
-// ===== TF-IDF METHODS =====
-
-async function detectAndConfigureTfidf() {
-  try {
-    if (!datasetId.value) {
-      showError('Error', 'No dataset ID found');
-      return;
-    }
-
-    isProcessing.value = true;
-    processingMessage.value = 'Detecting text columns...';
-
-    // Step 1: Detect text columns
-    const detectResponse = await authenticatedPost(`/api/detect-text-columns`, {
-      dataset_id: datasetId.value
-    });
-
-    const detectData = await detectResponse.json();
-
-    if (!detectData.success) {
-      throw new Error('Text column detection failed');
-    }
-
-    console.log('📝 Detected text columns:', detectData.text_columns);
-
-    // Step 2: Configure TF-IDF parameters
-    if (detectData.text_columns.length > 0) {
-      processingMessage.value = 'Configuring TF-IDF parameters...';
-
-    const configResponse = await authenticatedPost(`/api/configure-tfidf`, {
-        dataset_id: datasetId.value,
-        text_columns: detectData.text_columns
-      });
-
-      const configData = await configResponse.json();
-
-      if (!configData.success) {
-        throw new Error('TF-IDF configuration failed');
-      }
-
-      console.log('⚙️ TF-IDF configuration:', configData);
-
-      // Store configuration
-      tfidfConfig.value = configData;
-      tfidfWarnings.value = configData.warnings || [];
-
-      // Prepare text columns with configuration
-      textColumns.value = detectData.text_columns.map(col => ({
-        ...col,
-        selected: false,
-        config: configData.column_configs.find(c => c.name === col.name)
-      }));
-
-      showSuccess('Text Columns Detected', `Found ${detectData.text_columns.length} text column(s)`);
-    } else {
-      textColumns.value = [];
-      showInfo('No Text Columns', 'No text columns detected in your dataset');
-    }
-
-    // Show modal
-    showTfidfModal.value = true;
-
-  } catch (error) {
-    console.error('❌ TF-IDF detection error:', error);
-    showError('Detection Failed', error.message);
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-}
-
-async function applyTfidf() {
-  try {
-    const selectedColumns = textColumns.value.filter(c => c.selected);
-
-    if (selectedColumns.length === 0) {
-      showWarning('No Selection', 'Please select at least one text column');
-      return;
-    }
-
-    if (!datasetId.value) {
-      showError('Error', 'No dataset ID found');
-      return;
-    }
-
-    isProcessing.value = true;
-    processingMessage.value = `Applying TF-IDF to ${selectedColumns.length} column(s)...`;
-
-    // Prepare request payload
-    const columnsConfig = selectedColumns.map(col => ({
-      name: col.name,
-      max_features: col.config.max_features,
-      min_df: col.config.min_df,
-      max_df: col.config.max_df,
-      ngram_range: col.config.ngram_range
-    }));
-
-    console.log('🔤 Applying TF-IDF with config:', columnsConfig);
-
-    const response = await authenticatedPost(`/api/apply-tfidf`, {
-      dataset_id: datasetId.value,
-      columns: columnsConfig
-    });
-
-    const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.detail || 'TF-IDF application failed');
-    }
-
-    console.log('✅ TF-IDF applied successfully:', data);
-
-    // Update preview data
-    trainData.value = data.train_preview || [];
-    testData.value = data.test_preview || [];
-    
-    // Preserve column metadata when updating columns list
-    if (data.columns && data.columns.length > 0) {
-      columns.value = data.columns.map(colName => {
-        const existingCol = columns.value.find(c => c.name === colName);
-        if (existingCol) {
-          return existingCol;
-        } else {
-          // New TF-IDF feature - always numeric
-          return {
-            name: colName,
-            type: 'numerical',
-            semanticType: 'numeric',
-            unique: 0,
-            missing: 0,
-            remove: false,
-            encode: false,
-            scale: false,
-            isAlreadyScaled: false,
-            scalingMethod: 'standard'
-          };
-        }
-      });
-    }
-
-    // Update state
-    tfidfApplied.value = true;
-    showTfidfModal.value = false;
-
-    // Show success message with details
-    showSuccess(
-      'TF-IDF Applied',
-      `Added ${data.tfidf_features_added} TF-IDF features. Total features: ${data.final_feature_count}`
-    );
-
-    // Add preprocessing step
-    addPreprocessingStep({
-      type: 'tfidf',
-      description: `Applied TF-IDF to ${selectedColumns.length} text column(s)`,
-      details: {
-        columns: selectedColumns.map(c => c.name),
-        total_features_added: data.tfidf_features_added,
-        final_feature_count: data.final_feature_count
-      }
-    });
-    mlStore.isDirty = true;
-
-  } catch (error) {
-    console.error('❌ TF-IDF application error:', error);
-    showError('TF-IDF Failed', error.message);
-  } finally {
-    isProcessing.value = false;
-    processingMessage.value = '';
-  }
-}
-
-
 
 
 async function applyTargetEncoding() {

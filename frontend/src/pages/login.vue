@@ -38,7 +38,7 @@
           <div class="auth-glow"></div>
 
           <!-- Sliding Glass Tab Selectors -->
-          <div class="auth-tabs" role="tablist">
+          <div class="auth-tabs" role="tablist"> 
             <button
               role="tab"
               :aria-selected="activeTab === 'login'"
@@ -126,9 +126,9 @@
                     </button>
                   </div>
                   <span v-if="loginErrors.password" class="field-error">{{ loginErrors.password }}</span>
-                </div>
+                </div> 
 
-                <!-- Upgraded button with shiny swiping glow -->
+                <!-- Sign in button -->
                 <button type="submit" class="submit-btn" :disabled="loading">
                   <span v-if="loading" class="loading-spinner"></span>
                   <span v-else class="btn-content">
@@ -154,7 +154,7 @@
                   <p class="form-subtitle">Join DataSage and compile raw data pipelines instantly</p>
                 </div>
 
-                <!-- Username Input (Floating Label) -->
+                <!-- Username Input -->
                 <div class="form-group" :class="{ 'has-error': registerErrors.username, 'has-content': registerForm.username || focus.registerUsername }">
                   <div class="input-wrapper">
                     <span class="input-icon">
@@ -176,9 +176,9 @@
                     <label for="register-username" class="floating-label">Username</label>
                   </div>
                   <span v-if="registerErrors.username" class="field-error">{{ registerErrors.username }}</span>
-                </div>
+                </div> 
 
-                <!-- Email Input (Floating Label) -->
+                <!-- Email Input -->
                 <div class="form-group" :class="{ 'has-error': registerErrors.email, 'has-content': registerForm.email || focus.registerEmail }">
                   <div class="input-wrapper">
                     <span class="input-icon">
@@ -202,7 +202,7 @@
                   <span v-if="registerErrors.email" class="field-error">{{ registerErrors.email }}</span>
                 </div>
 
-                <!-- Password Input (Floating Label) -->
+                <!-- Password Inpu -->
                 <div class="form-group" :class="{ 'has-error': registerErrors.password, 'has-content': registerForm.password || focus.registerPassword }">
                   <div class="input-wrapper">
                     <span class="input-icon">
@@ -253,7 +253,7 @@
                   </span>
                 </div>
 
-                <!-- Confirm Password Input (Floating Label) -->
+                <!-- Confirm Password Input  -->
                 <div class="form-group" :class="{ 'has-error': registerErrors.confirmPassword, 'has-content': registerForm.confirmPassword || focus.registerConfirmPassword }">
                   <div class="input-wrapper">
                     <span class="input-icon">
@@ -311,6 +311,7 @@
                     {{ registerError }}
                   </div>
                 </transition>
+
               </form>
 
             </transition>

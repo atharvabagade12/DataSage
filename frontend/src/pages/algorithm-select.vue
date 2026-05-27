@@ -432,107 +432,105 @@
       
       
 
-      <!-- Action Section -->
-      <section v-if="selectedAlgorithm" class="action-section">
-        <div class="action-content">
-          <!-- Column 1: Model profile -->
-          <div class="footer-column model-profile">
-            <div class="column-header">
-              <span class="column-icon">🧠</span>
-              <h4>Selected Model</h4>
-            </div>
-            <div class="model-info-wrapper">
-              <div class="model-main">
-                <span class="model-icon">{{ selectedAlgorithm.icon }}</span>
-                <div class="model-details">
-                  <span class="model-name">{{ selectedAlgorithm.name }}</span>
-                  <span class="model-badge">{{ selectedAlgorithm.category ? formatCategoryName(selectedAlgorithm.category) : 'Machine Learning Model' }}</span>
-                </div>
+    </div>
+
+    <!-- Action Section -->
+    <section v-if="!isLoading && selectedAlgorithm" class="action-section">
+      <div class="action-content">
+        <!-- Column 1: Model profile -->
+        <div class="footer-column model-profile">
+          <div class="column-header">
+            <span class="column-icon">🧠</span>
+            <h4>Selected Model</h4>
+          </div>
+          <div class="model-info-wrapper">
+            <div class="model-main">
+              <span class="model-icon">{{ selectedAlgorithm.icon }}</span>
+              <div class="model-details">
+                <span class="model-name">{{ selectedAlgorithm.name }}</span>
+                <span class="model-badge">{{ selectedAlgorithm.category ? formatCategoryName(selectedAlgorithm.category) : 'Machine Learning Model' }}</span>
               </div>
-              <div class="model-score-badge" :title="'Match score computed by DataSage recommendation engine: ' + Math.round(selectedAlgorithm.score * 100) + '%'">
-                <div class="score-ring-mini" :class="getScoreLevel(selectedAlgorithm.score)">
-                  <span class="score-pct">{{ Math.round(selectedAlgorithm.score * 100) }}%</span>
-                  <span class="score-lbl">Match</span>
-                </div>
+            </div>
+            <div class="model-score-badge" :title="'Match score computed by DataSage recommendation engine: ' + Math.round(selectedAlgorithm.score * 100) + '%'">
+              <div class="score-ring-mini" :class="getScoreLevel(selectedAlgorithm.score)">
+                <span class="score-pct">{{ Math.round(selectedAlgorithm.score * 100) }}%</span>
+                <span class="score-lbl">Match</span>
               </div>
             </div>
           </div>
+        </div>
 
-          <!-- Divider -->
-          <div class="footer-divider"></div>
+        <!-- Divider -->
+        <div class="footer-divider"></div>
 
-          <!-- Column 2: Problem & Target Context -->
-          <div class="footer-column problem-context">
-            <div class="column-header">
-              <span class="column-icon">🎯</span>
-              <h4>Problem Setup</h4>
-            </div>
-            <div class="problem-details">
-              <div class="context-item">
-                <span class="context-label">Task Type:</span>
-                <span class="problem-type-badge-mini" :class="problemType.type">
-                  {{ formatProblemType(problemType.type) }}
-                </span>
-              </div>
-              <div v-if="selectedTarget" class="context-item">
-                <span class="context-label">Target Column:</span>
-                <span class="target-column-badge">
-                  {{ selectedTarget.name }}
-                </span>
-              </div>
-            </div>
+        <!-- Column 2: Problem & Target Context -->
+        <div class="footer-column problem-context">
+          <div class="column-header">
+            <span class="column-icon">🎯</span>
+            <h4>Problem Setup</h4>
           </div>
-
-          <!-- Divider -->
-          <div class="footer-divider"></div>
-
-          <!-- Column 3: Action Launchpad -->
-          <div class="footer-column action-launchpad">
-            <div class="action-buttons">
-              <button
-                @click="startTraining"
-                class="start-training-btn-premium"
-                :disabled="isTraining"
-              >
-                <div class="btn-glow-layer"></div>
-                <div class="btn-content">
-                  <svg
-                    v-if="isTraining"
-                    width="18"
-                    height="18"
-                    class="spinner"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
-                  </svg>
-                  <svg
-                    v-else
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-                  </svg>
-                  <span>
-                    {{
-                      isTraining
-                        ? "Initializing Training..."
-                        : "Start Model Training"
-                    }}
-                  </span>
-                </div>
-              </button>
-              <span class="preflight-status">
-                <span class="pulse-indicator"></span>
-                Pre-flight checks passed • Ready
+          <div class="problem-details">
+            <div class="context-item">
+              <span class="context-label">Task Type:</span>
+              <span class="problem-type-badge-mini" :class="problemType.type">
+                {{ formatProblemType(problemType.type) }}
+              </span>
+            </div>
+            <div v-if="selectedTarget" class="context-item">
+              <span class="context-label">Target Column:</span>
+              <span class="target-column-badge">
+                {{ selectedTarget.name }}
               </span>
             </div>
           </div>
         </div>
-      </section>
-    </div>
+
+        <!-- Divider -->
+        <div class="footer-divider"></div>
+
+        <!-- Column 3: Action Launchpad -->
+        <div class="footer-column action-launchpad">
+          <div class="action-buttons">
+            <button
+              @click="startTraining"
+              class="start-training-btn-premium"
+              :disabled="isTraining"
+            >
+              <div class="btn-glow-layer"></div>
+              <div class="btn-content">
+                <svg
+                  v-if="isTraining"
+                  width="18"
+                  height="18"
+                  class="spinner"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
+                </svg>
+                <svg
+                  v-else
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+                </svg>
+                <span>
+                  {{
+                    isTraining
+                      ? "Initializing Training..."
+                      : "Start Model Training"
+                  }}
+                </span>
+              </div>
+            </button>
+            
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Loading Overlay -->
     <div v-if="isTraining" class="training-overlay">
@@ -5089,16 +5087,18 @@ onMounted(async () => {
 
 /* Action Section */
 .action-section {
-  background: rgba(13, 13, 33, 0.75);
+  background: rgba(26, 26, 46, 0.9);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(102, 126, 234, 0.25);
-  border-radius: 20px;
+  border-top: 1px solid rgba(102, 126, 234, 0.2);
   padding: 1.5rem 2rem;
-  margin-top: 2.5rem;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
 }
 
 .action-content {
+  max-width: 1400px;
+  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: stretch;
